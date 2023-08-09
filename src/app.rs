@@ -4,18 +4,17 @@ use leptos_router::*;
 
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
-    // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context(cx);
 
     view! { cx,
-        // injects a stylesheet into the document <head>
-        // id=leptos means cargo-leptos will hot-reload this stylesheet
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
 
-        // sets the document title
-        <Title text="Welcome to Leptos"/>
+        <Title text="Jay Dan Howard"/>
+        <link
+            href="https://fonts.googleapis.com/css?family=Press+Start+2P&display=swap"
+            rel="stylesheet"
+        />
 
-        // content for this welcome page
         <Router>
             <main>
                 <Routes>
@@ -30,13 +29,21 @@ pub fn App(cx: Scope) -> impl IntoView {
 /// Renders the home page of your application.
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
-    // Creates a reactive value to update the button
-    let (count, set_count) = create_signal(cx, 0);
-    let on_click = move |_| set_count.update(|count| *count += 1);
-
     view! { cx,
-        <h1>"Welcome to Leptos!"</h1>
-        <button on:click=on_click>"Click Me: " {count}</button>
+        <h1>"Hi, I'm Jay!"</h1>
+        <div>
+            "Currently a senior software engineer at Cricket Health where we use software to empower clinicians and nephrologists to treat and prevent kidney disease."
+        </div>
+        <div>
+            "I'm passionate making software that helps those in need, particularly in health care and in education (I've coached high school debate and tutored programming)."
+        </div>
+        <div>
+            "During the pandemic I picked up a few new hobbies like flight sims (in VR), 3D printing, and Onewheeling . I currently spend a lot of my time practicing flying the Huey with an online community that has real military aviators! From their coaching I'm pretty sure I could fly one in real life in a pinch, though I hope that never gets put to the test. I'm also very passionate about space exploration and think we should never stop exploring.
+            "
+        </div>
+        <div>
+            "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
+        </div>
     }
 }
 
@@ -57,7 +64,5 @@ fn NotFound(cx: Scope) -> impl IntoView {
         resp.set_status(actix_web::http::StatusCode::NOT_FOUND);
     }
 
-    view! { cx,
-        <h1>"Not Found"</h1>
-    }
+    view! { cx, <h1>"Not Found"</h1> }
 }
