@@ -10,59 +10,61 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
 
         <Title text="Jay Dan Howard"/>
-        <link
-            href="https://fonts.googleapis.com/css?family=Press+Start+2P&display=swap"
-            rel="stylesheet"
-        />
-
         <Router>
             <main>
                 <Routes>
-                    <Route path="" view=HomePage/>
-                    <Route path="/*any" view=NotFound/>
+                    <Route path="/*any" view=HomePage/>
+                    <Route path="/about" view=HomePage>
+                        <Route path="great" view= |cx| view!{ cx,
+                            <ul>
+                                <li>Fullstack web development </li>
+                                <li>Typescript/Javascript/ES6</li>
+                                <li>React</li>
+                                <li>SQL (MySQL, Postgres)</li>
+                                <li>Designing fault-tolerant RESTful APIs</li>
+                            </ul>
+                        }/>
+                        <Route path="better" view= |cx| view!{ cx,
+                            <ul>
+                                <li>Rust</li>
+                                <li>Kubernetes</li>
+                            </ul>
+                        }/>
+                        <Route path="interested" view= |cx| view!{ cx,
+                            <ul>
+                                <li>Flight sims</li>
+                                <li>r#"Motorcyling, Onewheeling, transportation with <= 3 wheels"#</li>
+                                <li>Flight sims</li>
+                                <li>Space - KSP</li>
+                            </ul>
+                        }/>
+                    </Route>
+
                 </Routes>
             </main>
         </Router>
     }
 }
 
-/// Renders the home page of your application.
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
     view! { cx,
         <h1>"Hi, I'm Jay!"</h1>
-        <div>
-            "Currently a senior software engineer at Cricket Health where we use software to empower clinicians and nephrologists to treat and prevent kidney disease."
-        </div>
-        <div>
-            "I'm passionate making software that helps those in need, particularly in health care and in education (I've coached high school debate and tutored programming)."
-        </div>
-        <div>
-            "During the pandemic I picked up a few new hobbies like flight sims (in VR), 3D printing, and Onewheeling . I currently spend a lot of my time practicing flying the Huey with an online community that has real military aviators! From their coaching I'm pretty sure I could fly one in real life in a pinch, though I hope that never gets put to the test. I'm also very passionate about space exploration and think we should never stop exploring.
-            "
+        <div class="about">
+            <div>
+            "Currently a senior software engineer at Interwell Health leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease. I care mostly about technology that mostly cares about people."
+            </div>
+            <img href="profile.jpg"/>
         </div>
         <div>
             "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
         </div>
+        <div>
+            r#"Things I'm "#
+            <a href="great">great at:</a>
+            <a href="better">getting better at:</a>
+            <a href="interested">interested in:</a>
+            <Outlet/>
+        </div>
     }
-}
-
-/// 404 - Not Found
-#[component]
-fn NotFound(cx: Scope) -> impl IntoView {
-    // set an HTTP status code 404
-    // this is feature gated because it can only be done during
-    // initial server-side rendering
-    // if you navigate to the 404 page subsequently, the status
-    // code will not be set because there is not a new HTTP request
-    // to the server
-    #[cfg(feature = "ssr")]
-    {
-        // this can be done inline because it's synchronous
-        // if it were async, we'd use a server function
-        let resp = expect_context::<leptos_actix::ResponseOptions>(cx);
-        resp.set_status(actix_web::http::StatusCode::NOT_FOUND);
-    }
-
-    view! { cx, <h1>"Not Found"</h1> }
 }
