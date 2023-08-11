@@ -4,60 +4,67 @@ use leptos_router::*;
 
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
-    // Provides context that manages stylesheets, titles, meta tags, etc.
     provide_meta_context(cx);
 
     view! { cx,
-        // injects a stylesheet into the document <head>
-        // id=leptos means cargo-leptos will hot-reload this stylesheet
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
 
-        // sets the document title
-        <Title text="Welcome to Leptos"/>
-
-        // content for this welcome page
+        <Title text="Jay Dan Howard"/>
         <Router>
             <main>
                 <Routes>
-                    <Route path="" view=HomePage/>
-                    <Route path="/*any" view=NotFound/>
+                    <Route path="/*any" view=HomePage/>
+                    <Route path="/about" view=HomePage>
+                        <Route path="great" view= |cx| view!{ cx,
+                            <ul>
+                                <li>Fullstack web development </li>
+                                <li>Typescript/Javascript/ES6</li>
+                                <li>React</li>
+                                <li>SQL (MySQL, Postgres)</li>
+                                <li>Designing fault-tolerant RESTful APIs</li>
+                            </ul>
+                        }/>
+                        <Route path="better" view= |cx| view!{ cx,
+                            <ul>
+                                <li>Rust</li>
+                                <li>Kubernetes</li>
+                            </ul>
+                        }/>
+                        <Route path="interested" view= |cx| view!{ cx,
+                            <ul>
+                                <li>Flight sims</li>
+                                <li>r#"Motorcyling, Onewheeling, transportation with <= 3 wheels"#</li>
+                                <li>Flight sims</li>
+                                <li>Space - KSP</li>
+                            </ul>
+                        }/>
+                    </Route>
+
                 </Routes>
             </main>
         </Router>
     }
 }
 
-/// Renders the home page of your application.
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
-    // Creates a reactive value to update the button
-    let (count, set_count) = create_signal(cx, 0);
-    let on_click = move |_| set_count.update(|count| *count += 1);
-
     view! { cx,
-        <h1>"Welcome to Leptos!"</h1>
-        <button on:click=on_click>"Click Me: " {count}</button>
-    }
-}
-
-/// 404 - Not Found
-#[component]
-fn NotFound(cx: Scope) -> impl IntoView {
-    // set an HTTP status code 404
-    // this is feature gated because it can only be done during
-    // initial server-side rendering
-    // if you navigate to the 404 page subsequently, the status
-    // code will not be set because there is not a new HTTP request
-    // to the server
-    #[cfg(feature = "ssr")]
-    {
-        // this can be done inline because it's synchronous
-        // if it were async, we'd use a server function
-        let resp = expect_context::<leptos_actix::ResponseOptions>(cx);
-        resp.set_status(actix_web::http::StatusCode::NOT_FOUND);
-    }
-
-    view! { cx,
-        <h1>"Not Found"</h1>
+        <h1>"Hi, I'm Jay!"</h1>
+        <div class="about">
+            <div>
+            "Currently a senior software engineer at Interwell Health leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease. I care mostly about technology that mostly cares about people."
+            </div>
+            <img href="profile.jpg"/>
+        </div>
+        <div>
+            "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
+        </div>
+        <div>
+            r#"Things I'm "#
+            <a href="great">great at:</a>
+            <a href="better">getting better at:</a>
+            <a href="interested">interested in:</a>
+            <Outlet/>
+        </div>
     }
 }
