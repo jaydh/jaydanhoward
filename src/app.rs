@@ -63,7 +63,7 @@ fn HomePage(cx: Scope) -> impl IntoView {
             <div class="about-text">
             <p>"Currently a senior software engineer at Interwell Health, leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease. I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."</p>
             <div class="about-nav">
-                r#"Things I'm "#
+                <span>r#"Things I'm "#</span>
                 <a
                     href="great"
                     class="about-nav-item"
@@ -82,6 +82,7 @@ fn HomePage(cx: Scope) -> impl IntoView {
                     class=("about-nav-item-selected", move || location.pathname.get() == "/about/interested")>
                      interested in
                 </a>
+                <span>:</span>
             </div>
             <Outlet/>
             </div>
