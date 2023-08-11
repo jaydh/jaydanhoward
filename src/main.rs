@@ -7,6 +7,10 @@ async fn main() -> std::io::Result<()> {
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use leptos_start::app::*;
 
+    pub async fn health_check() -> HttpResponse {
+        HttpResponse::Ok().finish()
+    }
+
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
     // Generate the list of routes in your Leptos App
@@ -20,8 +24,8 @@ async fn main() -> std::io::Result<()> {
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             // serve JS/WASM/CSS from `pkg`
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
-            // serve other assets from the `assets` directory
             .service(Files::new("/assets", site_root))
+            .route("/health_check", web::get().to(health_check))
             .service(favicon)
             .leptos_routes(
                 leptos_options.to_owned(),
