@@ -22,7 +22,6 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
             // serve other assets from the `assets` directory
             .service(Files::new("/assets", site_root))
-            // serve the favicon from /favicon.ico
             .service(favicon)
             .leptos_routes(
                 leptos_options.to_owned(),
@@ -30,7 +29,7 @@ async fn main() -> std::io::Result<()> {
                 |cx| view! { cx, <App/> },
             )
             .app_data(web::Data::new(leptos_options.to_owned()))
-        //.wrap(middleware::Compress::default())
+            .wrap(middleware::Compress::default())
     })
     .bind(&addr)?
     .run()

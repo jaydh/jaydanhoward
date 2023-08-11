@@ -13,7 +13,6 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Router>
             <main>
                 <Routes>
-                    <Route path="/*any" view=HomePage/>
                     <Route path="/about" view=HomePage>
                         <Route path="great" view= |cx| view!{ cx,
                             <ul>
@@ -21,12 +20,16 @@ pub fn App(cx: Scope) -> impl IntoView {
                                 <li>Typescript/Javascript/ES6</li>
                                 <li>React</li>
                                 <li>SQL (MySQL, Postgres)</li>
-                                <li>Designing fault-tolerant RESTful APIs</li>
+                                <li>Designing performant and fault-tolerant RESTful APIs</li>
+                                <li>Service telemetry and root cause analysis</li>
+                                <li>Mentoring junior engineers</li>
+                                <li>Getting it done</li>
                             </ul>
                         }/>
                         <Route path="better" view= |cx| view!{ cx,
                             <ul>
                                 <li>Rust</li>
+                                <li>Leptos</li>
                                 <li>Kubernetes</li>
                             </ul>
                         }/>
@@ -34,11 +37,14 @@ pub fn App(cx: Scope) -> impl IntoView {
                             <ul>
                                 <li>Flight sims</li>
                                 <li>r#"Motorcyling, Onewheeling, transportation with <= 3 wheels"#</li>
-                                <li>Flight sims</li>
                                 <li>Space - KSP</li>
+                                <li>WASM</li>
+                                <li>GoLang</li>
+                                <li>Aerospace engineering</li>
                             </ul>
                         }/>
                     </Route>
+                    <Route path="" view=move |cx| view! { cx, <Redirect path="/about/great"/> } />
 
                 </Routes>
             </main>
@@ -48,23 +54,38 @@ pub fn App(cx: Scope) -> impl IntoView {
 
 #[component]
 fn HomePage(cx: Scope) -> impl IntoView {
+    let location = use_location(cx);
+
     view! { cx,
-        <h1>"Hi, I'm Jay!"</h1>
+        <h1>"👋I'm Jay!"</h1>
+        <h2>"I deeply care about technology that deeply cares about people."</h2>
         <div class="about">
-            <div>
-            "Currently a senior software engineer at Interwell Health leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease. I care mostly about technology that mostly cares about people."
+            <div class="about-text">
+            <p>"Currently a senior software engineer at Interwell Health, leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease. I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."</p>
+            <div class="about-nav">
+                r#"Things I'm "#
+                <a
+                    href="great"
+                    class="about-nav-item"
+                    class=("about-nav-item-selected", move || location.pathname.get() == "/about/great")>
+                    great at
+               </a>
+                <a
+                    href="better"
+                    class="about-nav-item"
+                    class=("about-nav-item-selected", move || location.pathname.get() == "/about/better")>
+                    getting better at
+               </a>
+                <a
+                    href="interested"
+                    class="about-nav-item"
+                    class=("about-nav-item-selected", move || location.pathname.get() == "/about/interested")>
+                     interested in
+                </a>
             </div>
-            <img href="profile.jpg"/>
-        </div>
-        <div>
-            "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
-        </div>
-        <div>
-            r#"Things I'm "#
-            <a href="great">great at:</a>
-            <a href="better">getting better at:</a>
-            <a href="interested">interested in:</a>
             <Outlet/>
+            </div>
+            <img src="/assets/profile.jpg" />
         </div>
     }
 }

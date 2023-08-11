@@ -13,9 +13,46 @@ body {
   padding: 5rem;
 }
 
+.about {
+    display: flex;
+    flex-direction: row;
+    gap: 10em;
+}
+
+img {
+    max-height: 400px;
+    max-width: 400px;
+    height: auto;
+    width: auto;
+    border-radius: 10%;
+
+}
+
+.about-nav {
+    display: flex;
+    flex-direction: row;
+    gap: 3em;
+
+}
+
+.about-nav-item {
+    text-decoration: inherit;
+    color: inherit;
+    cursor: pointer;
+
+}
+
+.about-nav-item-selected {
+    color: white;
+    cursor: default;
+    font-weight: bold;
+}
+
+
+
 @font-face {
   font-family: 'IBM Plex Sans';
-  src: url('./IBMPlexSans-Regular.ttf') format('woff2');
+  src: url('/assets/IBMPlexSans-Regular.ttf');
   font-weight: normal;
   font-style: normal;
 }
