@@ -1,29 +1,35 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.71.0 as chef
+FROM rustlang/rust:nightly-alpine AS chef
 
 WORKDIR /app
-RUN apt-get update && apt-get install lld clang -y
-
-FROM chef as planner
 COPY . .
-run cargo chef prepare
+RUN apk update && apk add lld clang musl-dev pkgconfig gcompat libressl libressl-dev build-base libstdc++ 
+RUN rustup update
+RUN rustup default nightly
+RUN rustup target add wasm32-unknown-unknown
+RUN cargo +nightly install cargo-leptos
+#RUN cargo +nightly install cargo-chef
+run cargo +nightly leptos build 
+
+ENTRYPOINT ["./target/release/jaydanhoward"]
+
+#FROM chef as planner
+#COPY . .
+#run cargo +nightly chef prepare --recipe-path recipe.json
 
 
-FROM chef as builder
-COPY --from=planner /app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+#FROM chef as builder
+#COPY . .
+#COPY --from=planner /app/recipe.json recipe.json
+#RUN cargo +nightly chef cook --release --recipe-path recipe.json
 
-COPY . .
-run cargo build --release --bin jaydanhoward
+#FROM rustlang/rust:nightly-alpine AS runtime 
+#WORKDIR /app
+#COPY . .
 
-FROM debian:bullseye-slim AS runtime 
-WORKDIR /app
+#RUN apk update \
+#    && apk add ca-certificates \
+#    && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
+#COPY --from=builder /app/target/release/jaydanhoward jaydanhoward 
 
-COPY --from=builder /app/target/release/jaydanhoward jaydanhoward 
-
-ENTRYPOINT ["./jaydanhoward"]
+#ENTRYPOINT ["./jaydanhoward"]
