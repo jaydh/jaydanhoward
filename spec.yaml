@@ -1,4 +1,4 @@
-name: zero2prod
+name: jaydanhoward
 region: sfo3
 services:
   - name: jaydanhoward 
@@ -10,7 +10,7 @@ services:
       repo: jaydh/jaydanhoward
     health_check: 
       http_path: /health_check
-    http_port: 3000
+    http_port: 8080
     instance_count: 1
     instance_size_slug: basic-xxs
     routes:
