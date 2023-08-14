@@ -8,7 +8,6 @@ pub fn App(cx: Scope) -> impl IntoView {
 
     view! { cx,
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
@@ -106,48 +105,35 @@ pub fn About(cx: Scope) -> impl IntoView {
 fn Skills(cx: Scope) -> impl IntoView {
     let location = use_location(cx);
     let pathname = move || location.pathname.get();
-    let is_great_link = move || pathname() == "/skills/great";
-    let is_better_link = move || pathname() == "/skills/better";
-    let is_interested_link = move || pathname() == "/skills/interested";
+
+    let routes = vec![
+        ("great", "great at"),
+        ("better", "getting better at"),
+        ("interested", "intereseted in"),
+    ];
 
     view! { cx,
             <div>
                 <div class="flex flex-row gap-10 mb-20">
                     <span>"Things I'm"</span>
-                    <a
-                        href="great"
-                        class=("underline", move || is_great_link())
-                        class=("font-heavy", move || is_great_link())
-                        class=("cursor-default", move || is_great_link())
-                        class=("cursor-pointer", move || !is_great_link())
-                        class=("hover:underline", move || !is_great_link())
-                        class=("no-underline", move || !is_great_link())
-                    >
-                           great at
-                    </a>
-                    <a
-                        href="better"
-                        class=("underline", move || is_better_link())
-                        class=("font-heavy", move || is_better_link())
-                        class=("cursor-default", move || is_better_link())
-                        class=("cursor-pointer", move || !is_better_link())
-                        class=("hover:underline", move || !is_better_link())
-                        class=("no-underline", move || !is_better_link())
-                    >
-                           getting better at
-
-                    </a>
-                    <a
-                        href="interested"
-                        class=("underline", move || is_interested_link())
-                        class=("font-heavy", move || is_interested_link())
-                        class=("cursor-default", move || is_interested_link())
-                        class=("cursor-pointer", move || !is_interested_link())
-                        class=("hover:underline", move || !is_interested_link())
-                        class=("no-underline", move || !is_interested_link())
-                    >
-                           interested in
-                    </a>
+                    {routes.into_iter()
+                        .map(|(route, display_text)| {
+                            let is_match = move || pathname() == format!("/skills/{}", route);
+                            view! { cx,
+                                <a
+                                    href={route}
+                                    class=("underline", move || is_match())
+                                    class=("font-heavy", move || is_match())
+                                    class=("cursor-default", move || is_match())
+                                    class=("cursor-pointer", move || !is_match())
+                                    class=("hover:underline", move || !is_match())
+                                    class=("no-underline", move || !is_match())
+                                >
+                                    {display_text}
+                                </a>
+                            }
+                        })
+                        .collect_view(cx)}
                     <span>:</span>
                 </div>
                 <Outlet/>
