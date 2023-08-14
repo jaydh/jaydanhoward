@@ -54,3 +54,11 @@ jobs:
         run: cargo install cargo-tarpaulin
       - name: Generate code coverage
         run: cargo tarpaulin --verbose --workspace
+
+  deploy:
+    name: Install doctl
+    uses: digitalocean/action-doctl@v2
+    with:
+      token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+    name: Deploy
+    run: doctl cfb792d1-205b-4ed4-a20b-4c851a4c374c 

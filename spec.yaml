@@ -6,7 +6,6 @@ services:
     source_dir: .
     github:
       branch: main 
-      deploy_on_push: true
       repo: jaydh/jaydanhoward
     health_check: 
       http_path: /health_check
