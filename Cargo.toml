@@ -1,5 +1,5 @@
 [package]
-name = "leptos_start"
+name = "jaydanhoward"
 version = "0.1.0"
 edition = "2021"
 
@@ -17,9 +17,14 @@ leptos_meta = { version = "0.4", features = ["nightly"] }
 leptos_actix = { version = "0.4", optional = true }
 leptos_router = { version = "0.4", features = ["nightly"] }
 wasm-bindgen = "=0.2.87"
+web-sys = { version = "0.3", features = [
+  "AbortController",
+  "AbortSignal",
+  "HtmlDocument",
+]}
+serde = "1.0.183"
 
 [features]
-csr = ["leptos/csr", "leptos_meta/csr", "leptos_router/csr"]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
   "dep:actix-files",
@@ -42,7 +47,7 @@ panic = "abort"
 output-name = "leptos_start"
 site-root = "target/site"
 site-pkg-dir = "pkg"
-style-file = "style/main.scss"
+style-file = "style/main.css"
 assets-dir = "assets"
 site-addr = "127.0.0.1:8000"
 reload-port = 8001
@@ -56,3 +61,5 @@ bin-default-features = false
 lib-features = ["hydrate"]
 lib-default-features = false
 lib-profile-release = "wasm-release"
+tailwind-input-file = "style/main.css"
+tailwind-config-file = "tailwind.config.js"

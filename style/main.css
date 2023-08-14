@@ -1,0 +1,23 @@
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+img {
+    max-height: 400px;
+    max-width: 400px;
+    height: auto;
+    width: auto;
+    border-radius: 10%;
+
+}
+
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/assets/IBMPlexSans-Regular.ttf');
+  font-weight: normal;
+  font-style: normal;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

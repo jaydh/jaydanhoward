@@ -3,9 +3,9 @@
 async fn main() -> std::io::Result<()> {
     use actix_files::Files;
     use actix_web::*;
+    use jaydanhoward::app::*;
     use leptos::*;
     use leptos_actix::{generate_route_list, LeptosRoutes};
-    use leptos_start::app::*;
 
     pub async fn health_check() -> HttpResponse {
         HttpResponse::Ok().finish()

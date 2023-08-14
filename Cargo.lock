@@ -1136,6 +1136,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
+name = "jaydanhoward"
+version = "0.1.0"
+dependencies = [
+ "actix-files",
+ "actix-web",
+ "cfg-if",
+ "console_error_panic_hook",
+ "http",
+ "leptos",
+ "leptos_actix",
+ "leptos_meta",
+ "leptos_router",
+ "serde",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "jobserver"
 version = "0.1.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1393,22 +1411,6 @@ dependencies = [
  "server_fn",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "leptos_start"
-version = "0.1.0"
-dependencies = [
- "actix-files",
- "actix-web",
- "cfg-if",
- "console_error_panic_hook",
- "http",
- "leptos",
- "leptos_actix",
- "leptos_meta",
- "leptos_router",
- "wasm-bindgen",
 ]
 
 [[package]]

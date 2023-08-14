@@ -1,4 +1,5 @@
 pub mod app;
+mod dark_mode;
 use cfg_if::cfg_if;
 
 cfg_if! {
