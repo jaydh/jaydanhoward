@@ -109,7 +109,7 @@ fn Skills(cx: Scope) -> impl IntoView {
     let routes = vec![
         ("great", "great at"),
         ("better", "getting better at"),
-        ("interested", "intereseted in"),
+        ("interested", "interested in"),
     ];
 
     view! { cx,
@@ -134,7 +134,6 @@ fn Skills(cx: Scope) -> impl IntoView {
                             }
                         })
                         .collect_view(cx)}
-                    <span>:</span>
                 </div>
                 <Outlet/>
         </div>
