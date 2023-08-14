@@ -119,15 +119,17 @@ fn Skills(cx: Scope) -> impl IntoView {
                     {routes.into_iter()
                         .map(|(route, display_text)| {
                             let is_match = move || pathname() == format!("/skills/{}", route);
+                            let is_not_match = move || !is_match();
+
                             view! { cx,
                                 <a
                                     href={route}
-                                    class=("underline", move || is_match())
-                                    class=("font-heavy", move || is_match())
-                                    class=("cursor-default", move || is_match())
-                                    class=("cursor-pointer", move || !is_match())
-                                    class=("hover:underline", move || !is_match())
-                                    class=("no-underline", move || !is_match())
+                                    class=("underline", is_match)
+                                    class=("font-heavy", is_match)
+                                    class=("cursor-default", is_match)
+                                    class=("cursor-pointer", is_not_match)
+                                    class=("hover:underline", is_not_match)
+                                    class=("no-underline", is_not_match)
                                 >
                                     {display_text}
                                 </a>
