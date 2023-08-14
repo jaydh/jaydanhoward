@@ -57,6 +57,7 @@ jobs:
 
   deploy:
     name: deploy
+    needs: [test, fmt, clippy, coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Install doctl
@@ -64,4 +65,4 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
       - name: Deploy
-        run: doctl cfb792d1-205b-4ed4-a20b-4c851a4c374c 
+        run: doctl apps update cfb792d1-205b-4ed4-a20b-4c851a4c374c
