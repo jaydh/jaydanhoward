@@ -1,6 +1,7 @@
 #[cfg(feature = "ssr")]
 pub mod main {
     use crate::components::App;
+    use crate::telemtry::main::{get_subscriber, init_subscriber};
     use actix_files::Files;
     use actix_web::{web, HttpResponse, HttpServer};
     use leptos::*;
@@ -11,6 +12,8 @@ pub mod main {
     }
 
     pub async fn run() -> Result<(), std::io::Error> {
+        let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
+        init_subscriber(subscriber);
         let conf = get_configuration(None).await.unwrap();
         let addr = conf.leptos_options.site_addr;
         let routes = generate_route_list(|cx| view! { cx, <App/> });

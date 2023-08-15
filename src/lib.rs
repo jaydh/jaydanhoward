@@ -1,8 +1,9 @@
 use cfg_if::cfg_if;
 
 pub mod components;
-mod dark_mode;
+pub mod dark_mode;
 pub mod startup;
+pub mod telemtry;
 
 cfg_if! {
 if #[cfg(feature = "hydrate")] {
