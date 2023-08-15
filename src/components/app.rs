@@ -1,5 +1,5 @@
 use crate::components::about::About;
-use crate::components::lighthouse::Lighthouse;
+use crate::components::diagnostics::Diagnostics;
 use crate::components::skills::{BetterAt, GreatAt, InterestedIn, Skills};
 use leptos::*;
 use leptos_meta::{provide_meta_context, Stylesheet, Title};
@@ -12,7 +12,7 @@ pub fn App(cx: Scope) -> impl IntoView {
     let routes = vec![
         ("/about", "About"),
         ("/skills", "Skills"),
-        ("/lighthouse", "Lighthouse"),
+        ("/diagnostics", "Diagnostics"),
     ];
 
     view! { cx,
@@ -53,7 +53,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                                     path="interested"
                                     view=InterestedIn />
                             </Route>
-                            <Route path="/lighthouse" view=Lighthouse />
+                            <Route path="/diagnostics" view=Diagnostics />
                             <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
                             <Route path="/skills" view=move |cx| view! { cx, <Redirect path="/skills/great"/> }/>
                         </Routes>

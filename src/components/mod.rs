@@ -1,6 +1,6 @@
 mod about;
 mod app;
-mod lighthouse;
+mod diagnostics;
 mod skills;
 
 pub use app::App;
