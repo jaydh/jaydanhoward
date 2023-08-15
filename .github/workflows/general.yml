@@ -66,4 +66,4 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
       - name: Deploy
-        run: doctl apps create-deployment cfb792d1-205b-4ed4-a20b-4c851a4c374c --spec=spec.yaml
+        run: doctl apps create-deployment cfb792d1-205b-4ed4-a20b-4c851a4c374c
