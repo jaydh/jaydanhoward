@@ -14,7 +14,6 @@ pub mod main {
     pub async fn run() -> Result<(), std::io::Error> {
         let conf = get_configuration(None).await.unwrap();
         let addr = conf.leptos_options.site_addr;
-        // Generate the list of routes in your Leptos App
         let routes = generate_route_list(|cx| view! { cx, <App/> });
 
         let server = HttpServer::new(move || {
