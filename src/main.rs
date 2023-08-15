@@ -12,7 +12,7 @@ async fn main() -> () {
             .args([
                 "https://jaydanhoward-qwuri.ondigitalocean.app/",
                 "--output-path",
-                "./assets/lighthouse.html",
+                "./site/lighthouse.html",
                 r#"--chrome-flags="--headless""#,
             ])
             .output()
