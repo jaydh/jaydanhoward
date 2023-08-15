@@ -1,6 +1,6 @@
 use cfg_if::cfg_if;
 
-pub mod app;
+pub mod components;
 mod dark_mode;
 pub mod startup;
 
@@ -8,10 +8,10 @@ cfg_if! {
 if #[cfg(feature = "hydrate")] {
 
   use wasm_bindgen::prelude::wasm_bindgen;
+  use components::App;
 
     #[wasm_bindgen]
     pub fn hydrate() {
-      use app::*;
       use leptos::*;
 
       console_error_panic_hook::set_once();

@@ -27,14 +27,10 @@ RUN cargo leptos build --release -vv
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates npm chromium curl \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
-
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
-
-RUN npm install -g lighthouse
 
 COPY --from=builder /app/target/server/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site

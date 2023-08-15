@@ -1,8 +1,7 @@
 #[cfg(feature = "ssr")]
 pub mod main {
-    use crate::app::App;
+    use crate::components::App;
     use actix_files::Files;
-    use actix_web::*;
     use actix_web::{web, HttpResponse, HttpServer};
     use leptos::*;
     use leptos_actix::{generate_route_list, LeptosRoutes};
@@ -20,7 +19,7 @@ pub mod main {
             let leptos_options = &conf.leptos_options;
             let site_root = &leptos_options.site_root;
 
-            App::new()
+            actix_web::App::new()
                 .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
                 .service(Files::new("/pkg", format!("{site_root}/pkg")))
                 .service(Files::new("/assets", site_root))
@@ -31,7 +30,7 @@ pub mod main {
                     |cx| view! { cx, <App/> },
                 )
                 .app_data(web::Data::new(leptos_options.to_owned()))
-                .wrap(middleware::Compress::default())
+                .wrap(actix_web::middleware::Compress::default())
         })
         .bind(&addr)?
         .run()

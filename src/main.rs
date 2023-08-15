@@ -2,25 +2,8 @@
 #[actix_web::main]
 async fn main() -> () {
     use jaydanhoward::startup::main::run;
-    use std::process::Command;
-    use std::thread;
-    use std::time::Duration;
 
-    thread::spawn(|| {
-        thread::sleep(Duration::from_secs(30));
-        let output = Command::new("lighthouse")
-            .args([
-                "https://jaydanhoward-qwuri.ondigitalocean.app/",
-                "--output-path",
-                "./site/lighthouse.html",
-                r#"--chrome-flags="--headless""#,
-            ])
-            .output()
-            .expect("failed to execute process");
-        dbg!(output);
-    });
-
-    run().await;
+    let _ = run().await;
 }
 
 #[cfg(feature = "ssr")]
