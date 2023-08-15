@@ -24,13 +24,23 @@ web-sys = { version = "0.3", features = [
 ]}
 serde = "1.0.183"
 anyhow = "1.0.72"
-
+tokio = { version = "1", optional = true, features = ["macros", "rt-multi-thread"] }
+tracing = { version = "0.1.19", optional = true} 
+tracing-actix-web = { version = "0.7", optional = true} 
+tracing-bunyan-formatter = { version = "0.3", optional = true}
+tracing-log = { version = "0.1.1", optional = true}
+tracing-subscriber = { version = "0.3", optional = true, features = ["registry", "env-filter"] }
 [features]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
 ssr = [
   "dep:actix-files",
   "dep:actix-web",
   "dep:leptos_actix",
+  "dep:tokio",
+  "dep:tracing",
+  "dep:tracing-bunyan-formatter",
+  "dep:tracing-log",
+  "dep:tracing-subscriber",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
