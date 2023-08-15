@@ -1141,6 +1141,7 @@ version = "0.1.0"
 dependencies = [
  "actix-files",
  "actix-web",
+ "anyhow",
  "cfg-if",
  "console_error_panic_hook",
  "http",

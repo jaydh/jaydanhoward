@@ -1,6 +1,8 @@
+use cfg_if::cfg_if;
+
 pub mod app;
 mod dark_mode;
-use cfg_if::cfg_if;
+pub mod startup;
 
 cfg_if! {
 if #[cfg(feature = "hydrate")] {
