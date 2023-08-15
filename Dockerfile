@@ -32,7 +32,7 @@ RUN apt-get update -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/target/server/release/leptos_start /app/
+COPY --from=builder /app/target/server/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
 COPY --from=builder /app/Cargo.toml /app/
 
