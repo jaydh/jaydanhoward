@@ -31,6 +31,7 @@ pub fn Skills(cx: Scope) -> impl IntoView {
                                     class=("cursor-pointer", is_not_match)
                                     class=("hover:underline", is_not_match)
                                     class=("no-underline", is_not_match)
+                                    class=("font-medium", is_not_match)
                                 >
                                     {display_text}
                                 </a>
