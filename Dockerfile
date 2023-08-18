@@ -54,5 +54,4 @@ RUN chmod +x ./control_job.sh
 RUN groupadd -r chrome && useradd -r -g chrome -G audio,video chrome \
   && mkdir -p /home/chrome/reports && chown -R chrome:chrome /home/chrome
 
-USER chrome
 CMD ./control_job.sh
