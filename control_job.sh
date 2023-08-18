@@ -27,7 +27,7 @@ if [ $retry_count -eq $MAX_RETRIES ]; then
     echo "Health check did not succeed after $MAX_RETRIES retries."
 fi
 
-(cd /home/chrome && runuser -l chrome -c "lighthouse --chrome-flags=\"--headless\" $LEPTOS_SITE_ADDR")
+(cd /home/chrome && runuser -l chrome -c "lighthouse --chrome-flags=\"--headless\" http://$LEPTOS_SITE_ADDR")
 cp /home/chrome/jaydanhoward*.report.html /app/site/lighthouse.html
 
 fg %1
