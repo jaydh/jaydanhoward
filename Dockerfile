@@ -52,6 +52,6 @@ COPY control_job.sh control_job.sh
 RUN chmod +x ./control_job.sh
 
 RUN groupadd -r chrome && useradd -r -g chrome -G audio,video chrome \
-  && mkdir -p /home/chrome/reports && chown -R chrome:chrome /home/chrome
+  && mkdir -p /home/chrome && chown -R chrome:chrome /home/chrome
 
 CMD ./control_job.sh
