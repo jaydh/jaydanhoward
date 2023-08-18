@@ -27,15 +27,18 @@ RUN cargo leptos build --release -vv
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates curl chromium \
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends openssl ca-certificates curl chromium
 
 RUN curl -sSL https://deb.nodesource.com/setup_18.x | bash
+RUN curl -o /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh && sh /tmp/netdata-kickstart.sh
 RUN apt-get install -y nodejs
 ARG CACHEBUST=1
 RUN npm install -g lighthouse
+
+RUN apt-get autoremove -y \
+    && apt-get clean -y \
+    && apt-get purge --auto-remove -y gnupg \
+    && rm -rf /var/lib/apt/lists/* 
 
 COPY --from=builder /app/target/server/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
@@ -46,7 +49,9 @@ ENV RUST_LOG="info"
 ENV APP_ENVIRONMENT="production"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT="site"
+
 EXPOSE 8080
+EXPOSE 19999
 
 COPY control_job.sh control_job.sh
 RUN chmod +x ./control_job.sh
