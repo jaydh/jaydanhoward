@@ -27,10 +27,15 @@ RUN cargo leptos build --release -vv
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && apt-get install -y --no-install-recommends openssl ca-certificates curl chromium \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+
+RUN curl -sSL https://deb.nodesource.com/setup_18.x | bash
+RUN apt-get install -y nodejs
+ARG CACHEBUST=1
+RUN npm install -g lighthouse
 
 COPY --from=builder /app/target/server/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
@@ -43,4 +48,11 @@ ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
 ENV LEPTOS_SITE_ROOT="site"
 EXPOSE 8080
 
-CMD ["/app/jaydanhoward"]
+COPY control_job.sh control_job.sh
+RUN chmod +x ./control_job.sh
+
+RUN groupadd -r chrome && useradd -r -g chrome -G audio,video chrome \
+  && mkdir -p /home/chrome/reports && chown -R chrome:chrome /home/chrome
+
+USER chrome
+CMD ./control_job.sh
