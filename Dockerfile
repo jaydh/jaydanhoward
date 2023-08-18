@@ -30,7 +30,8 @@ RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl ca-certificates curl chromium
 
 RUN curl -sSL https://deb.nodesource.com/setup_18.x | bash
-RUN curl -o /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh && sh /tmp/netdata-kickstart.sh
+# Might put nginx in this container
+# RUN curl -o /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh && sh /tmp/netdata-kickstart.sh
 RUN apt-get install -y nodejs
 ARG CACHEBUST=1
 RUN npm install -g lighthouse
