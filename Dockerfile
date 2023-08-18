@@ -1,3 +1,5 @@
+# Image is huge, haven't split into separate services because not sure how DigitalOcean billing works and I'm cheap (does each node have a static cost?)
+
 FROM lukemathwalker/cargo-chef:latest-rust-1.71.0 as chef
 
 RUN apt-get update && apt-get install lld clang -y

@@ -3,6 +3,8 @@ use leptos::*;
 #[component]
 pub fn Lighthouse(cx: Scope) -> impl IntoView {
     view! { cx,
+
+        <h2 class="text-semibold">r#"Lighthouse report ("#<a class="underline" href="https://github.com/jaydh/jaydanhoward/blob/main/control_job.sh" target="_blank" rel="noreferrer">generated for every deploy</a>r#")"#: </h2>
         <iframe
             src="assets/lighthouse.html"
             title="Lighthouse Report"
@@ -14,8 +16,9 @@ pub fn Lighthouse(cx: Scope) -> impl IntoView {
 #[component]
 pub fn Github(cx: Scope) -> impl IntoView {
     view! { cx,
-         <div>
-             <a class="underline" href="https://github.com/jaydh/jaydanhoward/actions">Latest deploys</a>
+         <div class="flex flex-col">
+             <a class="underline" href="https://github.com/jaydh/jaydanhoward" target="_blank" rel="noreferrer">Source code</a>
+             <a class="underline" href="https://github.com/jaydh/jaydanhoward/actions" target="_blank" rel="noreferrer">Latest deploys</a>
          </div>
     }
 }

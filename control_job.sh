@@ -28,6 +28,6 @@ if [ $retry_count -eq $MAX_RETRIES ]; then
 fi
 
 (cd /home/chrome && runuser -l chrome -c "lighthouse --chrome-flags=\"--headless\" http://$LEPTOS_SITE_ADDR")
-cp /home/chrome/jaydanhoward*.report.html /app/site/lighthouse.html
+cp /home/chrome/*.report.html /app/site/lighthouse.html
 
 fg %1
