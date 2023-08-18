@@ -1,6 +1,6 @@
 mod about;
 mod app;
-mod diagnostics;
+mod dev;
 mod skills;
 
 pub use app::App;

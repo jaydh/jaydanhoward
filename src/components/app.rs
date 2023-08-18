@@ -1,5 +1,5 @@
 use crate::components::about::About;
-use crate::components::diagnostics::Diagnostics;
+use crate::components::dev::Dev;
 use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn, Skills};
 use leptos::*;
 use leptos_meta::{provide_meta_context, Stylesheet, Title};
@@ -56,7 +56,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                                     path="believe"
                                     view=Beliefs />
                             </Route>
-                            <Route path="/diagnostics" view=Diagnostics />
+                            <Route path="/dev" view=Dev />
                             <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
                             <Route path="/skills" view=move |cx| view! { cx, <Redirect path="/skills/great"/> }/>
                         </Routes>

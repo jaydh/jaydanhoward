@@ -20,7 +20,7 @@ pub fn Github(cx: Scope) -> impl IntoView {
     }
 }
 #[component]
-pub fn Diagnostics(cx: Scope) -> impl IntoView {
+pub fn Dev(cx: Scope) -> impl IntoView {
     view! { cx,
         <Github />
         <Lighthouse />
