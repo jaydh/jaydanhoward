@@ -9,11 +9,7 @@ use leptos_router::{Redirect, Route, Router, Routes};
 pub fn App(cx: Scope) -> impl IntoView {
     provide_meta_context(cx);
 
-    let routes = vec![
-        ("/about", "About"),
-        ("/skills", "Skills"),
-        ("/diagnostics", "Diagnostics"),
-    ];
+    let routes = vec![("/about", "About"), ("/skills", "Skills"), ("/dev", "Dev")];
 
     view! { cx,
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
