@@ -16,14 +16,19 @@ RUN mkdir -p /app
 WORKDIR /app
 
 FROM chef as planner
-COPY . .
+COPY Cargo.toml Cargo.toml
+COPY src src
 run cargo +nightly chef prepare --recipe-path recipe.json
 
 FROM chef as builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo +nightly chef cook --release --recipe-path recipe.json
 
-COPY . .
+COPY Cargo.toml Cargo.toml
+COPY assets assets
+COPY src src
+COPY style style
+COPY tailwind.config.js tailwind.config.js
 RUN cargo leptos build --release -vv
 
 FROM debian:bullseye-slim AS runtime 
