@@ -1,5 +1,5 @@
 #!/bin/bash
-
+IFS=$' \t\r\n'
 set -m
 
 MAX_RETRIES=10  # Maximum number of retries
@@ -28,6 +28,5 @@ fi
 lighthouse --output-path lighthouse.html --chrome-flags="--headless" $LEPTOS_SITE_ADDR/about
 
 BOUNDARY_UUID=$(uuidgen)
-echo "$LEPTOS_SITE_ADDR/api/lighthouse"
 curl -X POST -H "Content-Type: multipart/form-data; boundary=$BOUNDARY_UUID" "file=@/home/chrome/lighthouse.html" "$LEPTOS_SITE_ADDR/api/lighthouse"
 exit 0
