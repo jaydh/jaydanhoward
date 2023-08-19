@@ -19,9 +19,10 @@ services:
     instance_size_slug: basic-xxs
     routes:
       - path: /
-workers:
+jobs:
   - name: lighthouse 
     dockerfile_path: lighthouse/Dockerfile
+    kind: POST_DEPLOY
     github:
       branch: main 
       repo: jaydh/jaydanhoward
