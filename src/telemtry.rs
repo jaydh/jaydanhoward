@@ -1,44 +1,47 @@
 #[cfg(feature = "ssr")]
-pub mod main {
-    use tokio::task::JoinHandle;
-    use tracing::{subscriber::set_global_default, Subscriber};
-    use tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer};
-    use tracing_log::LogTracer;
-    use tracing_subscriber::fmt::MakeWriter;
-    use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use {
+    tokio::task::JoinHandle,
+    tracing::{subscriber::set_global_default, Subscriber},
+    tracing_bunyan_formatter::{BunyanFormattingLayer, JsonStorageLayer},
+    tracing_log::LogTracer,
+    tracing_subscriber::fmt::MakeWriter,
+    tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry},
+};
 
-    pub fn get_subscriber<Sink>(
-        name: String,
-        env_filter: String,
-        sink: Sink,
-    ) -> impl Subscriber + Send + Sync
-    where
-        Sink: for<'a> MakeWriter<'a> + Send + Sync + 'static,
-    {
-        let env_filter =
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
-        let leptos_filter =
-            EnvFilter::try_new("leptos=warn,leptos_meta=warn,leptos_router=warn,app=info").unwrap();
+#[cfg(feature = "ssr")]
+pub fn get_subscriber<Sink>(
+    name: String,
+    env_filter: String,
+    sink: Sink,
+) -> impl Subscriber + Send + Sync
+where
+    Sink: for<'a> MakeWriter<'a> + Send + Sync + 'static,
+{
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
+    let leptos_filter =
+        EnvFilter::try_new("leptos=warn,leptos_meta=warn,leptos_router=warn,app=info").unwrap();
 
-        let formatting_layer = BunyanFormattingLayer::new(name, sink);
-        Registry::default()
-            .with(env_filter)
-            .with(leptos_filter)
-            .with(JsonStorageLayer)
-            .with(formatting_layer)
-    }
+    let formatting_layer = BunyanFormattingLayer::new(name, sink);
+    Registry::default()
+        .with(env_filter)
+        .with(leptos_filter)
+        .with(JsonStorageLayer)
+        .with(formatting_layer)
+}
 
-    pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
-        LogTracer::init().expect("Failed to set logger.");
-        set_global_default(subscriber).expect("Failed to set subscriber");
-    }
+#[cfg(feature = "ssr")]
+pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
+    LogTracer::init().expect("Failed to set logger.");
+    set_global_default(subscriber).expect("Failed to set subscriber");
+}
 
-    pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        let current_span = tracing::Span::current();
-        tokio::task::spawn_blocking(move || current_span.in_scope(f))
-    }
+#[cfg(feature = "ssr")]
+pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
+where
+    F: FnOnce() -> R + Send + 'static,
+    R: Send + 'static,
+{
+    let current_span = tracing::Span::current();
+    tokio::task::spawn_blocking(move || current_span.in_scope(f))
 }

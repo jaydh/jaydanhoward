@@ -2,6 +2,7 @@ use cfg_if::cfg_if;
 
 pub mod components;
 pub mod dark_mode;
+pub mod routes;
 pub mod startup;
 pub mod telemtry;
 

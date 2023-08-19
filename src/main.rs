@@ -1,7 +1,7 @@
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> () {
-    use jaydanhoward::startup::main::run;
+    use jaydanhoward::startup::run;
 
     let _ = run().await;
 }
@@ -24,22 +24,4 @@ pub fn main() {
     // unless we want this to work with e.g., Trunk for pure client-side testing
     // see lib.rs for hydration function instead
     // see optional feature `csr` instead
-}
-
-#[cfg(all(not(feature = "ssr"), feature = "csr"))]
-pub fn main() {
-    // a client-side main function is required for using `trunk serve`
-    // prefer using `cargo leptos serve` instead
-    // to run: `trunk serve --open --features csr`
-    use leptos::*;
-    use leptos_start::app::*;
-    use wasm_bindgen::prelude::wasm_bindgen;
-
-    console_error_panic_hook::set_once();
-
-    leptos::mount_to_body(move |cx| {
-        // note: for testing it may be preferrable to replace this with a
-        // more specific component, although leptos_router should still work
-        view! { cx, <App/> }
-    });
 }
