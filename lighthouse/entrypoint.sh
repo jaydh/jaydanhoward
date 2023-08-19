@@ -25,5 +25,6 @@ if [ $retry_count -eq $MAX_RETRIES ]; then
     exit 1
 fi
 
-lighthouse --chrome-flags="--headless" $LEPTOS_SITE_ADDR/about
+lighthouse --output-path lighthouse.html --chrome-flags="--headless" $LEPTOS_SITE_ADDR/about
+curl -X POST -H "Content-Type: multipart/form-data" "file=@/home/chrome/lighthouse.html" $LEPTOS_SITE_ADDR/api/lighthouse
 exit 0
