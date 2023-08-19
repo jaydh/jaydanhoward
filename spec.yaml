@@ -19,3 +19,9 @@ services:
     instance_size_slug: basic-xxs
     routes:
       - path: /
+workers:
+  - name: lighthouse 
+    dockerfile_path: lighthouse/Dockerfile
+    source_dir: lighthouse/
+    instance_count: 1
+    instance_size_slug: basic-xxs
