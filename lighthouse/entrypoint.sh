@@ -4,9 +4,9 @@ set -m
 
 MAX_RETRIES=10  # Maximum number of retries
 RETRY_INTERVAL=5  # Time interval between retries in seconds
-
 retry_count=0
 
+echo "Starting lighthouse worker"
 while [ $retry_count -lt $MAX_RETRIES ]; do
     response_code=$(curl -s -o /dev/null -w "%{http_code}" $LEPTOS_SITE_ADDR/health_check)
     
