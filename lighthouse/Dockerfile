@@ -1,7 +1,7 @@
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates curl chromium
+    && apt-get install -y --no-install-recommends openssl ca-certificates curl chromium uuid-runtime
 
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs
 ARG CACHEBUST=1
