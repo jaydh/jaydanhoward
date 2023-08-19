@@ -1,3 +1,5 @@
+use std::fs;
+use std::io::Write; // bring trait into scope
 #[cfg(feature = "ssr")]
 use {
     actix_multipart::Multipart,
@@ -7,15 +9,24 @@ use {
 
 #[cfg(feature = "ssr")]
 pub async fn upload_lighthouse_report(mut payload: Multipart) -> Result<HttpResponse, Error> {
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open("site/lighthouse.html")?;
+
+    let mut file_contents: Vec<u8> = Vec::new();
     // iterate over multipart stream
     while let Some(item) = payload.next().await {
         let mut field = item?;
 
         // Field in turn is stream of *Bytes* object
         while let Some(chunk) = field.next().await {
-            println!("-- CHUNK: \n{:?}", std::str::from_utf8(&chunk?));
+            let chunk = chunk?;
+            dbg!(&chunk);
+            file_contents.extend_from_slice(&chunk);
         }
     }
+    let _ = file.write_all(&file_contents);
 
     Ok(HttpResponse::Ok().into())
 }

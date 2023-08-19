@@ -11,7 +11,7 @@ use {
 
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
-    let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
+    let subscriber = get_subscriber("jaydanhoward".into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
@@ -22,10 +22,7 @@ pub async fn run() -> Result<(), std::io::Error> {
         let site_root = &leptos_options.site_root;
 
         actix_web::App::new()
-            .route(
-                "/api/upload_lighthouse_report",
-                web::post().to(upload_lighthouse_report),
-            )
+            .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
             .route("/health_check", web::get().to(health_check))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
