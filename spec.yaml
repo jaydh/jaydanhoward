@@ -22,6 +22,9 @@ services:
 workers:
   - name: lighthouse 
     dockerfile_path: lighthouse/Dockerfile
+    github:
+      branch: main 
+      repo: jaydh/jaydanhoward
     source_dir: lighthouse/
     instance_count: 1
     instance_size_slug: basic-xxs
