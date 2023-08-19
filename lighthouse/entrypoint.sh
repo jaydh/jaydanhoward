@@ -28,5 +28,5 @@ lighthouse --output-path lighthouse.html --chrome-flags="--headless" $LEPTOS_SIT
 
 BOUNDARY_UUID=$(uuidgen)
 BOUNDARY_UUID_NO_HYPHENS=${BOUNDARY_UUID//-}
-curl -X POST -H "Content-Type: multipart/form-data; boundary=$BOUNDARY_UUID_NO_HYPHENS" "file=@/home/chrome/lighthouse.html" "$LEPTOS_SITE_ADDR/api/lighthouse"
+curl -X POST -H "Content-Type: multipart/form-data; boundary=gc0p4Jq0M2Yt08jU534c0p" "file=@/home/chrome/lighthouse.html" "$LEPTOS_SITE_ADDR/api/lighthouse"
 exit 0
