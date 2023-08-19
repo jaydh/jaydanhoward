@@ -1,15 +1,14 @@
-use std::fs;
-use std::io::Write; // bring trait into scope
 #[cfg(feature = "ssr")]
 use {
     actix_multipart::Multipart,
     actix_web::{Error, HttpResponse},
     futures_util::StreamExt as _,
+    std::io::Write,
 };
 
 #[cfg(feature = "ssr")]
 pub async fn upload_lighthouse_report(mut payload: Multipart) -> Result<HttpResponse, Error> {
-    let mut file = fs::OpenOptions::new()
+    let mut file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
         .open("site/lighthouse.html")?;
