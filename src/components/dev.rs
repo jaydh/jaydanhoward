@@ -4,7 +4,12 @@ use leptos::*;
 pub fn Lighthouse(cx: Scope) -> impl IntoView {
     view! { cx,
 
-        <h2 class="text-semibold">r#"Lighthouse report ("#<a class="underline" href="https://github.com/jaydh/jaydanhoward/blob/main/control_job.sh" target="_blank" rel="noreferrer">generated for every deploy</a>r#")"#: </h2>
+        <h2 class="text-semibold">r#"Lighthouse report ("#
+            <a class="underline" href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">
+                generated for every deploy (performance score suffering from running chrome on small instance size)
+            </a>
+             r#")"#:
+        </h2>
         <iframe
             src="assets/lighthouse.html"
             title="Lighthouse Report"

@@ -25,9 +25,5 @@ if [ $retry_count -eq $MAX_RETRIES ]; then
 fi
 
 lighthouse --output-path lighthouse.html --chrome-flags="--headless" $LEPTOS_SITE_ADDR/about
-
-BOUNDARY_UUID=$(uuidgen)
-BOUNDARY_UUID_NO_HYPHENS=$(echo $BOUNDARY_UUID | tr -d '-')
-first_10_chars=$(echo "$original_string" | cut -c 1-10)
 curl --location "$LEPTOS_SITE_ADDR/api/lighthouse" --form 'file=@"/home/chrome/lighthouse.html"'
 exit 0
