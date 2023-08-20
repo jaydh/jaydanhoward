@@ -4,11 +4,11 @@ use leptos::*;
 pub fn Lighthouse(cx: Scope) -> impl IntoView {
     view! { cx,
 
-        <h2 class="text-semibold">r#"Lighthouse report ("#
+        <h2 class="font-semibold">r#"Programmatically generated lighthosue report("#
             <a class="underline" href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">
-                generated for every deploy (performance score suffering from running chrome on small instance size)
+                for every deploy
             </a>
-             r#")"#:
+             r#")"#. Note that the performance score here suffers from running chrome on small instance size, my local machine regularly get 99+.
         </h2>
         <iframe
             src="assets/lighthouse.html"
