@@ -14,14 +14,10 @@ pub async fn upload_lighthouse_report(mut payload: Multipart) -> Result<HttpResp
         .open("site/lighthouse.html")?;
 
     let mut file_contents: Vec<u8> = Vec::new();
-    // iterate over multipart stream
     while let Some(item) = payload.next().await {
         let mut field = item?;
-
-        // Field in turn is stream of *Bytes* object
         while let Some(chunk) = field.next().await {
             let chunk = chunk?;
-            dbg!(&chunk);
             file_contents.extend_from_slice(&chunk);
         }
     }

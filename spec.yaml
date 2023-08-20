@@ -28,4 +28,4 @@ jobs:
       repo: jaydh/jaydanhoward
     source_dir: lighthouse/
     instance_count: 1
-    instance_size_slug: basic-xxs
+    instance_size_slug: basic-m
