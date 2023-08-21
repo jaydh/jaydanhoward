@@ -10,6 +10,7 @@ crate-type = ["cdylib", "rlib"]
 actix-files = { version = "0.6", optional = true }
 actix-web = { version = "4", optional = true, features = ["macros"] }
 console_error_panic_hook = "0.1"
+config = { version = "0.13", default-features = false, features = ["yaml"] }
 cfg-if = "1"
 http = { version = "0.2", optional = true }
 leptos = { version = "0.4", features = ["nightly"] }
@@ -23,6 +24,8 @@ web-sys = { version = "0.3", features = [
   "HtmlDocument",
 ]}
 serde = "1.0.183"
+serde-aux = { version = "4", optional = true }
+serde_json = { version = "1", optional = true }
 anyhow = "1.0.72"
 tokio = { version = "1", optional = true, features = ["macros", "rt-multi-thread"] }
 tracing = { version = "0.1.19", optional = true} 
@@ -53,6 +56,8 @@ ssr = [
   "dep:futures-util",
   "dep:secrecy",
   "dep:base64",
+  "dep:serde-aux",
+  "dep:serde_json",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
