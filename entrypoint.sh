@@ -2,7 +2,8 @@
 
 set -m
 
-# start app
+service nginx start
+
 ./jaydanhoward &
 
 fg %1

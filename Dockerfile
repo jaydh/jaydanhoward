@@ -34,10 +34,11 @@ RUN cargo leptos build --release -vv
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && apt-get install -y --no-install-recommends openssl ca-certificates nginx curl \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
+RUN curl -o /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh && sh /tmp/netdata-kickstart.sh
 
 COPY --from=builder /app/target/server/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
@@ -46,14 +47,11 @@ COPY --from=builder /app/Cargo.toml /app/
 WORKDIR /app
 ENV RUST_LOG="info"
 ENV APP_ENVIRONMENT="production"
-ENV LEPTOS_SITE_ADDR="0.0.0.0:8080"
+ENV LEPTOS_SITE_ADDR="0.0.0.0:8000"
 ENV LEPTOS_SITE_ROOT="site"
 
 EXPOSE 8080
 
-
-# Might put nginx in this container
-# RUN curl -o /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh && sh /tmp/netdata-kickstart.sh
-#
+COPY nginx.conf /etc/nginx/nginx.conf
 COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
