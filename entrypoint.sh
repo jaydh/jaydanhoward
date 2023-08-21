@@ -2,7 +2,7 @@
 
 set -m
 
-service nginx start
+# service nginx start
 
 ./jaydanhoward &
 
