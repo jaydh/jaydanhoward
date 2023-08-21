@@ -1,21 +1,24 @@
 #[cfg(feature = "ssr")]
+#[derive(thiserror::Error, Debug)]
+pub enum LighthouseError {
+    #[error("invalid credentials.")]
+    InvalidCredentials(),
+    #[error("Feature is disabled")]
+    DisabledError(),
+}
+
+#[cfg(feature = "ssr")]
 use {
     actix_multipart::Multipart,
-    actix_web::http::header::{HeaderMap, HeaderValue},
+    actix_web::http::header::HeaderMap,
     actix_web::{Error, HttpRequest, HttpResponse},
     base64::Engine,
     futures_util::StreamExt as _,
-    secrecy::{ExposeSecret, Secret},
     std::io::Write,
 };
 
 #[cfg(feature = "ssr")]
-struct Credentials {
-    username: String,
-    password: Secret<String>,
-}
-#[cfg(feature = "ssr")]
-fn basic_authentication(headers: &HeaderMap) -> Result<(), Error> {
+fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
     // The header value, if present, must be a valid UTF8 string
     let header_value = headers.get("Authorization").unwrap().to_str().unwrap();
     let base64encoded_credentials = header_value.strip_prefix("Basic ").unwrap();
@@ -28,10 +31,16 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), Error> {
     let username = credentials.next().unwrap().to_string();
     let password = credentials.next().unwrap().to_string();
 
-    if username != "jay" || password != "ab" {
-        return Err(Error::try_from("blah"));
+    match std::env::var("LIGHTHOUSE_UPDATE_TOKEN") {
+        Ok(val) => {
+            if username != "jay" || password != val {
+                return Err(LighthouseError::InvalidCredentials());
+            }
+        }
+        Err(_) => return Err(LighthouseError::DisabledError()),
     }
-    Ok(())
+
+    return Ok(());
 }
 
 #[cfg(feature = "ssr")]
@@ -40,6 +49,9 @@ pub async fn upload_lighthouse_report(
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
     let credentials = basic_authentication(request.headers());
+    if credentials.is_err() {
+        return Ok(HttpResponse::BadRequest().finish());
+    }
 
     let mut file = std::fs::OpenOptions::new()
         .create(true)
@@ -56,5 +68,5 @@ pub async fn upload_lighthouse_report(
     }
     let _ = file.write_all(&file_contents);
 
-    Ok(HttpResponse::Ok().into())
+    Ok(HttpResponse::Ok().finish())
 }
