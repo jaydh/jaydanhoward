@@ -2,10 +2,13 @@
 
 set -m
 
-echo "Starting nginx"
-service nginx start
-
 echo "Starting HTTP server"
 ./jaydanhoward &
+
+echo "Starting nginx"
+service nginx start &
+
+echo "Starting netdata"
+netdata &
 
 fg %1
