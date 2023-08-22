@@ -32,11 +32,10 @@ RUN cargo leptos build --release -vv
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates nginx curl \
+    && apt-get install -y --no-install-recommends openssl ca-certificates nginx \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
-RUN curl -o /tmp/netdata-kickstart.sh https://my-netdata.io/kickstart.sh
 
 COPY --from=builder /app/target/server/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
