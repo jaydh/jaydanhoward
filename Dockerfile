@@ -2,14 +2,12 @@
 
 FROM lukemathwalker/cargo-chef:latest-rust-1.71.0 as chef
 
-RUN apt-get update && apt-get install lld clang -y
+RUN apt-get update && apt-get install lld clang curl -y
 run rustup install nightly
 run rustup default nightly
 run rustup target add wasm32-unknown-unknown
 
-RUN wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz
-RUN tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz
-RUN cp cargo-binstall /usr/local/cargo/bin
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
 RUN cargo binstall cargo-leptos -y
 
 RUN mkdir -p /app
