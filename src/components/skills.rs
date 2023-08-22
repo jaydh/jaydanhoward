@@ -70,7 +70,9 @@ pub fn BetterAt(cx: Scope) -> impl IntoView {
             <li>Rust</li>
             <li>Leptos</li>
             <li>Kubernetes</li>
-            <li></li>
+            <li>Motorcyling</li>
+            <li>Dog parenting</li>
+            <li>Camping</li>
         </ul>
     }
 }
