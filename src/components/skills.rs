@@ -93,7 +93,7 @@ pub fn InterestedIn(cx: Scope) -> impl IntoView {
 pub fn Beliefs(cx: Scope) -> impl IntoView {
     view! { cx,
         <h2 class="mb-10 font-semibold">Evolving list of loosely held, hopefully not pretentious sounding, and strong beliefs about software engineering, mayhaps only applying to the web world: </h2>
-        <ul class="list-disc list-outside space-y-4">
+        <ul class="list-disc list-outside space-y-4 mb-60">
             <li>Code that feels good to write is productive code</li>
             <li>Teams should use auto-formatters</li>
             <li>Unit test files that have more lines of mocking than tests is a really bad sign, and will create friction when business needs change, followed by the implmentation, followed by the tests</li>

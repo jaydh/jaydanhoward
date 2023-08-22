@@ -16,7 +16,7 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <div class="flex w-screen h-screen bg-pale-beige px-40">
+                <div class="flex w-screen min-h-screen bg-pale-beige px-40">
                     <div class="flex flex-col w-full h-full gap-10 bg-ivory-beige px-40">
                         <nav class="pointer-events-auto hidden md:block mt-20 mb-20">
                             <ul class="flex rounded-full bg-warm-beige px-3 text-sm font-medium">
