@@ -55,8 +55,8 @@ pub fn GreatAt(cx: Scope) -> impl IntoView {
             <li>Designing performant and fault-tolerant RESTful APIs</li>
             <li>Service telemetry and root cause analysis</li>
             <li>Leading teams</li>
-            <li>talking to stake holders</li>
-            <li>finding high value wins (especially the ones with low costs)</li>
+            <li>Talking to stake holders</li>
+            <li>Finding high value wins (especially the ones with low costs)</li>
             <li>Mentoring junior engineers</li>
             <li>Getting it done</li>
         </ul>
