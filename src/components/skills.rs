@@ -108,12 +108,12 @@ pub fn Beliefs(cx: Scope) -> impl IntoView {
                 <li>r#"▫️ To past-tense code: gracefully handling old versions of code after deploying to prod"#</li>
                 <li>r#"▫️ To future-tense code: today's code will happily swap in and out with tomorrow's code"#</li>
             </ul>
-            <li>r#"We need to remember performance is a measurement of the latency and throughput of the communication between or within machines."#</li>
-            <li>r#"Performance claims that aren't measurable tend to be a result of engineers being shy about being called artists. We should not be shy."#</li>
+            <li>r#"We need to remember performance is a measurement of the latency and throughput of the communication between or within machines"#</li>
+            <li>r#"Performance claims that aren't measurable tend to be a result of engineers being shy about being called artists. We should not be shy"#</li>
             <li>Large multi-hundred-line PRs indicate problems in the process</li>
             <ul class="list-none list-outside pl-8 space-y-4">
                 <li>r#"▫️ Poor developer utilization"#</li>
-                <li>r#"▫️ Slower and more painful feedback cycles (requested changes happen in the production code and in tests)"#</li>
+                <li>r#"▫️ Slower and more painful feedback cycles (requested changes have to happen in the service code and in tests)"#</li>
                 <li>r#"▫️ Behind-the-scene iteration from single developer battling dragons"#</li>
             </ul>
         </ul>

@@ -39,6 +39,7 @@ futures-util = { version = "0.3.28", optional = true}
 secrecy = { version = "0.8.0", optional = true }
 base64 = { version = "0.21.2", optional = true } 
 thiserror = "1.0.47"
+femark = { version = "0.1.4", optional = true }
 
 [features]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
@@ -58,6 +59,7 @@ ssr = [
   "dep:base64",
   "dep:serde-aux",
   "dep:serde_json",
+  "dep:femark",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
