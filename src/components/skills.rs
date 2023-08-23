@@ -98,7 +98,7 @@ pub fn Beliefs(cx: Scope) -> impl IntoView {
         <ul class="list-disc list-outside space-y-4 mb-60">
             <li>Code that feels good to write is productive code</li>
             <li>Teams should use auto-formatters</li>
-            <li>Unit test files that have more lines of mocking than tests is a really bad sign, and will create friction when business needs change, followed by the implmentation, followed by the tests</li>
+            <li>Unit test files that have more lines of mocks than tests is a really bad sign since they cement contracts that will be null and void when business needs and implementations change</li>
             <li>Dogma is as rampant in tech as it is anywhere else pepole are involved. We should always stay open-minded</li>
             <li>r#"Everything in software is about getting things to communicate "well""#</li>
             <ul class="list-none list-outside pl-8 space-y-4">
