@@ -1,6 +1,7 @@
+#![allow(clippy::all)]
+
 use leptos::*;
 
-#[allow(clippy::all)]
 #[server(ActixExtract, "/api")]
 pub async fn actix_extract(cx: Scope) -> Result<String, ServerFnError> {
     use actix_web::web::Data;
