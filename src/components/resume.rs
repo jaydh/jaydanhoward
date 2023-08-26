@@ -12,7 +12,7 @@ pub async fn actix_extract(cx: Scope) -> Result<String, ServerFnError> {
 pub fn Resume(cx: Scope) -> impl IntoView {
     let once = create_resource(
         cx,
-        move || cx.clone(),
+        move || cx,
         |c: Scope| async move { actix_extract(c).await },
     );
 
