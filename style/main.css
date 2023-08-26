@@ -7,6 +7,10 @@ img {
 
 }
 
+.resume {
+    all: initial;
+}
+
 @font-face {
   font-family: 'IBM Plex Sans';
   src: url('/assets/fonts/*.ttf');

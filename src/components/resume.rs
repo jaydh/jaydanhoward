@@ -21,7 +21,7 @@ pub fn Resume(cx: Scope) -> impl IntoView {
             fallback=move || view! { cx, <p>"Loading..."</p> }>
             {move || {
                 once.read(cx)
-                    .map(|resume_html| view! { cx, <div inner_html=resume_html.ok() /> })
+                    .map(|resume_html| view! { cx, <div class="resume" inner_html=resume_html.ok() /> })
                 }
             }
         </Suspense>
