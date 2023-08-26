@@ -20,9 +20,10 @@ pub fn Resume(cx: Scope) -> impl IntoView {
          <Suspense
             fallback=move || view! { cx, <p>"Loading..."</p> }>
             {move || {
-            once.read(cx)
-                .map(|a| view! { cx, <div>{a}</div> })
-            }}
+                once.read(cx)
+                    .map(|resume_html| view! { cx, <div inner_html=resume_html.ok() /> })
+                }
+            }
         </Suspense>
     }
 }
