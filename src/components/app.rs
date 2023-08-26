@@ -1,5 +1,6 @@
 use crate::components::about::About;
 use crate::components::dev::Dev;
+use crate::components::resume::Resume;
 use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn, Skills};
 use leptos::*;
 use leptos_meta::{provide_meta_context, Stylesheet, Title};
@@ -11,12 +12,22 @@ pub fn App(cx: Scope) -> impl IntoView {
 
     let routes = vec![("/about", "About"), ("/skills", "Skills"), ("/dev", "Dev")];
     let links = vec![
-        ("https://github.com/jaydh", "fa-brands fa-github-square"),
+        ("/resume", "fa-regular fa-file-lines", false),
+        (
+            "https://github.com/jaydh",
+            "fa-brands fa-github-square",
+            true,
+        ),
         (
             "https://www.linkedin.com/in/jaydanhoward/",
             "fa-brands fa-linkedin",
+            true,
         ),
-        ("mailto:hello@jaydanhoward.com", "fa-solid fa-envelope"),
+        (
+            "mailto:hello@jaydanhoward.com",
+            "fa-solid fa-envelope",
+            true,
+        ),
     ];
 
     view! { cx,
@@ -47,12 +58,17 @@ pub fn App(cx: Scope) -> impl IntoView {
                                 </ul>
                                 <ul class="flex ml-auto">
                                     {links.into_iter()
-                                        .map(|(route, iconClass)| {
+                                        .map(|(route, iconClass, external)| {
+                                            let target = if external {
+                                                "_blank"
+                                            } else {
+                                                "_self"
+                                            };
                                             view! { cx,
                                                 <a
                                                     href=route
                                                     class="hover:underline relative block px-3 py-2 transition"
-                                                    target="_blank" rel="noreferrer"
+                                                    target=target rel="noreferrer"
                                                 >
                                                     <i class=iconClass />
                                                 </a>
@@ -81,6 +97,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                                     view=Beliefs />
                             </Route>
                             <Route path="/dev" view=Dev />
+                            <Route path="/resume" view=Resume />
                             <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
                             <Route path="/skills" view=move |cx| view! { cx, <Redirect path="/skills/great"/> }/>
                         </Routes>

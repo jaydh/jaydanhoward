@@ -7,7 +7,20 @@ use {
     actix_web::{web, HttpServer},
     leptos::*,
     leptos_actix::{generate_route_list, LeptosRoutes},
+    pulldown_cmark::{html, Options, Parser},
+    std::fs::read_to_string,
 };
+
+#[cfg(feature = "ssr")]
+async fn convert_resume_md_to_html() -> String {
+    let markdown_content = read_to_string("assets/resume.md").unwrap();
+    let options = Options::empty();
+    let parser = Parser::new_ext(&markdown_content, options);
+    let mut html_output = String::new();
+    html::push_html(&mut html_output, parser);
+
+    html_output
+}
 
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
@@ -15,6 +28,8 @@ pub async fn run() -> Result<(), std::io::Error> {
     init_subscriber(subscriber);
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
+
+    let resume = convert_resume_md_to_html().await;
     let routes = generate_route_list(|cx| view! { cx, <App/> });
 
     let server = HttpServer::new(move || {
@@ -33,6 +48,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                 |cx| view! { cx, <App/> },
             )
             .app_data(web::Data::new(leptos_options.to_owned()))
+            .app_data(web::Data::new(resume.to_owned()))
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?

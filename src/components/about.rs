@@ -17,6 +17,5 @@ pub fn About(cx: Scope) -> impl IntoView {
             </div>
             <img src="/assets/profile.jpg" class="pl-20"/>
         </div>
-
     }
 }

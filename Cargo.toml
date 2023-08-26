@@ -40,6 +40,8 @@ secrecy = { version = "0.8.0", optional = true }
 base64 = { version = "0.21.2", optional = true } 
 thiserror = "1.0.47"
 femark = { version = "0.1.4", optional = true }
+pulldown-cmark = { version = "0.9.3", optional = true }
+chrono = { version = "0.4.26", optional = true }
 
 [features]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
@@ -60,6 +62,8 @@ ssr = [
   "dep:serde-aux",
   "dep:serde_json",
   "dep:femark",
+  "dep:pulldown-cmark",
+  "dep:chrono",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
