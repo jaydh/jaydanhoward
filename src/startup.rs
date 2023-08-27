@@ -13,7 +13,7 @@ use {
 
 #[cfg(feature = "ssr")]
 async fn convert_resume_md_to_html() -> String {
-    let markdown_content = read_to_string("assets/resume.md").unwrap();
+    let markdown_content = read_to_string("/assets/resume.md").unwrap();
     let options = Options::empty();
     let parser = Parser::new_ext(&markdown_content, options);
     let mut html_output = String::new();
