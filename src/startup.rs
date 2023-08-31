@@ -8,12 +8,15 @@ use {
     leptos::*,
     leptos_actix::{generate_route_list, LeptosRoutes},
     pulldown_cmark::{html, Options, Parser},
+    std::env,
     std::fs::read_to_string,
 };
 
 #[cfg(feature = "ssr")]
 async fn convert_resume_md_to_html() -> String {
-    let markdown_content = read_to_string("site/resume.md").unwrap();
+    let site_dir = env::var("LEPTOS_SITE_ROOT").unwrap();
+
+    let markdown_content = read_to_string(format!("{}/resume.md", site_dir)).unwrap();
     let options = Options::empty();
     let parser = Parser::new_ext(&markdown_content, options);
     let mut html_output = String::new();
