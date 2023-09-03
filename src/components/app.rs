@@ -1,5 +1,6 @@
 use crate::components::about::About;
 use crate::components::dev::Dev;
+use crate::components::life::Life;
 use crate::components::resume::Resume;
 use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn, Skills};
 use leptos::*;
@@ -98,6 +99,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                             </Route>
                             <Route path="/dev" view=Dev />
                             <Route path="/resume" view=Resume />
+                            <Route path="/life" view=Life />
                             <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
                             <Route path="/skills" view=move |cx| view! { cx, <Redirect path="/skills/great"/> }/>
                         </Routes>
