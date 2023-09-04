@@ -298,7 +298,7 @@ pub fn Life(cx: Scope) -> impl IntoView {
                 target="_blank"
                 rel="noreferrer"
             >
-                "Conway's Game of Life"
+                "Wiki"
             </a>
             <h2>Alive Cells: {alive_cells}</h2>
             <Controls

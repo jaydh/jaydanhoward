@@ -1,6 +1,7 @@
 use crate::components::about::About;
 use crate::components::dev::Dev;
 use crate::components::life::Life;
+use crate::components::projects::Projects;
 use crate::components::resume::Resume;
 use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn, Skills};
 use leptos::*;
@@ -13,6 +14,7 @@ pub fn App(cx: Scope) -> impl IntoView {
 
     let routes = vec![("/about", "About"), ("/skills", "Skills"), ("/dev", "Dev")];
     let links = vec![
+        ("/projects", "fa-solid fa-circle-nodes", false),
         ("/resume", "fa-regular fa-file-lines", false),
         (
             "https://github.com/jaydh",
@@ -80,7 +82,6 @@ pub fn App(cx: Scope) -> impl IntoView {
                             </ul>
                         </nav>
                         <Routes>
-
                             <Route path="/about" view=About/ >
                             <Route path="/skills" view=Skills>
                                 <Route
@@ -96,12 +97,15 @@ pub fn App(cx: Scope) -> impl IntoView {
                                 <Route
                                     path="believe"
                                     view=Beliefs />
+                                <Route path="/" view=move |cx| view! { cx, <Redirect path="great"/> }/>
                             </Route>
                             <Route path="/dev" view=Dev />
+                            <Route path="/projects" view=Projects>
+                                <Route path="/life" view=Life />
+                                <Route path="/" view=move |cx| view! { cx, <Redirect path="life"/> }/>
+                            </Route>
                             <Route path="/resume" view=Resume />
-                            <Route path="/life" view=Life />
                             <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
-                            <Route path="/skills" view=move |cx| view! { cx, <Redirect path="/skills/great"/> }/>
                         </Routes>
                     </div>
                 </div>
