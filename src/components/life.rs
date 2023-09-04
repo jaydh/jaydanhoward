@@ -7,6 +7,7 @@ struct Cell {
     alive: bool,
     x_pos: i32,
     y_pos: i32,
+    neighbors: Vec<usize>,
 }
 
 impl fmt::Display for Cell {
@@ -30,15 +31,38 @@ impl fmt::Display for CellVec {
     }
 }
 
+fn prepare_neighbors(read_cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>) {
+    let current_cells = &read_cells().0;
+    let mut next_cells = current_cells.clone();
+
+    for cell in &mut next_cells {
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx == 0 && dy == 0 {
+                    continue; // Skip the current cell
+                }
+
+                let neighbor_x = cell.x_pos as isize + dx;
+                let neighbor_y = cell.y_pos as isize + dy;
+
+                if neighbor_x >= 0 && neighbor_y >= 0 {
+                    if let Some(neighbor_index) = current_cells.iter().position(|c| {
+                        c.x_pos as isize == neighbor_x && c.y_pos as isize == neighbor_y
+                    }) {
+                        cell.neighbors.push(neighbor_index);
+                    }
+                }
+            }
+        }
+    }
+    set_cells(CellVec(next_cells));
+}
+
 fn get_alive_neighbor_count(cell: &Cell, cells: &Vec<Cell>) -> i32 {
     let mut count = 0;
-    for other_cell in cells {
-        if (other_cell.x_pos != cell.x_pos) || (other_cell.y_pos != cell.y_pos) {
-            let dx = (other_cell.x_pos - cell.x_pos).abs();
-            let dy = (other_cell.y_pos - cell.y_pos).abs();
-            if dx <= 1 && dy <= 1 && (dx + dy > 0) && other_cell.alive {
-                count += 1;
-            }
+    for other_cell_index in &cell.neighbors {
+        if cells[*other_cell_index].alive {
+            count += 1;
         }
     }
     count
@@ -61,11 +85,10 @@ fn calculate_next(read_cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVe
         }
     }
 
-    // Update the set_cells with the new state of cells
     set_cells(CellVec(next_cells));
 }
 
-fn randomize_cells(grid_size: u32, set_cells: WriteSignal<CellVec>) {
+fn randomize_cells(alive_probability: f64, grid_size: u32, set_cells: WriteSignal<CellVec>) {
     let mut rng = rand::thread_rng();
     let mut cells: Vec<Cell> = Vec::new();
     for x in 0..grid_size {
@@ -73,7 +96,8 @@ fn randomize_cells(grid_size: u32, set_cells: WriteSignal<CellVec>) {
             cells.push(Cell {
                 x_pos: x as i32,
                 y_pos: y as i32,
-                alive: rng.gen::<f64>() < 0.6,
+                alive: rng.gen::<f64>() < alive_probability,
+                neighbors: Vec::new(),
             })
         }
     }
@@ -84,13 +108,37 @@ fn randomize_cells(grid_size: u32, set_cells: WriteSignal<CellVec>) {
 pub fn Life(cx: Scope) -> impl IntoView {
     let (cells, set_cells) = create_signal::<CellVec>(cx, CellVec(Vec::new()));
     let (interval_ms, set_interval_ms) = create_signal(cx, 200);
-
-    let grid_size: u32 = 25;
-    let range = 0..grid_size;
+    let (grid_size, set_grid_size) = create_signal(cx, 25);
+    let range = move || 0..grid_size();
+    let (alive_probability, set_alive_probability) = create_signal(cx, 0.6);
 
     view! { cx,
         <div class="flex flex-col">
             <h1>"Conway's Game of Life"</h1>
+            <label for="grid_size">
+                Grid Size
+            </label>
+            <input
+                type="text"
+                id="grid_size"
+                on:input=move |ev| {
+                    set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
+                }
+
+                prop:value=grid_size
+            />
+            <label for="alive_probability">
+                Alive probability
+            </label>
+            <input
+                type="text"
+                id="alive_probability"
+                on:input=move |ev| {
+                    set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
+                }
+
+                prop:value=alive_probability
+            />
             <label for="interval_time">
                 Simulation speed in ms
             </label>
@@ -103,10 +151,13 @@ pub fn Life(cx: Scope) -> impl IntoView {
 
                 prop:value=interval_ms
             />
-            <button on:click=move |_| { randomize_cells(grid_size, set_cells) }>
+            <button on:click=move |_| {
+                randomize_cells(alive_probability(), grid_size(), set_cells)
+            }>
                 Randomize
             </button>
             <button on:click=move |_| {
+                prepare_neighbors(cells, set_cells);
                 let _ = set_interval_with_handle(
                     move || {
                         calculate_next(cells, set_cells);
@@ -117,67 +168,75 @@ pub fn Life(cx: Scope) -> impl IntoView {
                 Simulate
             </button>
             <div>
-                {range
-                    .clone()
-                    .map(|x| {
-                        view! { cx,
-                            <div class="flex flex-row">
-                                {range
-                                    .clone()
-                                    .map(|y| {
-                                        let isAlive = move || {
-                                            cells
-                                                .get()
-                                                .0
-                                                .iter()
-                                                .any(|c| {
-                                                    c.x_pos == x as i32 && c.y_pos == y as i32 && c.alive
-                                                })
-                                        };
-
-                                        view! { cx,
-                                            <div
-                                                class="w-10 h-10 border-2 border-green-600"
-                                                class=("bg-amber-500", move || isAlive() == true)
-                                                on:click=move |_| {
-                                                    match cells()
+                {move || {
+                    range()
+                        .clone()
+                        .map(|x| {
+                            view! { cx,
+                                <div class="flex flex-row">
+                                    {move || {
+                                        range()
+                                            .clone()
+                                            .map(|y| {
+                                                let isAlive = move || {
+                                                    cells
+                                                        .get()
                                                         .0
                                                         .iter()
-                                                        .position(|item| {
-                                                            item.x_pos == x as i32 && item.y_pos == y as i32
+                                                        .any(|c| {
+                                                            c.x_pos == x as i32 && c.y_pos == y as i32 && c.alive
                                                         })
-                                                    {
-                                                        Some(pos) => {
-                                                            let mut next_cells = cells().0.clone();
-                                                            next_cells[pos] = Cell {
-                                                                alive: !cells().0[pos].alive,
-                                                                x_pos: x as i32,
-                                                                y_pos: y as i32,
-                                                            };
-                                                            set_cells(CellVec(next_cells));
-                                                        }
-                                                        None => {
-                                                            set_cells
-                                                                .update(|v| {
-                                                                    v.0
-                                                                        .push(Cell {
-                                                                            alive: true,
-                                                                            x_pos: x as i32,
-                                                                            y_pos: y as i32,
+                                                };
+
+                                                view! { cx,
+                                                    <div
+                                                        class="w-10 h-10 border-2 border-green-600"
+                                                        class=("bg-amber-500", move || isAlive() == true)
+                                                        on:click=move |_| {
+                                                            match cells()
+                                                                .0
+                                                                .iter()
+                                                                .position(|item| {
+                                                                    item.x_pos == x as i32 && item.y_pos == y as i32
+                                                                })
+                                                            {
+                                                                Some(pos) => {
+                                                                    let mut next_cells = cells().0.clone();
+                                                                    next_cells[pos] = Cell {
+                                                                        alive: !cells().0[pos].alive,
+                                                                        x_pos: x as i32,
+                                                                        y_pos: y as i32,
+                                                                        neighbors: Vec::new(),
+                                                                    };
+                                                                    set_cells(CellVec(next_cells));
+                                                                }
+                                                                None => {
+                                                                    set_cells
+                                                                        .update(|v| {
+                                                                            v.0
+                                                                                .push(Cell {
+                                                                                    alive: true,
+                                                                                    x_pos: x as i32,
+                                                                                    y_pos: y as i32,
+                                                                                    neighbors: Vec::new(),
+                                                                                });
                                                                         });
-                                                                });
+                                                                }
+                                                            }
                                                         }
-                                                    }
+                                                    >
+                                                    </div>
                                                 }
-                                            >
-                                            </div>
-                                        }
-                                    })
-                                    .collect_view(cx)}
-                            </div>
-                        }
-                    })
-                    .collect_view(cx)}
+                                            })
+                                            .collect_view(cx)
+                                    }}
+
+                                </div>
+                            }
+                        })
+                        .collect_view(cx)
+                }}
+
             </div>
         </div>
     }
