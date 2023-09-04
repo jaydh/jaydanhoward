@@ -45,18 +45,11 @@ fn get_alive_neighbor_count(cell: &Cell, cells: &Vec<Cell>) -> i32 {
 }
 
 fn calculate_next(read_cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>) {
-    read_cells.with(|c| log!("cells {}", c));
     let current_cells = &read_cells().0;
     let mut next_cells = current_cells.clone();
 
     for cell in &mut next_cells {
         let alive_neighbor_count = get_alive_neighbor_count(&cell, current_cells);
-        log!(
-            "cell {},{}, has {} neighbors",
-            cell.x_pos,
-            cell.y_pos,
-            alive_neighbor_count
-        );
         if cell.alive {
             if alive_neighbor_count != 2 && alive_neighbor_count != 3 {
                 cell.alive = false;
@@ -90,13 +83,27 @@ fn randomize_cells(grid_size: u32, set_cells: WriteSignal<CellVec>) {
 #[component]
 pub fn Life(cx: Scope) -> impl IntoView {
     let (cells, set_cells) = create_signal::<CellVec>(cx, CellVec(Vec::new()));
-    let grid_size: u32 = 50;
+    let (interval_ms, set_interval_ms) = create_signal(cx, 200);
+
+    let grid_size: u32 = 25;
     let range = 0..grid_size;
 
     view! { cx,
         <div class="flex flex-col">
             <h1>"Conway's Game of Life"</h1>
-            <button on:click=move |_| { randomize_cells(grid_size,  set_cells) }>
+            <label for="interval_time">
+                Simulation speed in ms
+            </label>
+            <input
+                type="text"
+                id="interval_time"
+                on:input=move |ev| {
+                    set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
+                }
+
+                prop:value=interval_ms
+            />
+            <button on:click=move |_| { randomize_cells(grid_size, set_cells) }>
                 Randomize
             </button>
             <button on:click=move |_| {
@@ -104,9 +111,10 @@ pub fn Life(cx: Scope) -> impl IntoView {
                     move || {
                         calculate_next(cells, set_cells);
                     },
-                    std::time::Duration::from_millis(500 as u64));
+                    std::time::Duration::from_millis(interval_ms()),
+                );
             }>
-               Simulate
+                Simulate
             </button>
             <div>
                 {range
@@ -122,23 +130,44 @@ pub fn Life(cx: Scope) -> impl IntoView {
                                                 .get()
                                                 .0
                                                 .iter()
-                                                .any(|c| c.x_pos == x as i32 && c.y_pos == y as i32 && c.alive)
+                                                .any(|c| {
+                                                    c.x_pos == x as i32 && c.y_pos == y as i32 && c.alive
+                                                })
                                         };
 
                                         view! { cx,
                                             <div
-                                                class="w-10 h-10 border-2 border-green-600 bg-amber-500"
+                                                class="w-10 h-10 border-2 border-green-600"
                                                 class=("bg-amber-500", move || isAlive() == true)
                                                 on:click=move |_| {
-                                                    set_cells
-                                                        .update(|v| {
-                                                            v.0
-                                                                .push(Cell {
-                                                                    alive: true,
-                                                                    x_pos: x as i32,
-                                                                    y_pos: y as i32,
+                                                    match cells()
+                                                        .0
+                                                        .iter()
+                                                        .position(|item| {
+                                                            item.x_pos == x as i32 && item.y_pos == y as i32
+                                                        })
+                                                    {
+                                                        Some(pos) => {
+                                                            let mut next_cells = cells().0.clone();
+                                                            next_cells[pos] = Cell {
+                                                                alive: !cells().0[pos].alive,
+                                                                x_pos: x as i32,
+                                                                y_pos: y as i32,
+                                                            };
+                                                            set_cells(CellVec(next_cells));
+                                                        }
+                                                        None => {
+                                                            set_cells
+                                                                .update(|v| {
+                                                                    v.0
+                                                                        .push(Cell {
+                                                                            alive: true,
+                                                                            x_pos: x as i32,
+                                                                            y_pos: y as i32,
+                                                                        });
                                                                 });
-                                                        });
+                                                        }
+                                                    }
                                                 }
                                             >
                                             </div>
