@@ -16,13 +16,17 @@ use {
 async fn convert_resume_md_to_html() -> String {
     let site_dir = env::var("LEPTOS_SITE_ROOT").unwrap();
 
-    let markdown_content = read_to_string(format!("{}/resume.md", site_dir)).unwrap();
-    let options = Options::empty();
-    let parser = Parser::new_ext(&markdown_content, options);
-    let mut html_output = String::new();
-    html::push_html(&mut html_output, parser);
+    match read_to_string(format!("{}/resume.md", site_dir)) {
+        Ok(markdown_content) => {
+            let options = Options::empty();
+            let parser = Parser::new_ext(&markdown_content, options);
+            let mut html_output = String::new();
+            html::push_html(&mut html_output, parser);
 
-    html_output
+            html_output
+        }
+        Err(_) => "<div />".into(),
+    }
 }
 
 #[cfg(feature = "ssr")]
