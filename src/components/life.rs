@@ -152,6 +152,11 @@ pub fn Life(cx: Scope) -> impl IntoView {
                 prop:value=interval_ms
             />
             <button on:click=move |_| {
+                set_cells(CellVec(Vec::new()))
+            }>
+                Reset
+            </button>
+            <button on:click=move |_| {
                 randomize_cells(alive_probability(), grid_size(), set_cells)
             }>
                 Randomize
@@ -167,7 +172,7 @@ pub fn Life(cx: Scope) -> impl IntoView {
             }>
                 Simulate
             </button>
-            <div>
+            <div class="flex flex-col items-center">
                 {move || {
                     range()
                         .clone()
