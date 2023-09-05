@@ -59,7 +59,7 @@ jobs:
         run: cargo tarpaulin --verbose --workspace
 
   deploy:
-    name: deploy
+    name: Deploy to Digitalocean 
     needs: [test, fmt, clippy, coverage]
     runs-on: ubuntu-latest
     steps:
