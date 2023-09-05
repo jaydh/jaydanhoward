@@ -18,7 +18,7 @@ COPY Cargo.toml Cargo.toml
 COPY .git .git
 COPY src src
 COPY --from=chef /app/inject-git inject-git
-RUn cargo run --manifest-path=./inject-git/Cargo.toml ./
+RUn cargo run --manifest-path=./inject-git/Cargo.toml ./src
 run cargo +nightly chef prepare --recipe-path recipe.json
 
 FROM chef as builder
