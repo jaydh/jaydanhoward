@@ -4,7 +4,7 @@ use leptos::*;
 pub fn About(cx: Scope) -> impl IntoView {
     view! {
         cx,
-        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" />
+        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
         <div class="flex flex-row">
             <div class="flex flex-col space-y-10 max-w-lg">
                 <h1 class="text-5xl font-heavy mb-6">r#"👋I'm Jay D Howard! I believe compassion makes tech worthwhile."#</h1>
