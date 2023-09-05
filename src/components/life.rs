@@ -211,6 +211,7 @@ fn Grid(
     let range = move || 0..grid_size();
     view! { cx,
         <div class="flex flex-col">
+            <a href="#[git]">source</a>
             {move || {
                 range()
                     .clone()

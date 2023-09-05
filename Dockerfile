@@ -1,21 +1,24 @@
-# Image is huge, haven't split into separate services because not sure how DigitalOcean billing works and I'm cheap (does each node have a static cost?)
-
 FROM lukemathwalker/cargo-chef:latest-rust-1.71.0 as chef
-
-RUN apt-get update && apt-get install lld clang curl -y
-run rustup install nightly
-run rustup default nightly
-run rustup target add wasm32-unknown-unknown
-
-RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-RUN cargo binstall cargo-leptos -y
 
 RUN mkdir -p /app
 WORKDIR /app
 
+RUN apt-get update && apt-get install lld clang curl git -y
+run rustup install nightly
+run rustup default nightly
+run rustup target add wasm32-unknown-unknown
+RUN git clone https://github.com/jaydh/inject-git
+
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+RUN cargo binstall cargo-leptos -y
+
+
 FROM chef as planner
 COPY Cargo.toml Cargo.toml
+COPY .git .git
 COPY src src
+COPY --from=chef /app/inject-git inject-git
+RUn cargo run --manifest-path=./inject-git/Cargo.toml ./
 run cargo +nightly chef prepare --recipe-path recipe.json
 
 FROM chef as builder
