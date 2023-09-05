@@ -19,6 +19,7 @@ pub fn Resume(cx: Scope) -> impl IntoView {
     );
 
     view! { cx,
+        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" />
          <Suspense
             fallback=move || view! { cx, <p>"Loading..."</p> }>
             {move || {

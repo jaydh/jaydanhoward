@@ -41,6 +41,7 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
+                <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" />
                 <div class="flex w-screen h-full bg-pale-beige px-40">
                     <div class="flex flex-col w-full min-h-screen gap-10 bg-ivory-beige px-40 pb-40">
                         <nav class="pointer-events-auto hidden md:block mt-20 mb-20">

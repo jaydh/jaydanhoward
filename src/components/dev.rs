@@ -28,6 +28,7 @@ pub fn Github(cx: Scope) -> impl IntoView {
 #[component]
 pub fn Dev(cx: Scope) -> impl IntoView {
     view! { cx,
+        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" />
         <Github />
         <Lighthouse />
     }

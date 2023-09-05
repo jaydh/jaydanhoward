@@ -211,7 +211,6 @@ fn Grid(
     let range = move || 0..grid_size();
     view! { cx,
         <div class="flex flex-col">
-            <a href="#[git]">source</a>
             {move || {
                 range()
                     .clone()
@@ -294,6 +293,7 @@ pub fn Life(cx: Scope) -> impl IntoView {
     let (alive_probability, set_alive_probability) = create_signal(cx, 0.6);
 
     view! { cx,
+        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" />
         <div class="flex flex-col items-center">
             <a
                 class="hover:underline relative block px-3 py-2 transition"
