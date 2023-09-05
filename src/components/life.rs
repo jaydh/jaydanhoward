@@ -165,7 +165,9 @@ fn Controls(
                     id="interval_time"
                     on:input=move |ev| {
                         set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
-                        create_simulation_interval();
+                        if interval_handle().is_some() {
+                            create_simulation_interval();
+                        }
                     }
 
                     prop:value=interval_ms
