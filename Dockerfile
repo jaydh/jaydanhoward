@@ -27,7 +27,7 @@ RUN cargo +nightly chef cook --release --recipe-path recipe.json
 
 COPY Cargo.toml Cargo.toml
 COPY assets assets
-COPY --from=planner src src
+COPY --from=planner /app/src src
 COPY style style
 COPY tailwind.config.js tailwind.config.js
 RUN cargo leptos build --release -vv
