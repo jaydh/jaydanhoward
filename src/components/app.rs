@@ -41,13 +41,19 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
+                <a
+                    class="fixed bottom-0 right-0 p-12 fas fa-code"
+                    href="#[git]"
+                    target="_blank"
+                    rel="noreferrer"
+                ></a>
                 <div class="flex w-screen h-full bg-pale-beige px-40">
                     <div class="flex flex-col w-full min-h-screen gap-10 bg-ivory-beige px-40 pb-40">
                         <nav class="pointer-events-auto hidden md:block mt-20 mb-20">
                             <ul class="flex flex-row rounded-full bg-warm-beige px-3 text-sm font-medium">
                                 <ul class="flex">
-                                    {routes.into_iter()
+                                    {routes
+                                        .into_iter()
                                         .map(|(route, display_text)| {
                                             view! { cx,
                                                 <a
@@ -61,20 +67,18 @@ pub fn App(cx: Scope) -> impl IntoView {
                                         .collect_view(cx)}
                                 </ul>
                                 <ul class="flex ml-auto">
-                                    {links.into_iter()
+                                    {links
+                                        .into_iter()
                                         .map(|(route, iconClass, external)| {
-                                            let target = if external {
-                                                "_blank"
-                                            } else {
-                                                "_self"
-                                            };
+                                            let target = if external { "_blank" } else { "_self" };
                                             view! { cx,
                                                 <a
                                                     href=route
                                                     class="hover:underline relative block px-3 py-2 transition"
-                                                    target=target rel="noreferrer"
+                                                    target=target
+                                                    rel="noreferrer"
                                                 >
-                                                    <i class=iconClass />
+                                                    <i class=iconClass></i>
                                                 </a>
                                             }
                                         })
@@ -83,29 +87,26 @@ pub fn App(cx: Scope) -> impl IntoView {
                             </ul>
                         </nav>
                         <Routes>
-                            <Route path="/about" view=About/ >
+                            <Route path="/about" view=About/>
                             <Route path="/skills" view=Skills>
+                                <Route path="great" view=GreatAt/>
+                                <Route path="better" view=BetterAt/>
+                                <Route path="interested" view=InterestedIn/>
+                                <Route path="believe" view=Beliefs/>
                                 <Route
-                                    path="great"
-                                    view=GreatAt
+                                    path="/"
+                                    view=move |cx| view! { cx, <Redirect path="great"/> }
                                 />
-                                <Route
-                                    path="better"
-                                    view=BetterAt />
-                                <Route
-                                    path="interested"
-                                    view=InterestedIn />
-                                <Route
-                                    path="believe"
-                                    view=Beliefs />
-                                <Route path="/" view=move |cx| view! { cx, <Redirect path="great"/> }/>
                             </Route>
-                            <Route path="/dev" view=Dev />
+                            <Route path="/dev" view=Dev/>
                             <Route path="/projects" view=Projects>
-                                <Route path="/life" view=Life />
-                                <Route path="/" view=move |cx| view! { cx, <Redirect path="life"/> }/>
+                                <Route path="/life" view=Life/>
+                                <Route
+                                    path="/"
+                                    view=move |cx| view! { cx, <Redirect path="life"/> }
+                                />
                             </Route>
-                            <Route path="/resume" view=Resume />
+                            <Route path="/resume" view=Resume/>
                             <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
                         </Routes>
                     </div>

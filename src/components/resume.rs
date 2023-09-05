@@ -19,14 +19,22 @@ pub fn Resume(cx: Scope) -> impl IntoView {
     );
 
     view! { cx,
-        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
-         <Suspense
-            fallback=move || view! { cx, <p>"Loading..."</p> }>
+        <a
+            class="fixed bottom-0 right-0 p-12 fas fa-code"
+            href="#[git]"
+            target="_blank"
+            rel="noreferrer"
+        ></a>
+        <Suspense fallback=move || {
+            view! { cx, <p>"Loading..."</p> }
+        }>
             {move || {
                 once.read(cx)
-                    .map(|resume_html| view! { cx, <div class="resume" inner_html=resume_html.ok() /> })
-                }
-            }
+                    .map(|resume_html| {
+                        view! { cx, <div class="resume" inner_html=resume_html.ok()></div> }
+                    })
+            }}
+
         </Suspense>
     }
 }
