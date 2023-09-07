@@ -4,6 +4,7 @@ use crate::components::life::Life;
 use crate::components::projects::Projects;
 use crate::components::resume::Resume;
 use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn, Skills};
+use crate::components::source_anchor::SourceAnchor;
 use leptos::*;
 use leptos_meta::{provide_meta_context, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
@@ -41,7 +42,6 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
                 <div class="flex w-screen h-full bg-pale-beige px-40">
                     <div class="flex flex-col w-full min-h-screen gap-10 bg-ivory-beige px-40 pb-40">
                         <nav class="pointer-events-auto hidden md:block mt-20 mb-20">

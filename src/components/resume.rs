@@ -1,5 +1,6 @@
 #![allow(clippy::all)]
 
+use crate::components::source_anchor::SourceAnchor;
 use leptos::*;
 
 #[server(ActixExtract, "/api")]
@@ -19,7 +20,7 @@ pub fn Resume(cx: Scope) -> impl IntoView {
     );
 
     view! { cx,
-        <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
+         <SourceAnchor href="#[git]" />
          <Suspense
             fallback=move || view! { cx, <p>"Loading..."</p> }>
             {move || {

@@ -1,3 +1,4 @@
+use crate::components::source_anchor::SourceAnchor;
 use leptos::*;
 use leptos_router::{use_location, Outlet};
 
@@ -14,7 +15,7 @@ pub fn Skills(cx: Scope) -> impl IntoView {
     ];
 
     view! { cx,
-            <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
+            <SourceAnchor href="#[git]" />
             <div>
                 <div class="flex flex-row gap-10 mb-20">
                     <span>"Things I"</span>

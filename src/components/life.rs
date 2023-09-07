@@ -1,3 +1,4 @@
+use crate::components::source_anchor::SourceAnchor;
 use leptos::*;
 use rand::Rng;
 use std::fmt;
@@ -293,27 +294,26 @@ pub fn Life(cx: Scope) -> impl IntoView {
     let (alive_probability, set_alive_probability) = create_signal(cx, 0.6);
 
     view! { cx,
-            <a class="fixed bottom-0 right-0 p-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer"
-    />
-            <div class="flex flex-col items-center">
-                <a
-                    class="hover:underline relative block px-3 py-2 transition"
-                    href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    "Wiki"
-                </a>
-                <h2>Alive Cells: {alive_cells}</h2>
-                <Controls
-                    grid_size
-                    set_grid_size
-                    alive_probability
-                    set_alive_probability
-                    cells
-                    set_cells
-                />
-                <Grid grid_size cells set_cells/>
-            </div>
-        }
+        <SourceAnchor href="#[git]" />
+        <div class="flex flex-col items-center">
+            <a
+                class="hover:underline relative block px-3 py-2 transition"
+                href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+                target="_blank"
+                rel="noreferrer"
+            >
+                "Wiki"
+            </a>
+            <h2>Alive Cells: {alive_cells}</h2>
+            <Controls
+                grid_size
+                set_grid_size
+                alive_probability
+                set_alive_probability
+                cells
+                set_cells
+            />
+            <Grid grid_size cells set_cells/>
+        </div>
+    }
 }
