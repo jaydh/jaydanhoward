@@ -4,7 +4,7 @@ use leptos::*;
 pub fn SourceAnchor(cx: Scope, href: &'static str) -> impl IntoView {
     view! {
             cx,
-            <Show when= move || href == "#[git]" fallback = |cx| view! { cx, <div /> }>
+            <Show when= move || href != "#[git]" fallback = |cx| view! { cx, <div /> }>
                 <div class="group">
                     <a class="fixed bottom-12 right-12 fas fa-code" href="#[git]" target="_blank" rel="noreferrer" />
                     <span
