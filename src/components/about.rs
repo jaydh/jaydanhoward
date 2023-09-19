@@ -18,8 +18,7 @@ pub fn About(cx: Scope) -> impl IntoView {
                 </p>
             </div>
             <div class="flex flex-row ml-auto">
-                <img src="/assets/profile.webp" class="object-cover w-full h-72 rounded-l-lg"/>
-                <img src="/assets/lunabelle.webp" class="object-cover w-full h-72 rounded-r-lg"/>
+                <img src="/assets/profile.webp" class="object-cover w-full h-72 rounded-lg"/>
             </div>
         </div>
     }

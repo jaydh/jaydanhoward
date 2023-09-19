@@ -2,7 +2,7 @@ use leptos::*;
 use leptos_router::{use_location, Outlet};
 
 #[component]
-pub fn Projects(cx: Scope) -> impl IntoView {
+pub fn Work(cx: Scope) -> impl IntoView {
     let location = use_location(cx);
     let pathname = move || location.pathname.get();
 
@@ -14,7 +14,7 @@ pub fn Projects(cx: Scope) -> impl IntoView {
                     <span>"Projects hosted on this site while learning Rust/Leptos"</span>
                     {routes.into_iter()
                         .map(|(route, display_text)| {
-                            let is_match = move || pathname() == format!("/projects/{}", route);
+                            let is_match = move || pathname() == format!("/work/{}", route);
                             let is_not_match = move || !is_match();
 
                             view! { cx,

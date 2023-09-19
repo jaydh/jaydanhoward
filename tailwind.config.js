@@ -7,9 +7,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "ivory-beige": "#F5EEDD",
-        "pale-beige": "#E6D7B9",
-        "warm-beige": "#D2B48C",
+        "charcoal": "#1E1E1E",
       },
     },
   },
