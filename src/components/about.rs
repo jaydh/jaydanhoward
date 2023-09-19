@@ -72,6 +72,9 @@ pub fn About(cx: Scope) -> impl IntoView {
     let (section, set_section) = create_signal(cx, 0);
     let (touch_start_y, set_touch_start_y) = create_signal(cx, -1);
 
+    let down_available = move || section() < section_length - 1;
+    let up_available = move || section() > 0;
+
     let arrow_class = move || match section() < section_length - 1 {
         true => "fas fa-chevron-down cursor-pointer",
         false => "fas fa-chevron-up cursor-pointer",
@@ -83,11 +86,6 @@ pub fn About(cx: Scope) -> impl IntoView {
         } else if e.delta_y() < 0.0 && section() > 0 {
             set_section.set(section() - 1);
         }
-    };
-
-    let handle_next = move |_e: MouseEvent| match arrow_class().contains("up") {
-        true => set_section.set(section() - 1),
-        false => set_section.set(section() + 1),
     };
 
     let handle_touch_start = move |e: TouchEvent| match e.touches().item(0) {
@@ -125,17 +123,28 @@ pub fn About(cx: Scope) -> impl IntoView {
             on:touchmove=handle_touch_move
         >
             <div class="flex flex-col space-y-10 max-w-lg">
-                <ShowWithTransition when=move || { section() == 0 }>
-                    <PictureSection/>
-                </ShowWithTransition>
-                <ShowWithTransition when=move || { section() == 1 }>
-                    <MeSection/>
-                </ShowWithTransition>
-                <ShowWithTransition when=move || { section() == 2 }>
-                    <SiteSection/>
-                </ShowWithTransition>
                 <div class="text-xl flex flex-col items-center">
-                    <i class=arrow_class on:click=handle_next></i>
+                    <Show when=move || up_available() fallback=|_| ()>
+                        <i
+                            class="fas fa-chevron-up cursor-pointer mb-10"
+                            on:click=move |_| set_section.set(section() - 1)
+                        ></i>
+                    </Show>
+                    <ShowWithTransition when=move || { section() == 0 }>
+                        <PictureSection/>
+                    </ShowWithTransition>
+                    <ShowWithTransition when=move || { section() == 1 }>
+                        <MeSection/>
+                    </ShowWithTransition>
+                    <ShowWithTransition when=move || { section() == 2 }>
+                        <SiteSection/>
+                    </ShowWithTransition>
+                    <Show when=move || down_available() fallback=|_| ()>
+                        <i
+                            class="fas fa-chevron-down cursor-pointer mt-10"
+                            on:click=move |_| set_section.set(section() + 1)
+                        ></i>
+                    </Show>
                 </div>
             </div>
         </div>
