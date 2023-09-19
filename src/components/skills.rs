@@ -3,8 +3,8 @@ use leptos::*;
 use leptos_router::{use_location, Outlet};
 
 #[component]
-pub fn Skills(cx: Scope) -> impl IntoView {
-    let location = use_location(cx);
+pub fn Skills() -> impl IntoView {
+    let location = use_location();
     let pathname = move || location.pathname.get();
 
     let routes = vec![
@@ -14,7 +14,7 @@ pub fn Skills(cx: Scope) -> impl IntoView {
         ("believe", "believe in"),
     ];
 
-    view! { cx,
+    view! {
             <SourceAnchor href="#[git]" />
             <div>
                 <div class="flex flex-row gap-10 mb-20">
@@ -24,7 +24,7 @@ pub fn Skills(cx: Scope) -> impl IntoView {
                             let is_match = move || pathname() == format!("/skills/{}", route);
                             let is_not_match = move || !is_match();
 
-                            view! { cx,
+                            view! {
                                 <a
                                     href={route}
                                     class=("underline", is_match)
@@ -39,7 +39,7 @@ pub fn Skills(cx: Scope) -> impl IntoView {
                                 </a>
                             }
                         })
-                        .collect_view(cx)}
+                        .collect_view()}
                 </div>
                 <Outlet/>
         </div>
@@ -47,8 +47,8 @@ pub fn Skills(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn GreatAt(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn GreatAt() -> impl IntoView {
+    view! {
         <ul class="list-disc list-outside space-y-4">
             <li>Fullstack web development</li>
             <li>Typescript/Javascript/ES6</li>
@@ -66,8 +66,8 @@ pub fn GreatAt(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn BetterAt(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn BetterAt() -> impl IntoView {
+    view! {
         <ul class="list-disc list-outside space-y-4">
             <li>Rust</li>
             <li>Leptos</li>
@@ -80,8 +80,8 @@ pub fn BetterAt(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn InterestedIn(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn InterestedIn() -> impl IntoView {
+    view! {
         <ul class="list-disc list-outside space-y-4">
             <li>Flight sims</li>
             <li>"Motorcyling, Onewheeling, transportation with <= 3 wheels"</li>
@@ -94,8 +94,8 @@ pub fn InterestedIn(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn Beliefs(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn Beliefs() -> impl IntoView {
+    view! {
         <h2 class="mb-10 font-semibold">Evolving list of loosely held, hopefully not pretentious sounding, and strong beliefs about software engineering, mayhaps only applying to the web world: </h2>
         <ul class="list-disc list-outside space-y-4 mb-60">
             <li>Code that feels good to write is productive code</li>

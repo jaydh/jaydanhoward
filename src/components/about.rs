@@ -1,10 +1,10 @@
 use crate::components::source_anchor::SourceAnchor;
-use leptos::ev::{MouseEvent, TouchEvent, WheelEvent};
+use leptos::ev::{TouchEvent, WheelEvent};
 use leptos::*;
 
 #[component]
-pub fn PictureSection(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn PictureSection() -> impl IntoView {
+    view! {
         <div class="w-fit max-h-3xl relative">
             <img src="/assets/profile.webp" class="filter grayscale opacity-50 object-cover"/>
             <div class="absolute left-0 w-full h-40 bottom-0">
@@ -21,8 +21,8 @@ pub fn PictureSection(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn MeSection(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn MeSection() -> impl IntoView {
+    view! {
         <p>"Very few things are good in and of themselves, and tech is probably not one of them"</p>
         <p>
             "I'm currently a senior software engineer at Interwell Health, leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease"
@@ -34,8 +34,8 @@ pub fn MeSection(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn SiteSection(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn SiteSection() -> impl IntoView {
+    view! {
         <p>
             "This site exists to experiment with tech (currently that's Rust + Leptos + Tailwind), and to have a small corner of the internet where people can learn about me
             (mostly in a software engineering context)"
@@ -48,37 +48,32 @@ pub fn SiteSection(cx: Scope) -> impl IntoView {
 }
 
 #[component]
-pub fn ShowWithTransition<W>(cx: Scope, children: ChildrenFn, when: W) -> impl IntoView
+pub fn ShowWithTransition<W>(children: ChildrenFn, when: W) -> impl IntoView
 where
     W: Fn() -> bool + 'static,
 {
-    let memoized_when = create_memo(cx, move |_| when());
+    let memoized_when = create_memo(move |_| when());
 
-    view! { cx,
+    view! {
         <div
             class="transition-all duration-3000 transform scale-y-0 opacity-0"
             class=("opacity-100", move || memoized_when() == true)
             class=("scale-y-100", move || memoized_when() == true)
             class=("hidden", move || memoized_when() == false)
         >
-            {children(cx)}
+            {children()}
         </div>
     }
 }
 
 #[component]
-pub fn About(cx: Scope) -> impl IntoView {
+pub fn About() -> impl IntoView {
     let section_length = 3;
-    let (section, set_section) = create_signal(cx, 0);
-    let (touch_start_y, set_touch_start_y) = create_signal(cx, -1);
+    let (section, set_section) = create_signal(0);
+    let (touch_start_y, set_touch_start_y) = create_signal(-1);
 
     let down_available = move || section() < section_length - 1;
     let up_available = move || section() > 0;
-
-    let arrow_class = move || match section() < section_length - 1 {
-        true => "fas fa-chevron-down cursor-pointer",
-        false => "fas fa-chevron-up cursor-pointer",
-    };
 
     let handle_scroll = move |e: WheelEvent| {
         if e.delta_y() > 0.0 && section() < section_length - 1 {
@@ -114,7 +109,7 @@ pub fn About(cx: Scope) -> impl IntoView {
         None => set_touch_start_y(-1),
     };
 
-    view! { cx,
+    view! {
         <SourceAnchor href="#[git]"/>
         <div
             class="flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth"
@@ -124,7 +119,7 @@ pub fn About(cx: Scope) -> impl IntoView {
         >
             <div class="flex flex-col space-y-10 max-w-lg">
                 <div class="text-xl flex flex-col items-center">
-                    <Show when=move || up_available() fallback=|_| ()>
+                    <Show when=move || up_available() fallback=|| ()>
                         <i
                             class="fas fa-chevron-up cursor-pointer mb-10"
                             on:click=move |_| set_section.set(section() - 1)
@@ -139,7 +134,7 @@ pub fn About(cx: Scope) -> impl IntoView {
                     <ShowWithTransition when=move || { section() == 2 }>
                         <SiteSection/>
                     </ShowWithTransition>
-                    <Show when=move || down_available() fallback=|_| ()>
+                    <Show when=move || down_available() fallback=|| ()>
                         <i
                             class="fas fa-chevron-down cursor-pointer mt-10"
                             on:click=move |_| set_section.set(section() + 1)

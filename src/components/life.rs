@@ -1,5 +1,6 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::*;
+use leptos_dom::helpers::IntervalHandle;
 use rand::Rng;
 use std::fmt;
 
@@ -107,7 +108,6 @@ fn randomize_cells(alive_probability: f64, grid_size: u32, set_cells: WriteSigna
 
 #[component]
 fn Controls(
-    cx: Scope,
     grid_size: ReadSignal<u32>,
     set_grid_size: WriteSignal<u32>,
     alive_probability: ReadSignal<f64>,
@@ -115,8 +115,8 @@ fn Controls(
     cells: ReadSignal<CellVec>,
     set_cells: WriteSignal<CellVec>,
 ) -> impl IntoView {
-    let (interval_handle, set_interval_handle) = create_signal(cx, None::<IntervalHandle>);
-    let (interval_ms, set_interval_ms) = create_signal(cx, 200);
+    let (interval_handle, set_interval_handle) = create_signal(None::<IntervalHandle>);
+    let (interval_ms, set_interval_ms) = create_signal(200);
 
     let create_simulation_interval = move || {
         if let Some(handle) = interval_handle() {
@@ -131,7 +131,7 @@ fn Controls(
         set_interval_handle(interval_handle.ok());
     };
 
-    view! { cx,
+    view! {
         <div class="flex flex-row space-x-10">
             <div class="flex flex-col">
                 <label for="grid_size">
@@ -207,19 +207,18 @@ fn Controls(
 
 #[component]
 fn Grid(
-    cx: Scope,
     grid_size: ReadSignal<u32>,
     cells: ReadSignal<CellVec>,
     set_cells: WriteSignal<CellVec>,
 ) -> impl IntoView {
     let range = move || 0..grid_size();
-    view! { cx,
+    view! {
         <div class="flex flex-col">
             {move || {
                 range()
                     .clone()
                     .map(|x| {
-                        view! { cx,
+                        view! {
                             <div class="flex flex-row">
                                 {move || {
                                     range()
@@ -235,7 +234,7 @@ fn Grid(
                                                     })
                                             };
 
-                                            view! { cx,
+                                            view! {
                                                 <div
                                                     class="w-10 h-10 border-2 border-green-600"
                                                     class=("bg-white", move || isAlive() == true)
@@ -275,13 +274,13 @@ fn Grid(
                                                 </div>
                                             }
                                         })
-                                        .collect_view(cx)
+                                        .collect_view()
                                 }}
 
                             </div>
                         }
                     })
-                    .collect_view(cx)
+                    .collect_view()
             }}
 
         </div>
@@ -289,14 +288,14 @@ fn Grid(
 }
 
 #[component]
-pub fn Life(cx: Scope) -> impl IntoView {
-    let (cells, set_cells) = create_signal::<CellVec>(cx, CellVec(Vec::new()));
+pub fn Life() -> impl IntoView {
+    let (cells, set_cells) = create_signal::<CellVec>(CellVec(Vec::new()));
     let alive_cells = move || cells().0.into_iter().filter(|c| c.alive).count();
 
-    let (grid_size, set_grid_size) = create_signal(cx, 25);
-    let (alive_probability, set_alive_probability) = create_signal(cx, 0.6);
+    let (grid_size, set_grid_size) = create_signal(25);
+    let (alive_probability, set_alive_probability) = create_signal(0.6);
 
-    view! { cx,
+    view! {
         <SourceAnchor href="#[git]" />
         <div class="flex flex-col items-center">
             <a

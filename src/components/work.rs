@@ -2,13 +2,13 @@ use leptos::*;
 use leptos_router::{use_location, Outlet};
 
 #[component]
-pub fn Work(cx: Scope) -> impl IntoView {
-    let location = use_location(cx);
+pub fn Work() -> impl IntoView {
+    let location = use_location();
     let pathname = move || location.pathname.get();
 
     let routes = vec![("life", "Conway's Game of Life")];
 
-    view! { cx,
+    view! {
             <div>
                 <div class="flex flex-row gap-10 mb-20">
                     <span>"Projects hosted on this site while learning Rust/Leptos"</span>
@@ -17,7 +17,7 @@ pub fn Work(cx: Scope) -> impl IntoView {
                             let is_match = move || pathname() == format!("/work/{}", route);
                             let is_not_match = move || !is_match();
 
-                            view! { cx,
+                            view! {
                                 <a
                                     href={route}
                                     class=("underline", is_match)
@@ -32,7 +32,7 @@ pub fn Work(cx: Scope) -> impl IntoView {
                                 </a>
                             }
                         })
-                        .collect_view(cx)}
+                        .collect_view()}
                 </div>
                 <Outlet/>
         </div>

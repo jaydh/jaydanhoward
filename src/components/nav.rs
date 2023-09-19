@@ -1,7 +1,7 @@
 use leptos::*;
 
 #[component]
-pub fn Nav(cx: Scope) -> impl IntoView {
+pub fn Nav() -> impl IntoView {
     let routes = vec![("/work", "Work"), ("/about", "About")];
     let contact_links = vec![
         ("/resume", "fa-regular fa-file-lines", false),
@@ -22,9 +22,9 @@ pub fn Nav(cx: Scope) -> impl IntoView {
         ),
     ];
 
-    let (show_contact_links, set_show_contact_links) = create_signal(cx, false);
+    let (show_contact_links, set_show_contact_links) = create_signal(false);
 
-    view! { cx,
+    view! {
         <nav class="sticky flex flex-row pointer-events-auto m-20">
             <a
                 href="/"
@@ -40,7 +40,7 @@ pub fn Nav(cx: Scope) -> impl IntoView {
                 {routes
                     .into_iter()
                     .map(|(route, display_text)| {
-                        view! { cx,
+                        view! {
                             <a
                                 href=route
                                 class="hover:underline px-3 py-2 transition"
@@ -53,7 +53,7 @@ pub fn Nav(cx: Scope) -> impl IntoView {
                             </a>
                         }
                     })
-                    .collect_view(cx)} <div class="flex flex-col">
+                    .collect_view()} <div class="flex flex-col">
                     <button
                         type="button"
                         class="hover:underline px-3 py-2 transition"
@@ -66,13 +66,13 @@ pub fn Nav(cx: Scope) -> impl IntoView {
                         <i class="fas fa-caret-down"></i>
                     </button>
                     <div class="absolute mt-10">
-                        <Show when=move || { show_contact_links() == true } fallback=|_| ()>
+                        <Show when=move || { show_contact_links() == true } fallback=|| ()>
                             {contact_links
                                 .clone()
                                 .into_iter()
                                 .map(|(route, iconClass, external)| {
                                     let target = if external { "_blank" } else { "_self" };
-                                    view! { cx,
+                                    view! {
                                         <a
                                             href=route
                                             class="hover:underline relative block px-3 py-2 transition"
@@ -84,7 +84,7 @@ pub fn Nav(cx: Scope) -> impl IntoView {
                                         </a>
                                     }
                                 })
-                                .collect_view(cx)}
+                                .collect_view()}
                         </Show>
                     </div>
                 </div>

@@ -10,10 +10,10 @@ use leptos_meta::{provide_meta_context, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
-pub fn App(cx: Scope) -> impl IntoView {
-    provide_meta_context(cx);
+pub fn App() -> impl IntoView {
+    provide_meta_context();
 
-    view! { cx,
+    view! {
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
         <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
         <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
@@ -33,7 +33,7 @@ pub fn App(cx: Scope) -> impl IntoView {
                                 <Route path="believe" view=Beliefs/>
                                 <Route
                                     path="/"
-                                    view=move |cx| view! { cx, <Redirect path="great"/> }
+                                    view=move || view! { <Redirect path="great"/> }
                                 />
                             </Route>
                             <Route path="/dev" view=Dev/>
@@ -41,11 +41,11 @@ pub fn App(cx: Scope) -> impl IntoView {
                                 <Route path="/life" view=Life/>
                                 <Route
                                     path="/"
-                                    view=move |cx| view! { cx, <Redirect path="life"/> }
+                                    view=move || view! { <Redirect path="life"/> }
                                 />
                             </Route>
                             <Route path="/resume" view=Resume/>
-                            <Route path="" view=move |cx| view! { cx, <Redirect path="/about"/> }/>
+                            <Route path="" view=move || view! { <Redirect path="/about"/> }/>
                         </Routes>
                     </div>
                 </div>
