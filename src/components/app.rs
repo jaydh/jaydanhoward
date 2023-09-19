@@ -21,9 +21,9 @@ pub fn App(cx: Scope) -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <div class="flex flex-col w-screen h-full bg-charcoal px-40 text-white">
+                <div class="flex flex-col w-screen h-full bg-charcoal text-white">
                     <Nav/>
-                    <div class="flex flex-col w-full min-h-screen gap-10 bg-charcoal px-40 pb-40">
+                    <div class="flex flex-col w-full min-h-screen gap-10 items-center">
                         <Routes>
                             <Route path="/about" view=About/>
                             <Route path="/skills" view=Skills>

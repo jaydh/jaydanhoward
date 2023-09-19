@@ -25,7 +25,7 @@ pub fn Nav(cx: Scope) -> impl IntoView {
     let (show_contact_links, set_show_contact_links) = create_signal(cx, false);
 
     view! { cx,
-        <nav class="sticky flex flex-row pointer-events-auto mt-20 mb-20">
+        <nav class="sticky flex flex-row pointer-events-auto m-20">
             <a
                 href="/"
                 class="hover:underline px-3 py-2 transition"
@@ -63,13 +63,10 @@ pub fn Nav(cx: Scope) -> impl IntoView {
                     >
 
                         Contact
-                        <i class="fas fa-caret-down" />
+                        <i class="fas fa-caret-down"></i>
                     </button>
                     <div class="absolute mt-10">
-                        <Show
-                            when=move || { show_contact_links() == true }
-                            fallback=|cx| view! { cx, <div></div> }
-                        >
+                        <Show when=move || { show_contact_links() == true } fallback=|_| ()>
                             {contact_links
                                 .clone()
                                 .into_iter()

@@ -1,24 +1,112 @@
 use crate::components::source_anchor::SourceAnchor;
+use leptos::ev::{MouseEvent, WheelEvent};
 use leptos::*;
 
 #[component]
-pub fn About(cx: Scope) -> impl IntoView {
-    view! {
-        cx,
-        <SourceAnchor href="#[git]" />
-        <div class="flex flex-row">
-            <div class="flex flex-col space-y-10 max-w-lg">
-                <h1 class="text-5xl font-heavy mb-6">r#"👋I'm Jay D Howard! I believe compassion makes tech worthwhile."#</h1>
-                <p>"Very few things are good in and of themselves, and tech is probably not one of them. I'm currently a senior software engineer at Interwell Health, leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease. I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
-                </p>
-                <p>
-                    r#"This site exists to experiment with tech (currently that's Rust + Leptos + Tailwind), and to have a small corner of the internet where people can learn about me
-                        (mostly in a software engineering context). I live in beautiful San Francisco.
-                        I spend my AFK time walking my dog Lunabelle, wrenching on my motorcycle, and mindfully engaging in sillyness."#
-                </p>
+pub fn PictureSection(cx: Scope) -> impl IntoView {
+    view! { cx,
+        <div class="w-fit max-h-3xl relative">
+            <img src="/assets/profile.webp" class="filter grayscale opacity-50 object-cover"/>
+            <div class="absolute left-0 w-full h-40 bottom-0">
+                <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
             </div>
-            <div class="flex flex-row ml-auto">
-                <img src="/assets/profile.webp" class="object-cover w-full h-72 rounded-lg"/>
+            <div class="text-xl text-white absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                "I'm Jay Dan Howard!"
+            </div>
+            <div class="absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                I believe compassion makes tech worthwhile
+            </div>
+        </div>
+    }
+}
+
+#[component]
+pub fn MeSection(cx: Scope) -> impl IntoView {
+    view! { cx,
+        <p>"Very few things are good in and of themselves, and tech is probably not one of them"</p>
+        <p>
+            "I'm currently a senior software engineer at Interwell Health, leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease"
+        </p>
+        <p>
+            "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
+        </p>
+    }
+}
+
+#[component]
+pub fn SiteSection(cx: Scope) -> impl IntoView {
+    view! { cx,
+        <p>
+            "This site exists to experiment with tech (currently that's Rust + Leptos + Tailwind), and to have a small corner of the internet where people can learn about me
+            (mostly in a software engineering context)"
+        </p>
+        <p>"I live in beautiful San Francisco"</p>
+        <p>
+            "I spend my AFK time walking my dog Lunabelle, wrenching on my motorcycle, and mindfully engaging in silliness"
+        </p>
+    }
+}
+
+#[component]
+pub fn ShowWithTransition<W>(cx: Scope, children: ChildrenFn, when: W) -> impl IntoView
+where
+    W: Fn() -> bool + 'static,
+{
+    let memoized_when = create_memo(cx, move |_| when());
+
+    view! { cx,
+        <div
+            class="transition-all duration-3000 transform scale-y-0 opacity-0"
+            class=("opacity-100", move || memoized_when() == true)
+            class=("scale-y-100", move || memoized_when() == true)
+            class=("hidden", move || memoized_when() == false)
+        >
+            {children(cx)}
+        </div>
+    }
+}
+
+#[component]
+pub fn About(cx: Scope) -> impl IntoView {
+    let section_length = 3;
+    let (section, set_section) = create_signal(cx, 0);
+    let arrow_class = move || match section() < section_length - 1 {
+        true => "fas fa-chevron-down cursor-pointer",
+        false => "fas fa-chevron-up cursor-pointer",
+    };
+
+    let handle_scroll = move |e: WheelEvent| {
+        if e.delta_y() > 0.0 && section() < section_length - 1 {
+            set_section.set(section() + 1);
+        } else if e.delta_y() < 0.0 && section() > 0 {
+            set_section.set(section() - 1);
+        }
+    };
+
+    let handle_next = move |_e: MouseEvent| match arrow_class().contains("up") {
+        true => set_section.set(section() - 1),
+        false => set_section.set(section() + 1),
+    };
+
+    view! { cx,
+        <SourceAnchor href="#[git]"/>
+        <div
+            class="flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth"
+            on:wheel=handle_scroll
+        >
+            <div class="flex flex-col space-y-10 max-w-lg">
+                <ShowWithTransition when=move || { section() == 0 }>
+                    <PictureSection/>
+                </ShowWithTransition>
+                <ShowWithTransition when=move || { section() == 1 }>
+                    <MeSection/>
+                </ShowWithTransition>
+                <ShowWithTransition when=move || { section() == 2 }>
+                    <SiteSection/>
+                </ShowWithTransition>
+                <div class="text-xl flex flex-col items-center">
+                    <i class=arrow_class on:click=handle_next></i>
+                </div>
             </div>
         </div>
     }
