@@ -9,8 +9,7 @@ run rustup default nightly
 run rustup target add wasm32-unknown-unknown
 RUN git clone https://github.com/jaydh/inject-git
 
-RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-RUN cargo binstall cargo-leptos -y
+RUN cargo install --locked cargo-leptos
 
 
 FROM chef as planner
