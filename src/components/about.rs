@@ -1,5 +1,5 @@
 use crate::components::source_anchor::SourceAnchor;
-use leptos::ev::{MouseEvent, WheelEvent};
+use leptos::ev::{MouseEvent, TouchEvent, WheelEvent};
 use leptos::*;
 
 #[component]
@@ -70,6 +70,8 @@ where
 pub fn About(cx: Scope) -> impl IntoView {
     let section_length = 3;
     let (section, set_section) = create_signal(cx, 0);
+    let (touch_start_y, set_touch_start_y) = create_signal(cx, -1);
+
     let arrow_class = move || match section() < section_length - 1 {
         true => "fas fa-chevron-down cursor-pointer",
         false => "fas fa-chevron-up cursor-pointer",
@@ -88,11 +90,39 @@ pub fn About(cx: Scope) -> impl IntoView {
         false => set_section.set(section() + 1),
     };
 
+    let handle_touch_start = move |e: TouchEvent| match e.touches().item(0) {
+        Some(touchStart) => set_touch_start_y(touchStart.client_y()),
+        None => set_touch_start_y(-1),
+    };
+
+    let handle_touch_move = move |e: TouchEvent| match e.touches().item(0) {
+        Some(touchEnd) => {
+            if touch_start_y() > -1 {
+                let delta_y = touchEnd.client_y() - touch_start_y();
+                match delta_y {
+                    d if d.abs() < 50 => {}
+                    d if d < 0 && section() < section_length - 1 => {
+                        set_section.set(section() + 1);
+                        set_touch_start_y(-1);
+                    }
+                    d if d > 0 && section() > 0 => {
+                        set_section.set(section() - 1);
+                        set_touch_start_y(-1);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None => set_touch_start_y(-1),
+    };
+
     view! { cx,
         <SourceAnchor href="#[git]"/>
         <div
             class="flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth"
             on:wheel=handle_scroll
+            on:touchstart=handle_touch_start
+            on:touchmove=handle_touch_move
         >
             <div class="flex flex-col space-y-10 max-w-lg">
                 <ShowWithTransition when=move || { section() == 0 }>
