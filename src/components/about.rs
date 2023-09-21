@@ -2,7 +2,7 @@ use crate::components::skills::Skills;
 use crate::components::source_anchor::SourceAnchor;
 use leptos::ev::{TouchEvent, WheelEvent};
 use leptos::*;
-use leptos_router::{use_location, use_navigate, use_params_map};
+use leptos_router::{use_navigate, use_params_map};
 
 #[component]
 pub fn PictureSection() -> impl IntoView {
@@ -71,7 +71,6 @@ where
 #[component]
 pub fn About() -> impl IntoView {
     let params = use_params_map();
-    let location = use_location();
 
     let section_length = 4;
     let section = move || {
