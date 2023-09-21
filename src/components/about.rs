@@ -1,6 +1,8 @@
+use crate::components::skills::Skills;
 use crate::components::source_anchor::SourceAnchor;
 use leptos::ev::{TouchEvent, WheelEvent};
 use leptos::*;
+use leptos_router::{use_location, use_navigate, use_params_map};
 
 #[component]
 pub fn PictureSection() -> impl IntoView {
@@ -68,18 +70,31 @@ where
 
 #[component]
 pub fn About() -> impl IntoView {
-    let section_length = 3;
-    let (section, set_section) = create_signal(0);
+    let params = use_params_map();
+    let location = use_location();
+
+    let section_length = 4;
+    let section = move || {
+        params.with(|params| {
+            params
+                .get("section")
+                .cloned()
+                .unwrap()
+                .parse::<i32>()
+                .unwrap()
+        })
+    };
+
     let (touch_start_y, set_touch_start_y) = create_signal(-1);
 
-    let down_available = move || section() < section_length - 1;
-    let up_available = move || section() > 0;
+    let down_available = move || section() < section_length;
+    let up_available = move || section() > 1;
 
     let handle_scroll = move |e: WheelEvent| {
-        if e.delta_y() > 0.0 && section() < section_length - 1 {
-            set_section.set(section() + 1);
-        } else if e.delta_y() < 0.0 && section() > 0 {
-            set_section.set(section() - 1);
+        if e.delta_y() > 0.0 && section() < section_length {
+            use_navigate()(&format!("/about/{}", section() + 1), Default::default());
+        } else if e.delta_y() < 0.0 && section() > 1 {
+            use_navigate()(&format!("/about/{}", section() - 1), Default::default());
         }
     };
 
@@ -94,12 +109,12 @@ pub fn About() -> impl IntoView {
                 let delta_y = touchEnd.client_y() - touch_start_y();
                 match delta_y {
                     d if d.abs() < 50 => {}
-                    d if d < 0 && section() < section_length - 1 => {
-                        set_section.set(section() + 1);
+                    d if d < 0 && section() < section_length => {
+                        use_navigate()(&format!("/about/{}", section() + 1), Default::default());
                         set_touch_start_y(-1);
                     }
-                    d if d > 0 && section() > 0 => {
-                        set_section.set(section() - 1);
+                    d if d > 0 && section() > 1 => {
+                        use_navigate()(&format!("/about/{}", section() + 1), Default::default());
                         set_touch_start_y(-1);
                     }
                     _ => {}
@@ -120,24 +135,24 @@ pub fn About() -> impl IntoView {
             <div class="flex flex-col space-y-10 max-w-lg">
                 <div class="text-xl flex flex-col items-center">
                     <Show when=move || up_available() fallback=|| ()>
-                        <i
-                            class="fas fa-chevron-up cursor-pointer mb-10"
-                            on:click=move |_| set_section.set(section() - 1)
-                        ></i>
+                        <i class="fas fa-chevron-up cursor-pointer mb-10" on:click=move |_| {}></i>
                     </Show>
-                    <ShowWithTransition when=move || { section() == 0 }>
+                    <ShowWithTransition when=move || { section() == 1 }>
                         <PictureSection/>
                     </ShowWithTransition>
-                    <ShowWithTransition when=move || { section() == 1 }>
+                    <ShowWithTransition when=move || { section() == 2 }>
                         <MeSection/>
                     </ShowWithTransition>
-                    <ShowWithTransition when=move || { section() == 2 }>
+                    <ShowWithTransition when=move || { section() == 3 }>
                         <SiteSection/>
+                    </ShowWithTransition>
+                    <ShowWithTransition when=move || { section() == 4 }>
+                        <Skills/>
                     </ShowWithTransition>
                     <Show when=move || down_available() fallback=|| ()>
                         <i
                             class="fas fa-chevron-down cursor-pointer mt-10"
-                            on:click=move |_| set_section.set(section() + 1)
+                            on:click=move |_| {}
                         ></i>
                     </Show>
                 </div>

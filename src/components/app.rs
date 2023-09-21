@@ -25,24 +25,22 @@ pub fn App() -> impl IntoView {
                     <Nav/>
                     <div class="flex flex-col w-full min-h-screen gap-10 items-center">
                         <Routes>
-                            <Route path="/about" view=About/>
+                            <Route
+                                path="/about"
+                                view=move || view! { <Redirect path="/about/1"/> }
+                            />
+                            <Route path="/about/:section" view=About/>
                             <Route path="/skills" view=Skills>
                                 <Route path="great" view=GreatAt/>
                                 <Route path="better" view=BetterAt/>
                                 <Route path="interested" view=InterestedIn/>
                                 <Route path="believe" view=Beliefs/>
-                                <Route
-                                    path="/"
-                                    view=move || view! { <Redirect path="great"/> }
-                                />
+                                <Route path="/" view=move || view! { <Redirect path="great"/> }/>
                             </Route>
                             <Route path="/dev" view=Dev/>
                             <Route path="/work" view=Work>
                                 <Route path="/life" view=Life/>
-                                <Route
-                                    path="/"
-                                    view=move || view! { <Redirect path="life"/> }
-                                />
+                                <Route path="/" view=move || view! { <Redirect path="life"/> }/>
                             </Route>
                             <Route path="/resume" view=Resume/>
                             <Route path="" view=move || view! { <Redirect path="/about"/> }/>
