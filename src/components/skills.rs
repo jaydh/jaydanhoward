@@ -1,4 +1,3 @@
-use crate::components::source_anchor::SourceAnchor;
 use leptos::*;
 use leptos_router::{use_location, Outlet};
 
@@ -15,7 +14,6 @@ pub fn Skills() -> impl IntoView {
     ];
 
     view! {
-            <SourceAnchor href="#[git]" />
             <div>
                 <div class="flex flex-row gap-10 mb-20">
                     <span>"Things I"</span>
