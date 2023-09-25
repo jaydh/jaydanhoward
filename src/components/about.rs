@@ -88,12 +88,17 @@ pub fn About() -> impl IntoView {
 
     let down_available = move || section() < section_length;
     let up_available = move || section() > 1;
+    let go_to_next_section =
+        move || use_navigate()(&format!("/about/{}", section() + 1), Default::default());
+
+    let go_to_prev_section =
+        move || use_navigate()(&format!("/about/{}", section() - 1), Default::default());
 
     let handle_scroll = move |e: WheelEvent| {
         if e.delta_y() > 0.0 && section() < section_length {
-            use_navigate()(&format!("/about/{}", section() + 1), Default::default());
+            go_to_next_section();
         } else if e.delta_y() < 0.0 && section() > 1 {
-            use_navigate()(&format!("/about/{}", section() - 1), Default::default());
+            go_to_prev_section();
         }
     };
 
@@ -134,7 +139,7 @@ pub fn About() -> impl IntoView {
             <div class="flex flex-col space-y-10 max-w-lg">
                 <div class="text-xl flex flex-col items-center">
                     <Show when=move || up_available() fallback=|| ()>
-                        <i class="fas fa-chevron-up cursor-pointer mb-10" on:click=move |_| {}></i>
+                        <i class="fas fa-chevron-up cursor-pointer mb-10" on:click=move |_| go_to_prev_section()></i>
                     </Show>
                     <ShowWithTransition when=move || { section() == 1 }>
                         <PictureSection/>
@@ -151,7 +156,7 @@ pub fn About() -> impl IntoView {
                     <Show when=move || down_available() fallback=|| ()>
                         <i
                             class="fas fa-chevron-down cursor-pointer mt-10"
-                            on:click=move |_| {}
+                            on:click= move |_| go_to_next_section()
                         ></i>
                     </Show>
                 </div>
