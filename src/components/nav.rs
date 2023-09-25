@@ -2,7 +2,7 @@ use leptos::*;
 
 #[component]
 pub fn Nav() -> impl IntoView {
-    let routes = vec![("/about", "About"), ("/work", "Work")];
+    let routes = vec![("/about/1", "About"), ("/work", "Work")];
     let contact_links = vec![
         ("/resume", "fa-regular fa-file-lines", false),
         (
