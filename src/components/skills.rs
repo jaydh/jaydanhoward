@@ -1,9 +1,11 @@
+use leptos::logging::log;
 use leptos::*;
-use leptos_router::{use_location, Outlet};
+use leptos_router::{use_location, use_navigate, use_route, Outlet};
 
 #[component]
 pub fn Skills() -> impl IntoView {
     let location = use_location();
+    let route = use_route();
     let pathname = move || location.pathname.get();
 
     let routes = vec![
@@ -13,18 +15,26 @@ pub fn Skills() -> impl IntoView {
         ("believe", "believe in"),
     ];
 
+    if !routes
+        .iter()
+        .map(|&(x, _)| x)
+        .any(|e| route.path().contains(e))
+    {
+        use_navigate()(&format!("/about/4/great"), Default::default());
+    }
+
     view! {
             <div>
                 <div class="flex flex-row gap-10 mb-20">
                     <span>"Things I"</span>
                     {routes.into_iter()
-                        .map(|(route, display_text)| {
-                            let is_match = move || pathname() == format!("/skills/{}", route);
+                        .map(|(r, display_text)| {
+                            let is_match = move || pathname().contains(r);
                             let is_not_match = move || !is_match();
 
                             view! {
                                 <a
-                                    href={route}
+                                    href={route.resolve_path(r)}
                                     class=("underline", is_match)
                                     class=("font-bold", is_match)
                                     class=("cursor-default", is_match)

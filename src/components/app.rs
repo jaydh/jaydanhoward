@@ -3,7 +3,7 @@ use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::resume::Resume;
-use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn, Skills};
+use crate::components::skills::{Beliefs, BetterAt, GreatAt, InterestedIn};
 use crate::components::work::Work;
 use leptos::*;
 use leptos_meta::{provide_meta_context, Stylesheet, Title};
@@ -29,13 +29,12 @@ pub fn App() -> impl IntoView {
                                 path="/about"
                                 view=move || view! { <Redirect path="/about/1"/> }
                             />
-                            <Route path="/about/:section" view=About/>
-                            <Route path="/skills" view=Skills>
+                            <Route path="/about/:section" view=About>
                                 <Route path="great" view=GreatAt/>
                                 <Route path="better" view=BetterAt/>
                                 <Route path="interested" view=InterestedIn/>
                                 <Route path="believe" view=Beliefs/>
-                                <Route path="/" view=move || view! { <Redirect path="great"/> }/>
+                                <Route path="" view=|| ()/>
                             </Route>
                             <Route path="/dev" view=Dev/>
                             <Route path="/work" view=Work>

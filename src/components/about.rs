@@ -114,11 +114,11 @@ pub fn About() -> impl IntoView {
                 match delta_y {
                     d if d.abs() < 50 => {}
                     d if d < 0 && section() < section_length => {
-                        use_navigate()(&format!("/about/{}", section() + 1), Default::default());
+                        go_to_next_section();
                         set_touch_start_y(-1);
                     }
                     d if d > 0 && section() > 1 => {
-                        use_navigate()(&format!("/about/{}", section() + 1), Default::default());
+                        go_to_prev_section();
                         set_touch_start_y(-1);
                     }
                     _ => {}
