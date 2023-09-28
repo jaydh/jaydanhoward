@@ -15,14 +15,6 @@ pub fn Skills() -> impl IntoView {
         ("believe", "believe in"),
     ];
 
-    if !routes
-        .iter()
-        .map(|&(x, _)| x)
-        .any(|e| route.path().contains(e))
-    {
-        use_navigate()(&format!("/about/4/great"), Default::default());
-    }
-
     view! {
             <div>
                 <div class="flex flex-row gap-10 mb-20">
