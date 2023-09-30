@@ -1,8 +1,8 @@
-use crate::components::skills::Skills;
+use crate::components::skills_beliefs_switchers::SkillsBeliefsSwitcher;
 use crate::components::source_anchor::SourceAnchor;
 use leptos::ev::{TouchEvent, WheelEvent};
 use leptos::*;
-use leptos_router::{use_navigate, use_params_map};
+use leptos_router::{use_navigate, use_params_map, Outlet};
 
 #[component]
 pub fn PictureSection() -> impl IntoView {
@@ -151,8 +151,9 @@ pub fn About() -> impl IntoView {
                         <SiteSection/>
                     </ShowWithTransition>
                     <ShowWithTransition when=move || { section() == 4 }>
-                        <Skills/>
+                        <SkillsBeliefsSwitcher/>
                     </ShowWithTransition>
+                    <Outlet/>
                     <Show when=move || down_available() fallback=|| ()>
                         <i
                             class="fas fa-chevron-down cursor-pointer mt-10"
