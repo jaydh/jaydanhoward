@@ -4,7 +4,7 @@ use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::resume::Resume;
-use crate::components::skills::{BetterAt, GreatAt, InterestedIn, Skills};
+use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::*;
 use leptos_meta::{provide_meta_context, Stylesheet, Title};
@@ -22,9 +22,9 @@ pub fn App() -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <div class="flex flex-col w-screen h-full bg-charcoal text-white">
+                <div class="flex flex-col w-screen h-screen bg-charcoal text-white">
                     <Nav/>
-                    <div class="flex flex-col w-full min-h-screen gap-10 items-center">
+                    <div class="grow flex flex-col w-full gap-10 items-center">
                         <Routes>
                             <Route
                                 path="/about"
@@ -33,10 +33,10 @@ pub fn App() -> impl IntoView {
                             <Route path="/about/4" view=move || view! { <Redirect path="/about/4/skills"/> } />
                             <Route path="/about/:section" view=About>
                                 <Route path="skills" view=Skills>
-                                    <Route path="great" view=GreatAt/>
-                                    <Route path="better" view=BetterAt/>
+                                    <Route path="experienced" view=Experienced/>
+                                    <Route path="proficient" view=Proficient/>
                                     <Route path="interested" view=InterestedIn/>
-                                    <Route path="/" view=move || view! { <Redirect path="great"/> }/>
+                                    <Route path="/" view=move || view! { <Redirect path="experienced"/> }/>
                                 </Route>
                                 <Route path="beliefs" view=Beliefs/>
                                 <Route path="" view=|| ()/>
@@ -47,7 +47,7 @@ pub fn App() -> impl IntoView {
                                 <Route path="/" view=move || view! { <Redirect path="life"/> }/>
                             </Route>
                             <Route path="/resume" view=Resume/>
-                            <Route path="" view=move || view! { <Redirect path="/about"/> }/>
+                            <Route path="/*any" view=move || view! { <Redirect path="/about"/> }/>
                         </Routes>
                     </div>
                 </div>

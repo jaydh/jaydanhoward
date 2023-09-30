@@ -7,9 +7,8 @@ use leptos_router::{use_navigate, use_params_map, Outlet};
 #[component]
 pub fn PictureSection() -> impl IntoView {
     view! {
-        <div class="w-fit max-h-3xl relative">
-            <img src="/assets/profile.webp" class="filter grayscale opacity-50 object-cover"/>
-            <div class="absolute left-0 w-full h-40 bottom-0">
+            <img src="/assets/profile.webp" class="grow h-auto max-w-full filter grayscale opacity-50 object-cover"/>
+            <div class="grow absolute bottom-0 left-0 w-full h-20 ">
                 <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
             </div>
             <div class="text-xl text-white absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
@@ -18,7 +17,6 @@ pub fn PictureSection() -> impl IntoView {
             <div class="absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
                 I believe compassion makes tech worthwhile
             </div>
-        </div>
     }
 }
 
@@ -58,7 +56,7 @@ where
 
     view! {
         <div
-            class="transition-all duration-3000 transform scale-y-0 opacity-0"
+            class="h-full w-full transition-all duration-3000 transform scale-y-0 opacity-0"
             class=("opacity-100", move || memoized_when() == true)
             class=("scale-y-100", move || memoized_when() == true)
             class=("hidden", move || memoized_when() == false)
@@ -131,16 +129,19 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]"/>
         <div
-            class="flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth"
+            class="grow flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth items-center space-y-10 max-w-lg"
             on:wheel=handle_scroll
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move
         >
-            <div class="flex flex-col space-y-10 max-w-lg">
-                <div class="text-xl flex flex-col items-center">
-                    <Show when=move || up_available() fallback=|| ()>
-                        <i class="fas fa-chevron-up cursor-pointer mb-10" on:click=move |_| go_to_prev_section()></i>
-                    </Show>
+            <Show when=move || up_available() fallback=|| ()>
+                <i
+                    class="grow-0 mb-10 fas fa-chevron-up cursor-pointer"
+                    on:click=move |_| go_to_prev_section()
+                ></i>
+            </Show>
+
+                <div class="grow text-xl">
                     <ShowWithTransition when=move || { section() == 1 }>
                         <PictureSection/>
                     </ShowWithTransition>
@@ -154,14 +155,14 @@ pub fn About() -> impl IntoView {
                         <SkillsBeliefsSwitcher/>
                     </ShowWithTransition>
                     <Outlet/>
-                    <Show when=move || down_available() fallback=|| ()>
-                        <i
-                            class="fas fa-chevron-down cursor-pointer mt-10"
-                            on:click= move |_| go_to_next_section()
-                        ></i>
-                    </Show>
                 </div>
-            </div>
+            <Show when=move || down_available() fallback=|| ()>
+                <i
+                    class="grow-0 pb-20 mt-10 fas fa-chevron-down cursor-pointer"
+                    on:click=move |_| go_to_next_section()
+                ></i>
+            </Show>
+
         </div>
     }
 }

@@ -45,7 +45,7 @@ pub fn Skills() -> impl IntoView {
 }
 
 #[component]
-pub fn GreatAt() -> impl IntoView {
+pub fn Experienced() -> impl IntoView {
     view! {
         <ul class="list-disc list-outside space-y-4">
             <li>Fullstack web development</li>
@@ -64,7 +64,7 @@ pub fn GreatAt() -> impl IntoView {
 }
 
 #[component]
-pub fn BetterAt() -> impl IntoView {
+pub fn Proficient() -> impl IntoView {
     view! {
         <ul class="list-disc list-outside space-y-4">
             <li>Rust</li>
