@@ -1,4 +1,4 @@
-use crate::components::skills_beliefs_switchers::SkillsBeliefsSwitcher;
+use crate::components::binary_nav_switcher::BinaryNavSwithcer;
 use crate::components::source_anchor::SourceAnchor;
 use leptos::ev::{TouchEvent, WheelEvent};
 use leptos::*;
@@ -7,16 +7,19 @@ use leptos_router::{use_navigate, use_params_map, Outlet};
 #[component]
 pub fn PictureSection() -> impl IntoView {
     view! {
-            <img src="/assets/profile.webp" class="grow h-auto max-w-full filter grayscale opacity-50 object-cover"/>
-            <div class="grow absolute bottom-0 left-0 w-full h-20 ">
-                <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
-            </div>
-            <div class="text-xl text-white absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                "I'm Jay Dan Howard!"
-            </div>
-            <div class="absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                I believe compassion makes tech worthwhile
-            </div>
+        <img
+            src="/assets/profile.webp"
+            class="grow h-auto max-w-full filter grayscale opacity-50 object-cover"
+        />
+        <div class="grow absolute bottom-0 left-0 w-full h-20 ">
+            <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
+        </div>
+        <div class="text-xl text-white absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            "I'm Jay Dan Howard!"
+        </div>
+        <div class="absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+            I believe compassion makes tech worthwhile
+        </div>
     }
 }
 
@@ -56,7 +59,7 @@ where
 
     view! {
         <div
-            class="h-full w-full transition-all duration-3000 transform scale-y-0 opacity-0"
+            class="transition-all duration-3000 transform scale-y-0 opacity-0"
             class=("opacity-100", move || memoized_when() == true)
             class=("scale-y-100", move || memoized_when() == true)
             class=("hidden", move || memoized_when() == false)
@@ -140,22 +143,26 @@ pub fn About() -> impl IntoView {
                     on:click=move |_| go_to_prev_section()
                 ></i>
             </Show>
-
-                <div class="grow text-xl">
-                    <ShowWithTransition when=move || { section() == 1 }>
-                        <PictureSection/>
-                    </ShowWithTransition>
-                    <ShowWithTransition when=move || { section() == 2 }>
-                        <MeSection/>
-                    </ShowWithTransition>
-                    <ShowWithTransition when=move || { section() == 3 }>
-                        <SiteSection/>
-                    </ShowWithTransition>
-                    <ShowWithTransition when=move || { section() == 4 }>
-                        <SkillsBeliefsSwitcher/>
-                    </ShowWithTransition>
-                    <Outlet/>
-                </div>
+            <div class="grow text-xl">
+                <ShowWithTransition when=move || { section() == 1 }>
+                    <PictureSection/>
+                </ShowWithTransition>
+                <ShowWithTransition when=move || { section() == 2 }>
+                    <MeSection/>
+                </ShowWithTransition>
+                <ShowWithTransition when=move || { section() == 3 }>
+                    <SiteSection/>
+                </ShowWithTransition>
+                <ShowWithTransition when=move || { section() == 4 }>
+                    <BinaryNavSwithcer
+                        a_path="skills"
+                        a_display_text="Skills"
+                        b_path="beliefs"
+                        b_display_text="Beliefs"
+                    />
+                </ShowWithTransition>
+                <Outlet/>
+            </div>
             <Show when=move || down_available() fallback=|| ()>
                 <i
                     class="grow-0 pb-20 mt-10 fas fa-chevron-down cursor-pointer"

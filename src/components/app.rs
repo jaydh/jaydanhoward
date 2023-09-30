@@ -39,7 +39,7 @@ pub fn App() -> impl IntoView {
                                     <Route path="/" view=move || view! { <Redirect path="experienced"/> }/>
                                 </Route>
                                 <Route path="beliefs" view=Beliefs/>
-                                <Route path="" view=|| ()/>
+                                <Route path="/*any" view=|| ()/>
                             </Route>
                             <Route path="/dev" view=Dev/>
                             <Route path="/work" view=Work>
