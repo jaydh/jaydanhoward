@@ -9,8 +9,7 @@
   font-style: normal;
 }
 
-body {
-}
+body {}
 
 @tailwind base;
 @tailwind components;

@@ -132,7 +132,7 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]"/>
         <div
-            class="grow flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth items-center space-y-10 max-w-lg"
+            class="overflow-y-auto grow flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth items-center space-y-10 max-w-lg"
             on:wheel=handle_scroll
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move

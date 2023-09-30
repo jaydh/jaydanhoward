@@ -22,7 +22,7 @@ pub fn App() -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <div class="flex flex-col w-screen h-screen bg-charcoal text-white">
+                <div class="flex flex-col min-w-screen min-h-screen bg-charcoal text-white">
                     <Nav/>
                     <div class="grow flex flex-col w-full gap-10 items-center">
                         <Routes>
