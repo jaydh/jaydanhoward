@@ -59,7 +59,7 @@ where
 
     view! {
         <div
-            class="transition-all duration-3000 transform scale-y-0 opacity-0"
+            class="w-full h-full transition-all duration-3000 transform scale-y-0 opacity-0"
             class=("opacity-100", move || memoized_when() == true)
             class=("scale-y-100", move || memoized_when() == true)
             class=("hidden", move || memoized_when() == false)
@@ -96,6 +96,11 @@ pub fn About() -> impl IntoView {
         move || use_navigate()(&format!("/about/{}", section() - 1), Default::default());
 
     let handle_scroll = move |e: WheelEvent| {
+        let abs_delta = e.delta_y().abs();
+        if abs_delta < 100.0 {
+            return;
+        }
+
         if e.delta_y() > 0.0 && section() < section_length {
             go_to_next_section();
         } else if e.delta_y() < 0.0 && section() > 1 {
@@ -113,7 +118,7 @@ pub fn About() -> impl IntoView {
             if touch_start_y() > -1 {
                 let delta_y = touchEnd.client_y() - touch_start_y();
                 match delta_y {
-                    d if d.abs() < 50 => {}
+                    d if d.abs() < 200 => {}
                     d if d < 0 && section() < section_length => {
                         go_to_next_section();
                         set_touch_start_y(-1);
@@ -132,7 +137,7 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]"/>
         <div
-            class="grow flex flex-col text-white text-lg w-1/2 max-w-xl scroll-smooth items-center space-y-10 max-w-lg"
+            class="w-1/2 p-10 grow flex flex-col text-white text-lg scroll-smooth items-center space-y-10"
             on:wheel=handle_scroll
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move
@@ -143,26 +148,24 @@ pub fn About() -> impl IntoView {
                     on:click=move |_| go_to_prev_section()
                 ></i>
             </Show>
-            <div class="grow text-xl">
-                <ShowWithTransition when=move || { section() == 1 }>
-                    <PictureSection/>
-                </ShowWithTransition>
-                <ShowWithTransition when=move || { section() == 2 }>
-                    <MeSection/>
-                </ShowWithTransition>
-                <ShowWithTransition when=move || { section() == 3 }>
-                    <SiteSection/>
-                </ShowWithTransition>
-                <ShowWithTransition when=move || { section() == 4 }>
-                    <BinaryNavSwithcer
-                        a_path="skills"
-                        a_display_text="Skills"
-                        b_path="beliefs"
-                        b_display_text="Beliefs"
-                    />
-                </ShowWithTransition>
-                <Outlet/>
-            </div>
+            <ShowWithTransition when=move || { section() == 1 }>
+                <PictureSection/>
+            </ShowWithTransition>
+            <ShowWithTransition when=move || { section() == 2 }>
+                <MeSection/>
+            </ShowWithTransition>
+            <ShowWithTransition when=move || { section() == 3 }>
+                <SiteSection/>
+            </ShowWithTransition>
+            <ShowWithTransition when=move || { section() == 4 }>
+                <BinaryNavSwithcer
+                    a_path="skills"
+                    a_display_text="Skills"
+                    b_path="beliefs"
+                    b_display_text="Beliefs"
+                />
+            </ShowWithTransition>
+            <Outlet/>
             <Show when=move || down_available() fallback=|| ()>
                 <i
                     class="grow-0 pb-20 mt-10 fas fa-chevron-down cursor-pointer"

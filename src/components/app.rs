@@ -3,6 +3,7 @@ use crate::components::beliefs::Beliefs;
 use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
+use crate::components::projects::Projects;
 use crate::components::resume::Resume;
 use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
@@ -36,15 +37,18 @@ pub fn App() -> impl IntoView {
                                     <Route path="experienced" view=Experienced/>
                                     <Route path="proficient" view=Proficient/>
                                     <Route path="interested" view=InterestedIn/>
-                                    <Route path="/" view=move || view! { <Redirect path="experienced"/> }/>
+                                    <Route path="/*any" view=move || view! { <Redirect path="experienced"/> }/>
                                 </Route>
                                 <Route path="beliefs" view=Beliefs/>
                                 <Route path="/*any" view=|| ()/>
                             </Route>
-                            <Route path="/dev" view=Dev/>
                             <Route path="/work" view=Work>
-                                <Route path="/life" view=Life/>
-                                <Route path="/" view=move || view! { <Redirect path="life"/> }/>
+                                <Route path="dev" view=Dev/>
+                                <Route path="projects" view=Projects>
+                                    <Route path="life" view=Life/>
+                                    <Route path="/" view=move || view! { <Redirect path="life"/> }/>
+                                </Route>
+                                <Route path="/*any" view=move || view! { <Redirect path="dev"/> }/>
                             </Route>
                             <Route path="/resume" view=Resume/>
                             <Route path="/*any" view=move || view! { <Redirect path="/about"/> }/>

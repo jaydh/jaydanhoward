@@ -6,6 +6,7 @@ mod dev;
 mod life;
 mod link;
 mod nav;
+mod projects;
 mod resume;
 mod skills;
 mod source_anchor;
