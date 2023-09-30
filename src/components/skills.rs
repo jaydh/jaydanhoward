@@ -29,7 +29,7 @@ pub fn Skills() -> impl IntoView {
 #[component]
 pub fn Experienced() -> impl IntoView {
     view! {
-        <ul class="flex flex-wrap list-none space-y-4 justify-center">
+        <ul class="flex flex-col list-none space-y-4 items-center">
             <li>Fullstack web development</li>
             <li>Typescript/Javascript/ES6</li>
             <li>React</li>
@@ -48,7 +48,7 @@ pub fn Experienced() -> impl IntoView {
 #[component]
 pub fn Proficient() -> impl IntoView {
     view! {
-        <ul class="flex flex-wrap list-none space-y-4 justify-center">
+        <ul class="flex flex-col list-none space-y-4 items-center">
             <li>Rust</li>
             <li>Leptos</li>
             <li>Kubernetes</li>
@@ -62,7 +62,7 @@ pub fn Proficient() -> impl IntoView {
 #[component]
 pub fn InterestedIn() -> impl IntoView {
     view! {
-        <ul class="flex flex-wrap list-none space-y-4 justify-center">
+        <ul class="flex flex-col list-none space-y-4 items-center">
             <li>Flight sims</li>
             <li>"Motorcyling, Onewheeling, transportation with <= 3 wheels"</li>
             <li>Space - KSP</li>
