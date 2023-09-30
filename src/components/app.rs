@@ -24,7 +24,7 @@ pub fn App() -> impl IntoView {
             <main>
                 <div class="flex flex-col min-w-screen min-h-screen bg-charcoal text-white">
                     <Nav/>
-                    <div class="grow flex flex-col w-full gap-10 items-center">
+                    <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
                         <Routes>
                             <Route
                                 path="/about"
