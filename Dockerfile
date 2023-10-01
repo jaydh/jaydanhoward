@@ -24,11 +24,7 @@ FROM chef as builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo +nightly chef cook --release --recipe-path recipe.json
 
-COPY Cargo.toml Cargo.toml
-COPY assets assets
-COPY --from=planner /app/src src
-COPY style style
-COPY tailwind.config.js tailwind.config.js
+COPY . .
 RUN cargo leptos build --release -vv
 
 FROM debian:bullseye-slim AS runtime 
