@@ -41,7 +41,7 @@ fn prepare_neighbors(cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>
         for dy in -1..=1 {
             for dx in -1..=1 {
                 if dx == 0 && dy == 0 {
-                    continue; // Skip the current cell
+                    continue;
                 }
 
                 let neighbor_x = cell.x_pos as isize + dx;
@@ -315,7 +315,9 @@ pub fn Life() -> impl IntoView {
                 cells
                 set_cells
             />
-            <Grid grid_size cells set_cells/>
+            <div class="mt-20">
+                <Grid grid_size cells set_cells/>
+            </div>
         </div>
     }
 }

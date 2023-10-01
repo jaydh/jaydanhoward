@@ -25,7 +25,7 @@ pub fn Nav() -> impl IntoView {
     let (show_contact_links, set_show_contact_links) = create_signal(false);
 
     view! {
-        <nav class="sticky flex flex-row pointer-events-auto m-20">
+        <nav class="sticky flex flex-row pointer-events-auto m-20 text-xl">
             <a
                 href="/"
                 class="hover:underline px-3 py-2 transition"

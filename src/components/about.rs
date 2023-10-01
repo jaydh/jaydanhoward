@@ -17,10 +17,10 @@ pub fn PictureSection() -> impl IntoView {
         <div class="grow absolute bottom-0 left-0 w-full h-20 ">
             <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
         </div>
-        <div class="text-xl text-white absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div class="text-4xl text-white absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
             "I'm Jay Dan Howard!"
         </div>
-        <div class="absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div class="text-4xl absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
             I believe compassion makes tech worthwhile
         </div>
     }
@@ -62,7 +62,7 @@ where
 
     view! {
         <div
-            class="w-full h-full transition-all duration-3000 transform scale-y-0 opacity-0"
+            class="transition-all duration-3000 transform scale-y-0 opacity-0"
             class=("opacity-100", move || memoized_when() == true)
             class=("scale-y-100", move || memoized_when() == true)
             class=("hidden", move || memoized_when() == false)
@@ -99,11 +99,6 @@ pub fn About() -> impl IntoView {
         move || use_navigate()(&format!("/about/{}", section() - 1), Default::default());
 
     let handle_scroll = move |e: WheelEvent| {
-        let abs_delta = e.delta_y().abs();
-        if abs_delta < 100.0 {
-            return;
-        }
-
         if e.delta_y() > 0.0 && section() < section_length {
             go_to_next_section();
         } else if e.delta_y() < 0.0 && section() > 1 {
@@ -140,7 +135,7 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]"/>
         <div
-            class="w-1/2 p-10 grow flex flex-col text-white text-lg scroll-smooth items-center space-y-10"
+            class="w-1/2 p-10 grow flex flex-col items-center text-white text-lg scroll-smooth items-center space-y-10"
             on:wheel=handle_scroll
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move
