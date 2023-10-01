@@ -36,7 +36,7 @@ pub fn Nav() -> impl IntoView {
 
                 Jay Dan Howard
             </a>
-            <ul class="flex ml-auto">
+            <div class="flex ml-auto">
                 {routes
                     .into_iter()
                     .map(|(route, display_text)| {
@@ -88,7 +88,7 @@ pub fn Nav() -> impl IntoView {
                         </Show>
                     </div>
                 </div>
-            </ul>
+            </div>
         </nav>
     }
 }

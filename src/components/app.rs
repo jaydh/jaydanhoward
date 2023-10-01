@@ -8,7 +8,7 @@ use crate::components::resume::Resume;
 use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::*;
-use leptos_meta::{provide_meta_context, Link, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
@@ -16,6 +16,8 @@ pub fn App() -> impl IntoView {
     provide_meta_context();
 
     view! {
+        <Html lang="en"/>
+        <Meta name="description" content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust" />
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
         <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
         <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
