@@ -17,13 +17,13 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Html lang="en"/>
+        <Title text="Jay Dan Howard"/>
         <Meta name="description" content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust" />
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-        <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
-        <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
-        <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico"/>
-        <Title text="Jay Dan Howard"/>
+        <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
+        <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
+        <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
         <Router>
             <main>
                 <div class="flex flex-col min-w-screen min-h-screen bg-charcoal text-white">
