@@ -8,7 +8,7 @@ use crate::components::resume::Resume;
 use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::*;
-use leptos_meta::{provide_meta_context, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Link, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
@@ -20,6 +20,7 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
         <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
         <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
+        <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico"/>
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>

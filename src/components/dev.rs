@@ -11,25 +11,15 @@ pub fn Lighthouse() -> impl IntoView {
         <iframe
             src="/assets/lighthouse.html"
             title="Lighthouse Report"
-            class="w-full h-4/6"
+            class="grow w-full"
         />
     }
 }
 
 #[component]
-pub fn Github() -> impl IntoView {
-    view! {
-         <div class="flex flex-col font-semibold">
-             <a class="underline" href="https://github.com/jaydh/jaydanhoward" target="_blank" rel="noreferrer">Source code</a>
-             <a class="underline" href="https://github.com/jaydh/jaydanhoward/actions" target="_blank" rel="noreferrer">Latest deploys</a>
-         </div>
-    }
-}
-#[component]
 pub fn Dev() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
-        <Github />
         <Lighthouse />
     }
 }

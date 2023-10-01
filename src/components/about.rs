@@ -9,7 +9,10 @@ pub fn PictureSection() -> impl IntoView {
     view! {
         <img
             src="/assets/profile.webp"
+            srcset="/assets/profile.webp 720w, /assets/profile-medium.webp 480w, /assets/profile-small.webp 320w"
             class="grow h-auto max-w-full filter grayscale opacity-50 object-cover"
+            sizes="(max-width: 720px) 100vw, 720px"
+            alt="Picture of me"
         />
         <div class="grow absolute bottom-0 left-0 w-full h-20 ">
             <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
