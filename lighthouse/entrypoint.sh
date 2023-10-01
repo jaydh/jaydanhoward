@@ -24,6 +24,6 @@ if [ $retry_count -eq $MAX_RETRIES ]; then
     exit 1
 fi
 
-lighthouse --output-path lighthouse.html --chrome-flags="--headless" $LEPTOS_SITE_ADDR/about
+lighthouse --output-path lighthouse.html --chrome-flags="--headless" $LEPTOS_SITE_ADDR/about/1
 curl -u jay:$LIGHTHOUSE_UPDATE_TOKEN --location "$LEPTOS_SITE_ADDR/api/lighthouse" --form 'file=@"/home/chrome/lighthouse.html"'
 exit 0
