@@ -36,6 +36,18 @@ pub fn initial_prefers_dark() -> bool {
     }
 }
 
+#[cfg(not(feature = "ssr"))]
+pub fn get_client_prefers_dark() -> bool {
+    let w = window();
+    match w.match_media("(prefers-color-scheme: dark)") {
+        Ok(o) => match o {
+            Some(media_query_list) => media_query_list.matches(),
+            None => false,
+        },
+        Err(..) => false,
+    }
+}
+
 #[cfg(feature = "ssr")]
 pub fn initial_prefers_dark() -> bool {
     use_context::<actix_web::HttpRequest>()
@@ -49,17 +61,6 @@ pub fn initial_prefers_dark() -> bool {
                 .ok()
         })
         .unwrap_or(false)
-}
-
-pub fn get_client_prefers_dark() -> bool {
-    let w = window();
-    match w.match_media("(prefers-color-scheme: dark)") {
-        Ok(o) => match o {
-            Some(media_query_list) => media_query_list.matches(),
-            None => false,
-        },
-        Err(..) => false,
-    }
 }
 
 #[component]

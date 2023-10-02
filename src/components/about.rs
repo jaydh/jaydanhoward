@@ -10,17 +10,17 @@ pub fn PictureSection() -> impl IntoView {
         <img
             src="/assets/profile.webp"
             srcset="/assets/profile.webp 720w, /assets/profile-medium.webp 480w, /assets/profile-small.webp 320w"
-            class="grow h-auto max-w-full filter grayscale opacity-50 object-cover"
+            class="grow h-auto max-w-full filter grayscale dark:opacity-50 object-cover"
             sizes="(max-width: 720px) 100vw, 720px"
             alt="Picture of me"
         />
         <div class="grow absolute bottom-0 left-0 w-full h-20 ">
             <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
         </div>
-        <div class="text-4xl absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div class="text-charcoal dark:text-gray text-3xl absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
             "I'm Jay Dan Howard!"
         </div>
-        <div class="text-4xl absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        <div class="text-gray text-3xl absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
             I believe compassion makes tech worthwhile
         </div>
     }
