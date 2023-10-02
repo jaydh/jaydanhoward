@@ -133,7 +133,7 @@ fn Controls(
 
     view! {
         <div class="flex flex-row space-x-10">
-            <div class="flex flex-col">
+            <div class="flex flex-col text-charcoal dark:text-gray">
                 <label for="grid_size">
                     Grid Size
                 </label>
@@ -145,7 +145,6 @@ fn Controls(
                     }
 
                     prop:value=grid_size
-                    class="text-black"
                 />
                 <label for="alive_probability">
                     Alive probability
@@ -158,7 +157,6 @@ fn Controls(
                     }
 
                     prop:value=alive_probability
-                    class="text-black"
                 />
                 <label for="interval_time">
                     Simulation speed in ms
@@ -172,9 +170,7 @@ fn Controls(
                             create_simulation_interval();
                         }
                     }
-
                     prop:value=interval_ms
-                    class="text-black"
                 />
             </div>
             <div class="flex flex-col">
@@ -236,8 +232,9 @@ fn Grid(
 
                                             view! {
                                                 <div
-                                                    class="w-10 h-10 border-2 border-green-600"
-                                                    class=("bg-white", move || isAlive() == true)
+                                                    class="w-10 h-10 border-2 border-charcoal dark:border-gray"
+                                                    class=("bg-charcoal", move || isAlive() == true)
+                                                    class=("dark:bg-gray", move || isAlive() == true)
                                                     on:click=move |_| {
                                                         match cells()
                                                             .0

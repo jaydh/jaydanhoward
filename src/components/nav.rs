@@ -1,7 +1,8 @@
+use crate::components::dark_mode_toggle::DarkModeToggle;
 use leptos::*;
 
 #[component]
-pub fn Nav() -> impl IntoView {
+pub fn Nav(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
     let routes = vec![("/about/1", "About"), ("/work", "Work")];
     let contact_links = vec![
         ("/resume", "fa-regular fa-file-lines", false),
@@ -26,17 +27,20 @@ pub fn Nav() -> impl IntoView {
 
     view! {
         <nav class="sticky flex flex-row pointer-events-auto m-20 text-xl">
-            <a
-                href="/"
-                class="hover:underline px-3 py-2 transition"
-                on:click=move |_| {
-                    set_show_contact_links.set(false);
-                }
-            >
+            <div class="flex items-center">
+                <a
+                    href="/"
+                    class="hover:underline px-3 py-2 transition"
+                    on:click=move |_| {
+                        set_show_contact_links.set(false);
+                    }
+                >
 
-                Jay Dan Howard
-            </a>
-            <div class="flex ml-auto">
+                    Jay Dan Howard
+                </a>
+                <DarkModeToggle set_dark_mode_enabled=set_dark_mode_enabled/>
+            </div>
+            <div class="flex ml-auto items-center">
                 {routes
                     .into_iter()
                     .map(|(route, display_text)| {

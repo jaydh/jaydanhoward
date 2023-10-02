@@ -1,5 +1,6 @@
 use crate::components::about::About;
 use crate::components::beliefs::Beliefs;
+use crate::components::dark_mode_toggle::initial_prefers_dark;
 use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
@@ -12,11 +13,20 @@ use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
+pub fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
+    view! {<Html lang = "en" class=move || { match dark_mode_enabled() {
+        true => "dark",
+        false => "light"
+    }  } /> }
+}
+
+#[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
+    let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(initial_prefers_dark());
 
     view! {
-        <Html lang="en"/>
+        <DarkAwareHTML dark_mode_enabled=dark_mode_enabled />
         <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
         <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
         <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
@@ -30,8 +40,8 @@ pub fn App() -> impl IntoView {
         <Title text="Jay Dan Howard"/>
         <Router>
             <main>
-                <div class="flex flex-col min-w-screen min-h-screen bg-charcoal text-white">
-                    <Nav/>
+                <div class="flex flex-col min-w-screen min-h-screen bg-gray text-charcoal dark:bg-charcoal dark:text-gray">
+                    <Nav set_dark_mode_enabled=set_dark_mode_enabled/>
                     <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
                         <Routes>
                             <Route
@@ -39,6 +49,16 @@ pub fn App() -> impl IntoView {
                                 view=move || view! { <Redirect path="/about/1"/> }
                             />
                             <Route path="/about/4" view=move || view! { <Redirect path="/about/4/skills"/> } />
+                            <Route path="/about/:section" view=About>
+                                <Route path="skills" view=Skills>
+                                    <Route path="experienced" view=Experienced/>
+                                    <Route path="proficient" view=Proficient/>
+                                    <Route path="interested" view=InterestedIn/>
+                                    <Route path="/*any" view=move || view! { <Redirect path="experienced"/> }/>
+                                </Route>
+                                <Route path="beliefs" view=Beliefs/>
+                                <Route path="/*any" view=|| ()/>
+                            </Route>
                             <Route path="/about/:section" view=About>
                                 <Route path="skills" view=Skills>
                                     <Route path="experienced" view=Experienced/>
