@@ -53,9 +53,9 @@ pub fn initial_prefers_dark() -> bool {
 
 pub fn get_client_prefers_dark() -> bool {
     let w = window();
-    match w.match_media("prefers-color-scheme: dark") {
+    match w.match_media("(prefers-color-scheme: dark)") {
         Ok(o) => match o {
-            Some(..) => true,
+            Some(media_query_list) => media_query_list.matches(),
             None => false,
         },
         Err(..) => false,
