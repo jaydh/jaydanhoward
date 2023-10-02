@@ -144,6 +144,7 @@ pub fn About() -> impl IntoView {
                 <i
                     class="grow-0 mb-10 fas fa-chevron-up cursor-pointer"
                     on:click=move |_| go_to_prev_section()
+                    on:touchend=move |_| go_to_prev_section()
                 ></i>
             </Show>
             <ShowWithTransition when=move || { section() == 1 }>
@@ -168,6 +169,7 @@ pub fn About() -> impl IntoView {
                 <i
                     class="grow-0 pb-20 mt-10 fas fa-chevron-down cursor-pointer"
                     on:click=move |_| go_to_next_section()
+                    on:touchend=move |_| go_to_next_section()
                 ></i>
             </Show>
 
