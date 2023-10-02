@@ -30,7 +30,10 @@ pub fn initial_prefers_dark() -> bool {
 
     let doc = document().unchecked_into::<web_sys::HtmlDocument>();
     let cookie = doc.cookie().unwrap_or_default();
-    cookie.contains("darkmode=true")
+    match cookie.contains("darkmode=") {
+        true => cookie.contains("darkmode=true"),
+        false => get_client_prefers_dark(),
+    }
 }
 
 #[cfg(feature = "ssr")]
@@ -46,6 +49,17 @@ pub fn initial_prefers_dark() -> bool {
                 .ok()
         })
         .unwrap_or(false)
+}
+
+pub fn get_client_prefers_dark() -> bool {
+    let w = window();
+    match w.match_media("prefers-color-scheme: dark") {
+        Ok(o) => match o {
+            Some(..) => true,
+            None => false,
+        },
+        Err(..) => false,
+    }
 }
 
 #[component]
