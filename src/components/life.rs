@@ -245,12 +245,7 @@ fn Grid(
                                                         {
                                                             Some(pos) => {
                                                                 let mut next_cells = cells().0.clone();
-                                                                next_cells[pos] = Cell {
-                                                                    alive: !cells().0[pos].alive,
-                                                                    x_pos: x as i32,
-                                                                    y_pos: y as i32,
-                                                                    neighbors: Vec::new(),
-                                                                };
+                                                                next_cells[pos].alive = !cells().0[pos].alive;
                                                                 set_cells(CellVec(next_cells));
                                                             }
                                                             None => {
