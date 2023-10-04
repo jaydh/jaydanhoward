@@ -4,6 +4,7 @@ use crate::components::dark_mode_toggle::initial_prefers_dark;
 use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
+use crate::components::path_search::PathSearch;
 use crate::components::projects::Projects;
 use crate::components::resume::Resume;
 use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
@@ -73,6 +74,7 @@ pub fn App() -> impl IntoView {
                                 <Route path="dev" view=Dev/>
                                 <Route path="projects" view=Projects>
                                     <Route path="life" view=Life/>
+                                    <Route path="path" view=PathSearch/>
                                     <Route path="/" view=move || view! { <Redirect path="life"/> }/>
                                 </Route>
                                 <Route path="/*any" view=move || view! { <Redirect path="dev"/> }/>

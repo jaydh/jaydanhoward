@@ -143,7 +143,6 @@ fn Controls(
                     on:input=move |ev| {
                         set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
                     }
-
                     prop:value=grid_size
                 />
                 <label for="alive_probability">
@@ -155,7 +154,6 @@ fn Controls(
                     on:input=move |ev| {
                         set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
                     }
-
                     prop:value=alive_probability
                 />
                 <label for="interval_time">
@@ -213,14 +211,14 @@ fn Grid(
             {move || {
                 range()
                     .clone()
-                    .map(|x| {
+                    .map(|y| {
                         view! {
                             <div class="flex flex-row">
                                 {move || {
                                     range()
                                         .clone()
-                                        .map(|y| {
-                                            let isAlive = move || {
+                                        .map(|x| {
+                                            let is_alive = move || {
                                                 cells
                                                     .get()
                                                     .0
@@ -233,8 +231,8 @@ fn Grid(
                                             view! {
                                                 <div
                                                     class="w-10 h-10 border-2 border-charcoal dark:border-gray"
-                                                    class=("bg-charcoal", move || isAlive() == true)
-                                                    class=("dark:bg-gray", move || isAlive() == true)
+                                                    class=("bg-charcoal", move || is_alive() == true)
+                                                    class=("dark:bg-gray", move || is_alive() == true)
                                                     on:click=move |_| {
                                                         match cells()
                                                             .0
