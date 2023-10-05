@@ -18,8 +18,6 @@ pub async fn toggle_dark_mode(prefers_dark: bool) -> Result<bool, ServerFnError>
     );
     response_parts.headers = headers;
 
-    std::thread::sleep(std::time::Duration::from_millis(250));
-
     response.overwrite(response_parts);
     Ok(prefers_dark)
 }
