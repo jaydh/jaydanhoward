@@ -70,7 +70,7 @@ pub fn Nav(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
                         <i class="fas fa-caret-down"></i>
                     </button>
                     <div class="absolute mt-10">
-                        <Show when=move || { show_contact_links() == true } fallback=|| ()>
+                        <Show when=move || { show_contact_links() == true }>
                             {contact_links
                                 .clone()
                                 .into_iter()

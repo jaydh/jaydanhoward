@@ -140,7 +140,7 @@ pub fn About() -> impl IntoView {
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move
         >
-            <Show when=move || up_available() fallback=|| ()>
+            <Show when=move || up_available()>
                 <i
                     class="grow-0 mb-10 fas fa-chevron-up cursor-pointer"
                     on:click=move |_| go_to_prev_section()
@@ -165,7 +165,7 @@ pub fn About() -> impl IntoView {
                 />
             </ShowWithTransition>
             <Outlet/>
-            <Show when=move || down_available() fallback=|| ()>
+            <Show when=move || down_available()>
                 <i
                     class="grow-0 pb-20 mt-10 fas fa-chevron-down cursor-pointer"
                     on:click=move |_| go_to_next_section()
