@@ -124,7 +124,7 @@ fn add_candidates(
     current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
 ) {
-    let mut neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+    let neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
         .map(|(x, y)| {
             grid()
                 .0
@@ -147,14 +147,13 @@ fn add_candidates(
         .map(|cell| cell.unwrap().coordiantes)
         .collect::<Vec<CoordinatePair>>();
 
-    neighbors.sort_by(|a, b| {
-        let distance_a = distance(&corner().unwrap(), a);
-        let distance_b = distance(&corner().unwrap(), b);
-        distance_b.partial_cmp(&distance_a).unwrap()
-    });
-
     set_current_path_candidates.update(|path| {
         path.0.extend(neighbors);
+        path.0.sort_by(|a, b| {
+            let distance_a = distance(&corner().unwrap(), a);
+            let distance_b = distance(&corner().unwrap(), b);
+            distance_b.partial_cmp(&distance_a).unwrap()
+        });
     });
 }
 
