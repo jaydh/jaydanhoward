@@ -73,10 +73,34 @@ fn randomize_cells(passable_probability: f64, grid_size: u64, set_grid: WriteSig
     set_grid(grid);
 }
 
-fn get_next_direction(direction: ReadSignal<Option<(i64, i64)>>) -> (i64, i64) {
-    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-    if let Some(last) = direction() {
-        let mut direction_iter = directions.iter().cycle().skip_while(|&&dir| dir != last);
+fn get_next_corner(
+    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    grid_size: ReadSignal<u64>,
+    corner: ReadSignal<Option<CoordinatePair>>,
+) -> CoordinatePair {
+    let mut corners = [
+        CoordinatePair { x_pos: 0, y_pos: 0 },
+        CoordinatePair {
+            x_pos: 0,
+            y_pos: grid_size() as i64,
+        },
+        CoordinatePair {
+            x_pos: grid_size() as i64,
+            y_pos: 0,
+        },
+        CoordinatePair {
+            x_pos: grid_size() as i64,
+            y_pos: grid_size() as i64,
+        },
+    ];
+    corners.sort_by(|a, b| {
+        let distance_a = distance(&start_cell_coord().unwrap(), a);
+        let distance_b = distance(&start_cell_coord().unwrap(), b);
+        distance_a.partial_cmp(&distance_b).unwrap()
+    });
+
+    if let Some(last) = corner() {
+        let mut direction_iter = corners.iter().cycle().skip_while(|&&dir| dir != last);
         direction_iter.next();
 
         if let Some(&next_direction) = direction_iter.next() {
@@ -84,7 +108,7 @@ fn get_next_direction(direction: ReadSignal<Option<(i64, i64)>>) -> (i64, i64) {
         }
     }
 
-    directions[0]
+    corners[0]
 }
 
 fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
@@ -95,7 +119,7 @@ fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
 
 fn add_candidates(
     current_cell: ReadSignal<Option<CoordinatePair>>,
-    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    corner: ReadSignal<Option<CoordinatePair>>,
     grid: ReadSignal<Grid>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
 ) {
@@ -109,9 +133,9 @@ fn add_candidates(
                 set_current_path_candidates.update(|path| {
                     path.0.push(neighbor.coordiantes);
                     path.0.sort_by(|a, b| {
-                        let distance_a = distance(&start_cell_coord().unwrap(), a);
-                        let distance_b = distance(&start_cell_coord().unwrap(), b);
-                        distance_a.partial_cmp(&distance_b).unwrap()
+                        let distance_a = distance(&corner().unwrap(), a);
+                        let distance_b = distance(&corner().unwrap(), b);
+                        distance_b.partial_cmp(&distance_a).unwrap()
                     });
                 });
             }
@@ -120,8 +144,9 @@ fn add_candidates(
 }
 
 fn calculate_next(
-    direction: ReadSignal<Option<(i64, i64)>>,
-    set_direction: WriteSignal<Option<(i64, i64)>>,
+    grid_size: ReadSignal<u64>,
+    corner: ReadSignal<Option<CoordinatePair>>,
+    set_corner: WriteSignal<Option<CoordinatePair>>,
     grid: ReadSignal<Grid>,
     set_grid: WriteSignal<Grid>,
     current_path_candidates: ReadSignal<VecCoordinate>,
@@ -137,13 +162,9 @@ fn calculate_next(
             let cell = grid.0.get_mut(&start_cell_coord().unwrap()).unwrap();
             cell.visited = true;
         });
+        set_corner(Some(get_next_corner(start_cell_coord, grid_size, corner)));
     } else {
-        add_candidates(
-            current_cell,
-            start_cell_coord,
-            grid,
-            set_current_path_candidates,
-        );
+        add_candidates(current_cell, corner, grid, set_current_path_candidates);
         if let Some(next_visit_coord) = current_path_candidates().0.last() {
             set_current_path_candidates.update(|path| {
                 path.0.pop();
@@ -155,9 +176,7 @@ fn calculate_next(
                 cell.visited = true;
             });
         } else {
-            let next_direction = get_next_direction(direction);
-            logging::log!("d {:?}", &next_direction);
-            set_direction(Some(next_direction));
+            set_corner(Some(get_next_corner(start_cell_coord, grid_size, corner)));
         };
     }
 }
@@ -178,7 +197,7 @@ fn Controls(
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
 ) -> impl IntoView {
     let (interval_handle, set_interval_handle) = create_signal(None::<IntervalHandle>);
-    let (direction, set_direction) = create_signal(None::<(i64, i64)>);
+    let (corner, set_corner) = create_signal(None::<CoordinatePair>);
     let (interval_ms, set_interval_ms) = create_signal(200);
 
     let create_simulation_interval = move || {
@@ -195,8 +214,9 @@ fn Controls(
                     interval_handle().unwrap().clear();
                 }
                 calculate_next(
-                    direction,
-                    set_direction,
+                    grid_size,
+                    corner,
+                    set_corner,
                     grid,
                     set_grid,
                     current_path_candidates,
