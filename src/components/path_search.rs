@@ -87,8 +87,15 @@ fn get_next_direction(direction: ReadSignal<Option<(i64, i64)>>) -> (i64, i64) {
     directions[0]
 }
 
+fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
+    let dx = (coord1.x_pos - coord2.x_pos) as f64;
+    let dy = (coord1.y_pos - coord2.y_pos) as f64;
+    (dx * dx + dy * dy).sqrt()
+}
+
 fn add_candidates(
     current_cell: ReadSignal<Option<CoordinatePair>>,
+    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
     grid: ReadSignal<Grid>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
 ) {
@@ -99,7 +106,14 @@ fn add_candidates(
             y_pos: current_cell().unwrap().x_pos + dir.1,
         }) {
             if neighbor.is_passable && !neighbor.visited {
-                set_current_path_candidates.update(|path| path.0.push(neighbor.coordiantes));
+                set_current_path_candidates.update(|path| {
+                    path.0.push(neighbor.coordiantes);
+                    path.0.sort_by(|a, b| {
+                        let distance_a = distance(&start_cell_coord().unwrap(), a);
+                        let distance_b = distance(&start_cell_coord().unwrap(), b);
+                        distance_a.partial_cmp(&distance_b).unwrap()
+                    });
+                });
             }
         };
     }
@@ -124,7 +138,12 @@ fn calculate_next(
             cell.visited = true;
         });
     } else {
-        add_candidates(current_cell, grid, set_current_path_candidates);
+        add_candidates(
+            current_cell,
+            start_cell_coord,
+            grid,
+            set_current_path_candidates,
+        );
         if let Some(next_visit_coord) = current_path_candidates().0.last() {
             set_current_path_candidates.update(|path| {
                 path.0.pop();
