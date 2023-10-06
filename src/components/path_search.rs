@@ -121,6 +121,7 @@ fn add_candidates(
     current_cell: ReadSignal<Option<CoordinatePair>>,
     corner: ReadSignal<Option<CoordinatePair>>,
     grid: ReadSignal<Grid>,
+    current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
 ) {
     let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
@@ -129,7 +130,10 @@ fn add_candidates(
             x_pos: current_cell().unwrap().y_pos + dir.0,
             y_pos: current_cell().unwrap().x_pos + dir.1,
         }) {
-            if neighbor.is_passable && !neighbor.visited {
+            if neighbor.is_passable
+                && !neighbor.visited
+                && !current_path_candidates().0.contains(&neighbor.coordiantes)
+            {
                 set_current_path_candidates.update(|path| {
                     path.0.push(neighbor.coordiantes);
                     path.0.sort_by(|a, b| {
@@ -152,7 +156,6 @@ fn calculate_next(
     current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
 ) {
@@ -164,7 +167,13 @@ fn calculate_next(
         });
         set_corner(Some(get_next_corner(start_cell_coord, grid_size, corner)));
     } else {
-        add_candidates(current_cell, corner, grid, set_current_path_candidates);
+        add_candidates(
+            current_cell,
+            corner,
+            grid,
+            current_path_candidates,
+            set_current_path_candidates,
+        );
         if let Some(next_visit_coord) = current_path_candidates().0.last() {
             set_current_path_candidates.update(|path| {
                 path.0.pop();
@@ -222,7 +231,6 @@ fn Controls(
                     current_path_candidates,
                     set_current_path_candidates,
                     start_cell_coord,
-                    end_cell_coord,
                     current_cell,
                     set_current_cell,
                 )
@@ -289,7 +297,6 @@ fn Controls(
 fn SearchGrid(
     grid_size: ReadSignal<u64>,
     grid: ReadSignal<Grid>,
-    set_grid: WriteSignal<Grid>,
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
     set_start_cell_coord: WriteSignal<Option<CoordinatePair>>,
     end_cell_coord: ReadSignal<Option<CoordinatePair>>,
@@ -463,7 +470,6 @@ pub fn PathSearch() -> impl IntoView {
             <SearchGrid
                 grid_size=grid_size
                 grid=grid
-                set_grid=set_grid
                 start_cell_coord=start_cell_coord
                 set_start_cell_coord
                 end_cell_coord=end_cell_coord
