@@ -18,12 +18,10 @@ RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
 run cargo +nightly chef prepare --recipe-path recipe.json
 
 FROM chef as builder
-COPY --from=planner . .
 COPY --from=planner /app/recipe.json recipe.json
-
 RUN cargo +nightly chef cook --release --recipe-path recipe.json
 
-
+COPY --from=planner /app .
 RUN cargo leptos build --release -vv
 
 FROM debian:bullseye-slim AS runtime 
