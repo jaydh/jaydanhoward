@@ -11,6 +11,17 @@ struct CoordinatePair {
     y_pos: i64,
 }
 
+impl std::ops::Add for CoordinatePair {
+    type Output = CoordinatePair;
+
+    fn add(self, other: CoordinatePair) -> CoordinatePair {
+        CoordinatePair {
+            x_pos: self.x_pos + other.x_pos,
+            y_pos: self.y_pos + other.y_pos,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct Cell {
     is_passable: bool,
@@ -289,7 +300,6 @@ fn Controls(
 fn SearchGrid(
     grid_size: ReadSignal<u64>,
     grid: ReadSignal<Grid>,
-    set_grid: WriteSignal<Grid>,
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
     set_start_cell_coord: WriteSignal<Option<CoordinatePair>>,
     end_cell_coord: ReadSignal<Option<CoordinatePair>>,
@@ -463,7 +473,6 @@ pub fn PathSearch() -> impl IntoView {
             <SearchGrid
                 grid_size=grid_size
                 grid=grid
-                set_grid=set_grid
                 start_cell_coord=start_cell_coord
                 set_start_cell_coord
                 end_cell_coord=end_cell_coord
