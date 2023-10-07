@@ -17,8 +17,7 @@ pub fn Resume() -> impl IntoView {
 
     view! {
          <SourceAnchor href="#[git]" />
-         <Suspense
-            fallback=move || view! { <p>"Loading..."</p> }>
+         <Suspense>
             {move || {
                 once.get()
                     .map(|resume_html| view! { <div class="resume" inner_html=resume_html.ok() /> })

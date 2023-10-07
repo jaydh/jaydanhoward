@@ -111,11 +111,11 @@ fn get_next_corner(
     });
 
     if let Some(last) = corner() {
-        let mut direction_iter = corners.iter().cycle().skip_while(|&&dir| dir != last);
-        direction_iter.next();
+        let mut iter = corners.iter().cycle().skip_while(|&&dir| dir != last);
+        iter.next();
 
-        if let Some(&next_direction) = direction_iter.next() {
-            return next_direction;
+        if let Some(&next_corner) = iter.next() {
+            return next_corner;
         }
     }
 
@@ -132,26 +132,40 @@ fn add_candidates(
     current_cell: ReadSignal<Option<CoordinatePair>>,
     corner: ReadSignal<Option<CoordinatePair>>,
     grid: ReadSignal<Grid>,
+    current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
 ) {
-    let directions = [(0, 1), (0, -1), (1, 0), (-1, 0)];
-    for dir in directions {
-        if let Some(neighbor) = grid().0.get(&CoordinatePair {
-            x_pos: current_cell().unwrap().y_pos + dir.0,
-            y_pos: current_cell().unwrap().x_pos + dir.1,
-        }) {
-            if neighbor.is_passable && !neighbor.visited {
-                set_current_path_candidates.update(|path| {
-                    path.0.push(neighbor.coordiantes);
-                    path.0.sort_by(|a, b| {
-                        let distance_a = distance(&corner().unwrap(), a);
-                        let distance_b = distance(&corner().unwrap(), b);
-                        distance_b.partial_cmp(&distance_a).unwrap()
-                    });
-                });
-            }
-        };
-    }
+    let neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        .map(|(x, y)| {
+            grid()
+                .0
+                .get(&CoordinatePair {
+                    x_pos: current_cell().unwrap().x_pos + x,
+                    y_pos: current_cell().unwrap().y_pos + y,
+                })
+                .cloned()
+        })
+        .into_iter()
+        .filter(|n| {
+            n.as_ref()
+                .map(|c| {
+                    c.is_passable
+                        && !c.visited
+                        && !current_path_candidates().0.contains(&c.coordiantes)
+                })
+                .unwrap_or(false)
+        })
+        .map(|cell| cell.unwrap().coordiantes)
+        .collect::<Vec<CoordinatePair>>();
+
+    set_current_path_candidates.update(|path| {
+        path.0.extend(neighbors);
+        path.0.sort_by(|a, b| {
+            let distance_a = distance(&corner().unwrap(), a);
+            let distance_b = distance(&corner().unwrap(), b);
+            distance_b.partial_cmp(&distance_a).unwrap()
+        });
+    });
 }
 
 fn calculate_next(
@@ -163,7 +177,6 @@ fn calculate_next(
     current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
 ) {
@@ -175,7 +188,16 @@ fn calculate_next(
         });
         set_corner(Some(get_next_corner(start_cell_coord, grid_size, corner)));
     } else {
-        add_candidates(current_cell, corner, grid, set_current_path_candidates);
+        if current_cell() == corner() {
+            set_corner(Some(get_next_corner(start_cell_coord, grid_size, corner)));
+        }
+        add_candidates(
+            current_cell,
+            corner,
+            grid,
+            current_path_candidates,
+            set_current_path_candidates,
+        );
         if let Some(next_visit_coord) = current_path_candidates().0.last() {
             set_current_path_candidates.update(|path| {
                 path.0.pop();
@@ -233,7 +255,6 @@ fn Controls(
                     current_path_candidates,
                     set_current_path_candidates,
                     start_cell_coord,
-                    end_cell_coord,
                     current_cell,
                     set_current_cell,
                 )
