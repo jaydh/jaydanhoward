@@ -5,6 +5,33 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::fmt;
 
+#[derive(Clone, Debug)]
+enum Algorithm {
+    Corner,
+    Wall,
+}
+
+impl std::fmt::Display for Algorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Algorithm::Wall => write!(f, "Wall"),
+            Algorithm::Corner => write!(f, "Corner"),
+        }
+    }
+}
+
+impl std::str::FromStr for Algorithm {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Wall" => Ok(Algorithm::Wall),
+            "Corner" => Ok(Algorithm::Corner),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 struct CoordinatePair {
     x_pos: i64,
@@ -90,6 +117,15 @@ fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
     (dx * dx + dy * dy).sqrt()
 }
 
+fn distance_to_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> (i64, i64, i64, i64) {
+    let distance_left = point.x_pos;
+    let distance_right = grid_size() as i64 - point.x_pos - 1;
+    let distance_top = point.y_pos;
+    let distance_bottom = grid_size() as i64 - point.y_pos - 1;
+
+    (distance_left, distance_right, distance_top, distance_bottom)
+}
+
 fn add_candidates(
     grid_size: ReadSignal<u64>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
@@ -150,8 +186,8 @@ fn add_candidates(
         }) {
             path.0.extend(viable_neighbors);
             path.0.sort_by(|a, b| {
-                let distance_a = distance(corners.first().unwrap(), a);
-                let distance_b = distance(corners.first().unwrap(), b);
+                let distance_a = distance(&corners[0], a);
+                let distance_b = distance(&corners[0], b);
                 distance_b.partial_cmp(&distance_a).unwrap()
             });
         } else {
@@ -165,6 +201,45 @@ fn add_candidates(
     });
 }
 
+fn add_candidates_walls(
+    grid_size: ReadSignal<u64>,
+    current_cell: ReadSignal<Option<CoordinatePair>>,
+    grid: ReadSignal<Grid>,
+    current_path_candidates: ReadSignal<VecCoordinate>,
+    set_current_path_candidates: WriteSignal<VecCoordinate>,
+) {
+    let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+        .map(|(x, y)| {
+            grid()
+                .0
+                .get(&CoordinatePair {
+                    x_pos: current_cell().unwrap().x_pos + x,
+                    y_pos: current_cell().unwrap().y_pos + y,
+                })
+                .cloned()
+        })
+        .into_iter()
+        .filter(|n| {
+            n.as_ref()
+                .map(|c| {
+                    c.is_passable
+                        && !c.visited
+                        && !current_path_candidates().0.contains(&c.coordiantes)
+                })
+                .unwrap_or(false)
+        })
+        .map(|cell| cell.unwrap().coordiantes)
+        .collect::<Vec<CoordinatePair>>();
+
+    set_current_path_candidates.update(|path| {
+        path.0.extend(viable_neighbors);
+        path.0.sort_by_key(|point| {
+            let (left, right, top, bottom) = distance_to_walls(point, grid_size);
+            *[left, right, top, bottom].iter().min().unwrap()
+        });
+    });
+}
+
 fn calculate_next(
     grid_size: ReadSignal<u64>,
     grid: ReadSignal<Grid>,
@@ -174,6 +249,7 @@ fn calculate_next(
     set_current_path_candidates: WriteSignal<VecCoordinate>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
+    algorithm: ReadSignal<Algorithm>,
 ) {
     if current_cell().is_none() {
         set_current_cell(start_cell_coord());
@@ -182,13 +258,22 @@ fn calculate_next(
             cell.visited = true;
         });
     } else {
-        add_candidates(
-            grid_size,
-            current_cell,
-            grid,
-            current_path_candidates,
-            set_current_path_candidates,
-        );
+        match algorithm() {
+            Algorithm::Wall => add_candidates_walls(
+                grid_size,
+                current_cell,
+                grid,
+                current_path_candidates,
+                set_current_path_candidates,
+            ),
+            Algorithm::Corner => add_candidates(
+                grid_size,
+                current_cell,
+                grid,
+                current_path_candidates,
+                set_current_path_candidates,
+            ),
+        };
         if let Some(next_visit_coord) = current_path_candidates().0.last() {
             set_current_path_candidates.update(|path| {
                 path.0.pop();
@@ -217,6 +302,8 @@ fn Controls(
     set_current_path_candidates: WriteSignal<VecCoordinate>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
+    algorithm: ReadSignal<Algorithm>,
+    set_algorithm: WriteSignal<Algorithm>,
 ) -> impl IntoView {
     let (interval_handle, set_interval_handle) = create_signal(None::<IntervalHandle>);
     let (interval_ms, set_interval_ms) = create_signal(200);
@@ -243,6 +330,7 @@ fn Controls(
                     set_current_path_candidates,
                     current_cell,
                     set_current_cell,
+                    algorithm,
                 )
             },
             std::time::Duration::from_millis(interval_ms()),
@@ -253,7 +341,9 @@ fn Controls(
     view! {
         <div class="flex flex-row space-x-10 mb-10">
             <div class="flex flex-col text-charcoal dark:text-gray">
-                <label for="grid_size">Grid Size</label>
+                <label for="grid_size">
+                    Grid Size
+                </label>
                 <input
                     type="text"
                     id="grid_size"
@@ -263,7 +353,9 @@ fn Controls(
 
                     prop:value=grid_size
                 />
-                <label for="obstacle_probability">Obstacle probability</label>
+                <label for="obstacle_probability">
+                    Obstacle probability
+                </label>
                 <input
                     type="text"
                     id="obstacle_probability"
@@ -273,7 +365,9 @@ fn Controls(
 
                     prop:value=obstacle_probability
                 />
-                <label for="interval_time">Simulation speed in ms</label>
+                <label for="interval_time">
+                    Simulation speed in ms
+                </label>
                 <input
                     type="text"
                     id="interval_time"
@@ -288,15 +382,30 @@ fn Controls(
                 />
             </div>
             <div class="flex flex-col">
+                <select name="algorithm" on:change= move |ev| { set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap()); }>
+                    <option value="">
+                        --Please choose an algorithm--
+                    </option>
+                    <option value=Algorithm::Corner.to_string()>
+                        {Algorithm::Corner.to_string()}
+                    </option>
+                    <option value=Algorithm::Wall.to_string()>
+                        {Algorithm::Wall.to_string()}
+                    </option>
+                </select>
                 <button on:click=move |_| {
                     if let Some(handle) = interval_handle() {
                         handle.clear();
                     }
                     randomize_cells(obstacle_probability(), grid_size(), set_grid)
-                }>Randomize</button>
+                }>
+                    Randomize
+                </button>
                 <button on:click=move |_| {
                     create_simulation_interval();
-                }>Simulate</button>
+                }>
+                    Simulate
+                </button>
 
             </div>
         </div>
@@ -343,7 +452,6 @@ fn SearchGrid(
                                                     .map(|c| (x as i64, y as i64) == (c.x_pos, c.y_pos))
                                                     .unwrap_or(false)
                                             };
-
                                             let is_start_cell = move || {
                                                 start_cell_coord()
                                                     .map(|c| (x as i64, y as i64) == (c.x_pos, c.y_pos))
@@ -366,7 +474,6 @@ fn SearchGrid(
                                                     .map(|c| c.visited)
                                                     .unwrap_or(false)
                                             };
-
                                             let on_click = move |_| {
                                                 let clicked_on_start = move || {
                                                     start_cell_coord()
@@ -403,17 +510,16 @@ fn SearchGrid(
                                                     class="w-10 h-10 border-2 border-charcoal dark:border-gray"
                                                     class=("bg-green-500", move || is_start_cell() == true)
                                                     class=("bg-yellow-500", move || is_end_cell() == true)
-                                                    class=(
-                                                        "bg-red-500",
-                                                        move || { is_current_cell() == true },
-                                                    )
+                                                    class=("bg-red-500", move || { is_current_cell() == true })
+
                                                     class=(
                                                         "bg-blue-500",
                                                         move || {
-                                                            is_start_cell() == false && is_end_cell() == false && is_current_cell() == false
-                                                                && is_visited() == true
+                                                            is_start_cell() == false && is_end_cell() == false
+                                                                && is_current_cell() == false && is_visited() == true
                                                         },
                                                     )
+
                                                     class=(
                                                         "bg-charcoal",
                                                         move || {
@@ -453,6 +559,7 @@ pub fn PathSearch() -> impl IntoView {
     let (grid, set_grid) = create_signal(Grid(HashMap::new()));
     let (obstacle_probability, set_obstacle_probability) = create_signal(0.2);
     let (current_cell, set_current_cell) = create_signal(None::<CoordinatePair>);
+    let (algorithm, set_algorithm) = create_signal(Algorithm::Wall);
 
     let (start_cell_coord, set_start_cell_coord) = create_signal(None::<CoordinatePair>);
     let (end_cell_coord, set_end_cell_coord) = create_signal(None::<CoordinatePair>);
@@ -476,6 +583,8 @@ pub fn PathSearch() -> impl IntoView {
                 set_current_path_candidates=set_current_path_candidates
                 current_cell=current_cell
                 set_current_cell=set_current_cell
+                algorithm=algorithm
+                set_algorithm=set_algorithm
             />
             <SearchGrid
                 grid_size=grid_size
