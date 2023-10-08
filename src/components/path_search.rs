@@ -117,13 +117,16 @@ fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
     (dx * dx + dy * dy).sqrt()
 }
 
-fn distance_to_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> (i64, i64, i64, i64) {
+fn distance_to_closest_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> i64 {
     let distance_left = point.x_pos;
     let distance_right = grid_size() as i64 - point.x_pos - 1;
     let distance_top = point.y_pos;
     let distance_bottom = grid_size() as i64 - point.y_pos - 1;
 
-    (distance_left, distance_right, distance_top, distance_bottom)
+    *[distance_left, distance_right, distance_top, distance_bottom]
+        .iter()
+        .min()
+        .unwrap()
 }
 
 fn add_candidates(
@@ -178,8 +181,6 @@ fn add_candidates(
     });
 
     set_current_path_candidates.update(|path| {
-        logging::log!("path len {}", path.0.len());
-
         if viable_neighbors.iter().any(|c| {
             distance(&corners.first().unwrap(), c)
                 < distance(&corners.first().unwrap(), &current_cell().unwrap())
@@ -231,11 +232,40 @@ fn add_candidates_walls(
         .map(|cell| cell.unwrap().coordiantes)
         .collect::<Vec<CoordinatePair>>();
 
+    let mut corners = [
+        CoordinatePair { x_pos: 0, y_pos: 0 },
+        CoordinatePair {
+            x_pos: 0,
+            y_pos: grid_size() as i64,
+        },
+        CoordinatePair {
+            x_pos: grid_size() as i64,
+            y_pos: 0,
+        },
+        CoordinatePair {
+            x_pos: grid_size() as i64,
+            y_pos: grid_size() as i64,
+        },
+    ];
+    corners.sort_by(|a, b| {
+        let distance_a = distance(&current_cell().unwrap(), a);
+        let distance_b = distance(&current_cell().unwrap(), b);
+        distance_a.partial_cmp(&distance_b).unwrap()
+    });
+
     set_current_path_candidates.update(|path| {
         path.0.extend(viable_neighbors);
-        path.0.sort_by_key(|point| {
-            let (left, right, top, bottom) = distance_to_walls(point, grid_size);
-            *[left, right, top, bottom].iter().max().unwrap()
+        path.0.sort_by(|a, b| {
+            let a_wall_distance = distance_to_closest_walls(a, grid_size);
+            let b_wall_distance = distance_to_closest_walls(b, grid_size);
+
+            if a_wall_distance == b_wall_distance {
+                let distance_a = distance(&corners[0], a);
+                let distance_b = distance(&corners[0], b);
+                distance_b.partial_cmp(&distance_a).unwrap()
+            } else {
+                b_wall_distance.partial_cmp(&a_wall_distance).unwrap()
+            }
         });
     });
 }
