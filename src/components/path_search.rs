@@ -235,7 +235,7 @@ fn add_candidates_walls(
         path.0.extend(viable_neighbors);
         path.0.sort_by_key(|point| {
             let (left, right, top, bottom) = distance_to_walls(point, grid_size);
-            *[left, right, top, bottom].iter().min().unwrap()
+            *[left, right, top, bottom].iter().max().unwrap()
         });
     });
 }
