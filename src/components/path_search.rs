@@ -337,6 +337,7 @@ fn Controls(
 ) -> impl IntoView {
     let (interval_handle, set_interval_handle) = create_signal(None::<IntervalHandle>);
     let (interval_ms, set_interval_ms) = create_signal(200);
+    let visited_count = move || grid().0.values().filter(|c| c.visited).count();
 
     let create_simulation_interval = move || {
         if let Some(handle) = interval_handle() {
@@ -412,6 +413,7 @@ fn Controls(
                 />
             </div>
             <div class="flex flex-col">
+                <div>Visited: {visited_count}</div>
                 <select name="algorithm" on:change= move |ev| { set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap()); }>
                     <option value="">
                         --Please choose an algorithm--
