@@ -13,6 +13,8 @@ pub fn PictureSection() -> impl IntoView {
             class="grow h-auto max-w-full filter grayscale dark:opacity-50 object-cover"
             sizes="(max-width: 720px) 100vw, 720px"
             alt="Picture of me"
+            height=672
+            width=504
         />
         <div class="grow absolute bottom-0 left-0 w-full h-20 ">
             <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
