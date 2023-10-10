@@ -77,6 +77,7 @@ where
 #[component]
 pub fn About() -> impl IntoView {
     let params = use_params_map();
+    let (lock_scroll, set_lock_scroll) = create_signal(false);
 
     let section_length = 4;
     let section = move || {
@@ -101,10 +102,19 @@ pub fn About() -> impl IntoView {
         move || use_navigate()(&format!("/about/{}", section() - 1), Default::default());
 
     let handle_scroll = move |e: WheelEvent| {
-        if e.delta_y() > 0.0 && section() < section_length {
-            go_to_next_section();
-        } else if e.delta_y() < 0.0 && section() > 1 {
-            go_to_prev_section();
+        if lock_scroll() {
+            return;
+        } else {
+            if e.delta_y() > 0.0 && section() < section_length {
+                go_to_next_section();
+            } else if e.delta_y() < 0.0 && section() > 1 {
+                go_to_prev_section();
+            }
+            set_lock_scroll(true);
+            leptos_dom::helpers::set_timeout(
+                move || set_lock_scroll(false),
+                core::time::Duration::from_secs(1),
+            );
         }
     };
 
