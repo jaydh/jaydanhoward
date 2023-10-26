@@ -10,15 +10,39 @@ use crate::components::resume::Resume;
 use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::*;
-use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Meta, Script, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
-pub fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
+fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
     view! {<Html lang = "en" class=move || { match dark_mode_enabled() {
         true => "dark",
         false => "light"
     }  } /> }
+}
+
+#[component]
+fn FontAwesome() -> impl IntoView {
+    let fa_css = view! {
+        <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
+        <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
+        <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
+        <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
+        <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
+        <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
+    }
+    .into();
+
+    match std::env::var("APP_ENVIRONMENT") {
+        Ok(val) => match val.as_str() {
+            "production" => view! {
+                // jaydanhoward.com is the only domain on the allowlist
+                <Script src="https://kit.fontawesome.com/6ae5d22557.js" crossorigin="anonymous" async_="true" />
+            },
+            _ => fa_css,
+        },
+        Err(_) => fa_css,
+    }
 }
 
 #[component]
@@ -28,15 +52,9 @@ pub fn App() -> impl IntoView {
 
     view! {
         <DarkAwareHTML dark_mode_enabled=dark_mode_enabled />
-        <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
-        <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
-        <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
         <Meta name="description" content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust" />
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-        <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
-        <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
-        <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
-
+        <FontAwesome />
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico"/>
         <Title text="Jay Dan Howard"/>
         <Router>

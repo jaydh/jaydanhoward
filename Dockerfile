@@ -25,10 +25,6 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo +nightly chef cook --release --recipe-path recipe.json
 
 COPY --from=planner /app .
-RUN cargo build --release
-
-FROM chef as leptos_builder
-COPY --from=builder /app .
 RUN cargo leptos build --release -vv
 
 FROM debian:bullseye-slim AS runtime 
@@ -38,9 +34,9 @@ RUN apt-get update -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=leptos_builder /app/target/release/jaydanhoward /app/
-COPY --from=leptos_builder /app/target/site /app/site
-COPY --from=leptos_builder /app/Cargo.toml /app/
+COPY --from=builder /app/target/release/jaydanhoward /app/
+COPY --from=builder /app/target/site /app/site
+COPY --from=builder /app/Cargo.toml /app/
 
 WORKDIR /app
 ENV RUST_LOG="info"
