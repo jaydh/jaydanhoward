@@ -10,7 +10,7 @@ use crate::components::resume::Resume;
 use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::*;
-use leptos_meta::{provide_meta_context, Html, Link, Meta, Script, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
@@ -38,11 +38,13 @@ pub async fn get_env() -> Result<String, ServerFnError> {
 fn FontAwesomeCss(env: String) -> impl IntoView {
     match env.as_str() {
         "production" => view! {
-            <Script
-                src="https://kit.fontawesome.com/6ae5d22557.js"
-                crossorigin="anonymous"
-                async_="true"
-            />
+            <>
+                <script
+                    src="https://kit.fontawesome.com/6ae5d22557.js"
+                    crossorigin="anonymous"
+                    async="true"
+                />
+            </>
         },
         _ => view! {
             <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
