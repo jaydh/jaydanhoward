@@ -15,33 +15,58 @@ use leptos_router::{Redirect, Route, Router, Routes};
 
 #[component]
 fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
-    view! {<Html lang = "en" class=move || { match dark_mode_enabled() {
-        true => "dark",
-        false => "light"
-    }  } /> }
+    view! {
+        <Html
+            lang="en"
+            class=move || {
+                match dark_mode_enabled() {
+                    true => "dark",
+                    false => "light",
+                }
+            }
+        />
+    }
+}
+
+#[server(Env, "/api")]
+pub async fn get_env() -> Result<String, ServerFnError> {
+    std::env::var("APP_ENVIRONMENT")
+        .map_err(|_| ServerFnError::ServerError("Misconfigured Environment".to_string()))
+}
+
+#[component]
+fn FontAwesomeCss(env: String) -> impl IntoView {
+    match env.as_str() {
+        "production" => view! {
+            <Script
+                src="https://kit.fontawesome.com/6ae5d22557.js"
+                crossorigin="anonymous"
+                async_="true"
+            />
+        },
+        _ => view! {
+            <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
+            <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
+            <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
+            <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
+            <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
+            <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
+        }
+        .into(),
+    }
 }
 
 #[component]
 fn FontAwesome() -> impl IntoView {
-    let fa_css = view! {
-        <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
-        <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
-        <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
-        <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
-        <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
-        <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
-    }
-    .into();
+    let once = create_resource(|| (), |_| async move { get_env().await });
+    view! {
+        <Suspense>
+            {move || {
+                once.get()
+                    .map(|env| view! { <FontAwesomeCss env=env.unwrap_or("dev".to_string())/> })
+            }}
 
-    match std::env::var("APP_ENVIRONMENT") {
-        Ok(val) => match val.as_str() {
-            "production" => view! {
-                // jaydanhoward.com is the only domain on the allowlist
-                <Script src="https://kit.fontawesome.com/6ae5d22557.js" crossorigin="anonymous" async_="true" />
-            },
-            _ => fa_css,
-        },
-        Err(_) => fa_css,
+        </Suspense>
     }
 }
 
@@ -51,10 +76,13 @@ pub fn App() -> impl IntoView {
     let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(initial_prefers_dark());
 
     view! {
-        <DarkAwareHTML dark_mode_enabled=dark_mode_enabled />
-        <Meta name="description" content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust" />
+        <DarkAwareHTML dark_mode_enabled=dark_mode_enabled/>
+        <Meta
+            name="description"
+            content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust"
+        />
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-        <FontAwesome />
+        <FontAwesome/>
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico"/>
         <Title text="Jay Dan Howard"/>
         <Router>
@@ -67,13 +95,19 @@ pub fn App() -> impl IntoView {
                                 path="/about"
                                 view=move || view! { <Redirect path="/about/1"/> }
                             />
-                            <Route path="/about/4" view=move || view! { <Redirect path="/about/4/skills"/> } />
+                            <Route
+                                path="/about/4"
+                                view=move || view! { <Redirect path="/about/4/skills"/> }
+                            />
                             <Route path="/about/:section" view=About>
                                 <Route path="skills" view=Skills>
                                     <Route path="experienced" view=Experienced/>
                                     <Route path="proficient" view=Proficient/>
                                     <Route path="interested" view=InterestedIn/>
-                                    <Route path="/*any" view=move || view! { <Redirect path="experienced"/> }/>
+                                    <Route
+                                        path="/*any"
+                                        view=move || view! { <Redirect path="experienced"/> }
+                                    />
                                 </Route>
                                 <Route path="beliefs" view=Beliefs/>
                                 <Route path="/*any" view=|| ()/>
@@ -83,7 +117,10 @@ pub fn App() -> impl IntoView {
                                     <Route path="experienced" view=Experienced/>
                                     <Route path="proficient" view=Proficient/>
                                     <Route path="interested" view=InterestedIn/>
-                                    <Route path="/*any" view=move || view! { <Redirect path="experienced"/> }/>
+                                    <Route
+                                        path="/*any"
+                                        view=move || view! { <Redirect path="experienced"/> }
+                                    />
                                 </Route>
                                 <Route path="beliefs" view=Beliefs/>
                                 <Route path="/*any" view=|| ()/>
