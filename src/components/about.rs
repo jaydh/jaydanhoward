@@ -9,9 +9,9 @@ pub fn PictureSection() -> impl IntoView {
     view! {
         <img
             src="/assets/profile.webp"
-            srcset="/assets/profile.webp 720w, /assets/profile-medium.webp 480w, /assets/profile-small.webp 320w"
             class="grow h-auto max-w-full filter grayscale dark:opacity-50 object-cover"
-            sizes="(max-width: 720px) 100vw, 720px"
+            srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
+            sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
             alt="Picture of me"
             height=672
             width=504
@@ -147,7 +147,7 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]"/>
         <div
-            class="w-1/2 p-10 grow flex flex-col items-center text-lg scroll-smooth items-center space-y-10"
+            class="w-5/6 mg:w-4/6 lg:w-1/2 p-10 grow flex flex-col items-center text-lg scroll-smooth items-center space-y-10"
             on:wheel=handle_scroll
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move
