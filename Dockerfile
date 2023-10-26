@@ -1,15 +1,25 @@
-FROM rustlang/rust:nightly-bullseye as builder
+FROM rustlang/rust:nightly-bullseye as chef
+
+RUN apt-get update && apt-get install lld clang curl git -y
+RUN curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+RUN cargo binstall cargo-leptos -y
+RUN cargo binstall cargo-chef -y
+RUN rustup target add wasm32-unknown-unknown
+
 RUN mkdir -p /app
 WORKDIR /app
-RUN apt-get update && apt-get install lld clang curl git -y
-RUN rustup install nightly
-RUN rustup default nightly
-RUN rustup target add wasm32-unknown-unknown
 RUN git clone https://github.com/jaydh/inject-git
-RUN cargo install --locked cargo-leptos
 
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare  --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --all-features --recipe-path recipe.json
 COPY . .
 RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
+
 RUN cargo leptos build --release -vv
 
 FROM debian:bullseye-slim AS runtime 
