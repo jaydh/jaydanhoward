@@ -4,9 +4,9 @@ RUN mkdir -p /app
 WORKDIR /app
 
 RUN apt-get update && apt-get install lld clang curl git -y
-run rustup install nightly
-run rustup default nightly
-run rustup target add wasm32-unknown-unknown
+RUN rustup install nightly
+RUN rustup default nightly
+RUN rustup target add wasm32-unknown-unknown
 RUN git clone https://github.com/jaydh/inject-git
 
 RUN cargo install --locked cargo-leptos
