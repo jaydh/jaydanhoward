@@ -101,6 +101,7 @@ pub fn DarkModeToggle(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView
             <button
                 type="submit"
                 class="fixed bottom-12 right-20"
+                aria-label="light-dark-mode-toggle"
             >
                 <i class="far fa-lightbulb"/>
             </button>

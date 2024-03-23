@@ -1,6 +1,10 @@
+#[cfg(feature = "ssr")]
 mod health_check;
+#[cfg(feature = "ssr")]
 mod lighthouse;
+#[cfg(feature = "ssr")]
 pub use health_check::*;
+#[cfg(feature = "ssr")]
 pub use lighthouse::*;
 
 pub fn error_chain_fmt(
