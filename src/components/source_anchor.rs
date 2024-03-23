@@ -9,6 +9,7 @@ pub fn SourceAnchor(href: &'static str) -> impl IntoView {
                 href=href
                 target="_blank"
                 rel="noreferrer"
+                aria-hidden="true"
             ></a>
             <span class="absolute -top-20 -left-20 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100">
                 Self-Referencing Source Code

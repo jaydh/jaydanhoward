@@ -1,7 +1,7 @@
 #[cfg(feature = "ssr")]
 use {
     crate::components::App,
-    crate::routes::{health_check, upload_lighthouse_report},
+    crate::routes::{health_check, robots_txt, upload_lighthouse_report},
     crate::telemtry::{get_subscriber, init_subscriber},
     actix_files::Files,
     actix_web::{web, HttpServer},
@@ -46,6 +46,7 @@ pub async fn run() -> Result<(), std::io::Error> {
         actix_web::App::new()
             .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
             .route("/health_check", web::get().to(health_check))
+            .route("/robots.txt", web::get().to(robots_txt))
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
             .service(Files::new("/assets", site_root))
             .leptos_routes(

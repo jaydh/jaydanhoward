@@ -3,9 +3,13 @@ mod health_check;
 #[cfg(feature = "ssr")]
 mod lighthouse;
 #[cfg(feature = "ssr")]
+mod robots;
+#[cfg(feature = "ssr")]
 pub use health_check::*;
 #[cfg(feature = "ssr")]
 pub use lighthouse::*;
+#[cfg(feature = "ssr")]
+pub use robots::*;
 
 pub fn error_chain_fmt(
     e: &impl std::error::Error,
