@@ -7,8 +7,8 @@ use leptos::*;
 pub async fn actix_extract() -> Result<String, ServerFnError> {
     use actix_web::web::Data;
     use leptos_actix::extract;
-
-    extract(|resume: Data<String>| async move { resume.to_string() }).await
+    let resume: Data<String> = extract().await?;
+    Ok(resume.to_string())
 }
 
 #[component]
