@@ -87,7 +87,7 @@ pub fn App() -> impl IntoView {
         <FontAwesome/>
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico"/>
         <Title text="Jay Dan Howard"/>
-        <Router>
+        <Router trailing_slash=leptos_router::TrailingSlash::Redirect>
             <main>
                 <div class="flex flex-col min-w-screen min-h-screen bg-gray text-charcoal dark:bg-charcoal dark:text-gray">
                     <Nav set_dark_mode_enabled=set_dark_mode_enabled/>
