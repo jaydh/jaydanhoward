@@ -7,23 +7,26 @@ use leptos_router::{use_navigate, use_params_map, Outlet};
 #[component]
 pub fn PictureSection() -> impl IntoView {
     view! {
-        <img
-            src="/assets/profile.webp"
-            class="grow h-auto max-w-full filter grayscale dark:opacity-50 object-cover"
-            srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
-            sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
-            alt="Picture of me"
-            height=672
-            width=504
-        />
-        <div class="grow absolute bottom-0 left-0 w-full h-20 ">
-            <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
-        </div>
-        <div class="text-charcoal dark:text-gray text-3xl absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            "I'm Jay Dan Howard!"
-        </div>
-        <div class="text-gray text-3xl absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-            I believe compassion makes tech worthwhile
+        <div class="flex flex-col space-y-10">
+
+            <img
+                src="/assets/profile.webp"
+                class="grow h-auto max-w-full filter grayscale dark:opacity-50 object-cover"
+                srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
+                sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
+                alt="Picture of me"
+                height=672
+                width=504
+            />
+            <div class="grow absolute bottom-0 left-0 w-full h-20 ">
+                <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
+            </div>
+            <div class="text-charcoal dark:text-gray text-3xl absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                "I'm Jay Dan Howard!"
+            </div>
+            <div class="text-gray text-3xl absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                I believe compassion makes tech worthwhile
+            </div>
         </div>
     }
 }
@@ -31,27 +34,34 @@ pub fn PictureSection() -> impl IntoView {
 #[component]
 pub fn MeSection() -> impl IntoView {
     view! {
-        <p>"Very few things are good in and of themselves, and tech is probably not one of them"</p>
-        <p>
-            "I'm currently a senior software engineer at Interwell Health, leading an engineering team where we use software to empower clinicians and nephrologists to treat and prevent kidney disease"
-        </p>
-        <p>
-            "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
-        </p>
+        <div class="flex flex-col space-y-10">
+            <p>
+                "Very few things are good in and of themselves, and tech is probably not one of them"
+            </p>
+            <p>
+                "I'm currently a software engineer at Astranis, where we make microgeo satellites. I work on tools to model satellite network performance and other tools to actually monitor that performance."
+            </p>
+            <p>
+                "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
+            </p>
+        </div>
     }
 }
 
 #[component]
 pub fn SiteSection() -> impl IntoView {
     view! {
-        <p>
-            "This site exists to experiment with tech (currently that's Rust + Leptos + Tailwind), and to have a small corner of the internet where people can learn about me
-            (mostly in a software engineering context)"
-        </p>
-        <p>"I live in beautiful San Francisco"</p>
-        <p>
-            "I spend my AFK time walking my dog Lunabelle, wrenching on my motorcycle, and mindfully engaging in silliness"
-        </p>
+        <div class="flex flex-col space-y-10">
+
+            <p>
+                "This site exists to experiment with tech (currently that's Rust + Leptos + Tailwind), and to have a small corner of the internet where people can learn about me
+                (mostly in a software engineering context)"
+            </p>
+            <p>"I live in beautiful San Francisco"</p>
+            <p>
+                "I spend my AFK time walking my dog Lunabelle, wrenching on my motorcycle, and mindfully engaging in silliness"
+            </p>
+        </div>
     }
 }
 
@@ -147,7 +157,7 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]"/>
         <div
-            class="w-5/6 mg:w-4/6 lg:w-1/2 p-10 grow flex flex-col items-center text-lg scroll-smooth items-center space-y-10"
+            class="w-5/6 mg:w-4/6 lg:w-1/2 p-10 grow flex flex-col items-center text-2xl scroll-smooth items-center"
             on:wheel=handle_scroll
             on:touchstart=handle_touch_start
             on:touchmove=handle_touch_move

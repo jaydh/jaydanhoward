@@ -414,6 +414,7 @@ fn Controls(
                         set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap());
                     }
                 >
+
                     <option value="">--Please choose an algorithm--</option>
                     <option value=Algorithm::Corner
                         .to_string()>{Algorithm::Corner.to_string()}</option>
