@@ -43,7 +43,7 @@ fn FontAwesomeCss(env: String) -> impl IntoView {
                     src="https://kit.fontawesome.com/6ae5d22557.js"
                     crossorigin="anonymous"
                     async="true"
-                />
+                ></script>
             </>
         },
         _ => view! {

@@ -372,9 +372,7 @@ fn Controls(
     view! {
         <div class="flex flex-row space-x-10 mb-10">
             <div class="flex flex-col text-charcoal dark:text-gray">
-                <label for="grid_size">
-                    Grid Size
-                </label>
+                <label for="grid_size">Grid Size</label>
                 <input
                     type="text"
                     id="grid_size"
@@ -384,9 +382,7 @@ fn Controls(
 
                     prop:value=grid_size
                 />
-                <label for="obstacle_probability">
-                    Obstacle probability
-                </label>
+                <label for="obstacle_probability">Obstacle probability</label>
                 <input
                     type="text"
                     id="obstacle_probability"
@@ -396,9 +392,7 @@ fn Controls(
 
                     prop:value=obstacle_probability
                 />
-                <label for="interval_time">
-                    Simulation speed in ms
-                </label>
+                <label for="interval_time">Simulation speed in ms</label>
                 <input
                     type="text"
                     id="interval_time"
@@ -414,30 +408,26 @@ fn Controls(
             </div>
             <div class="flex flex-col">
                 <div>Visited: {visited_count}</div>
-                <select name="algorithm" on:change= move |ev| { set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap()); }>
-                    <option value="">
-                        --Please choose an algorithm--
-                    </option>
-                    <option value=Algorithm::Corner.to_string()>
-                        {Algorithm::Corner.to_string()}
-                    </option>
-                    <option value=Algorithm::Wall.to_string()>
-                        {Algorithm::Wall.to_string()}
-                    </option>
+                <select
+                    name="algorithm"
+                    on:change=move |ev| {
+                        set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap());
+                    }
+                >
+                    <option value="">--Please choose an algorithm--</option>
+                    <option value=Algorithm::Corner
+                        .to_string()>{Algorithm::Corner.to_string()}</option>
+                    <option value=Algorithm::Wall.to_string()>{Algorithm::Wall.to_string()}</option>
                 </select>
                 <button on:click=move |_| {
                     if let Some(handle) = interval_handle() {
                         handle.clear();
                     }
                     randomize_cells(obstacle_probability(), grid_size(), set_grid)
-                }>
-                    Randomize
-                </button>
+                }>Randomize</button>
                 <button on:click=move |_| {
                     create_simulation_interval();
-                }>
-                    Simulate
-                </button>
+                }>Simulate</button>
 
             </div>
         </div>

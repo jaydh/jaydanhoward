@@ -88,22 +88,15 @@ pub fn DarkModeToggle(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView
     };
 
     view! {
-        <Meta
-            name="color-scheme"
-            content=color_scheme
-        />
+        <Meta name="color-scheme" content=color_scheme/>
         <ActionForm action=toggle_dark_mode_action>
-            <input
-                type="hidden"
-                name="prefers_dark"
-                value=move || (!prefers_dark()).to_string()
-            />
+            <input type="hidden" name="prefers_dark" value=move || (!prefers_dark()).to_string()/>
             <button
                 type="submit"
                 class="fixed bottom-12 right-20"
                 aria-label="light-dark-mode-toggle"
             >
-                <i class="far fa-lightbulb"/>
+                <i class="far fa-lightbulb"></i>
             </button>
         </ActionForm>
     }

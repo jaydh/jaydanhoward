@@ -134,31 +134,27 @@ fn Controls(
     view! {
         <div class="flex flex-row space-x-10">
             <div class="flex flex-col text-charcoal dark:text-gray">
-                <label for="grid_size">
-                    Grid Size
-                </label>
+                <label for="grid_size">Grid Size</label>
                 <input
                     type="text"
                     id="grid_size"
                     on:input=move |ev| {
                         set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
                     }
+
                     prop:value=grid_size
                 />
-                <label for="alive_probability">
-                    Alive probability
-                </label>
+                <label for="alive_probability">Alive probability</label>
                 <input
                     type="text"
                     id="alive_probability"
                     on:input=move |ev| {
                         set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
                     }
+
                     prop:value=alive_probability
                 />
-                <label for="interval_time">
-                    Simulation speed in ms
-                </label>
+                <label for="interval_time">Simulation speed in ms</label>
                 <input
                     type="text"
                     id="interval_time"
@@ -168,6 +164,7 @@ fn Controls(
                             create_simulation_interval();
                         }
                     }
+
                     prop:value=interval_ms
                 />
             </div>
@@ -177,23 +174,17 @@ fn Controls(
                         handle.clear();
                     }
                     set_cells(CellVec(Vec::new()))
-                }>
-                    Reset
-                </button>
+                }>Reset</button>
                 <button on:click=move |_| {
                     if let Some(handle) = interval_handle() {
                         handle.clear();
                     }
                     randomize_cells(alive_probability(), grid_size(), set_cells)
-                }>
-                    Randomize
-                </button>
+                }>Randomize</button>
                 <button on:click=move |_| {
                     prepare_neighbors(cells, set_cells);
                     create_simulation_interval();
-                }>
-                    Simulate
-                </button>
+                }>Simulate</button>
             </div>
         </div>
     }
@@ -227,7 +218,6 @@ fn Grid(
                                                         c.x_pos == x as i32 && c.y_pos == y as i32 && c.alive
                                                     })
                                             };
-
                                             view! {
                                                 <div
                                                     class="w-10 h-10 border-2 border-charcoal dark:border-gray"
@@ -286,7 +276,7 @@ pub fn Life() -> impl IntoView {
     let (alive_probability, set_alive_probability) = create_signal(0.6);
 
     view! {
-        <SourceAnchor href="#[git]" />
+        <SourceAnchor href="#[git]"/>
         <div class="flex flex-col items-center">
             <a
                 class="hover:underline relative block px-3 py-2 transition"

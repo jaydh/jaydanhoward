@@ -16,13 +16,15 @@ pub fn Resume() -> impl IntoView {
     let once = create_resource(|| (), |_| async move { actix_extract().await });
 
     view! {
-         <SourceAnchor href="#[git]" />
-         <Suspense>
+        <SourceAnchor href="#[git]"/>
+        <Suspense>
             {move || {
                 once.get()
-                    .map(|resume_html| view! { <div class="resume" inner_html=resume_html.ok() /> })
-                }
-            }
+                    .map(|resume_html| {
+                        view! { <div class="resume" inner_html=resume_html.ok()></div> }
+                    })
+            }}
+
         </Suspense>
     }
 }
