@@ -1,7 +1,7 @@
 FROM debian:bullseye-slim AS runtime 
 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates curl gnupg chromium
+    && apt-get install -y --no-install-recommends openssl ca-certificates curl gnupg chromium chromium-sandbox
 
 RUN mkdir -p /etc/apt/keyrings
 RUN curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
