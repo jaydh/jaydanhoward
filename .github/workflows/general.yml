@@ -80,8 +80,6 @@ jobs:
         name: Build and push
         uses: docker/build-push-action@v6
         with:
+          context: .
           push: true
-          registry: harbor.jaydanhoward.com
-          username: ${{ secrets.HARBOR_USER}}
-          password: ${{ secrets.HARBOR_TOKEN}}
-          tags: jaydanhoward/app:latest
+          tags: harbor.jaydanhoward.com/library/jaydanhoward:latest
