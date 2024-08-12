@@ -81,4 +81,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          registry: harbor.jaydanhoward.com
+          username: ${{ secrets.HARBOR_USER}}
+          password: ${{ secrets.HARBOR_TOKEN}}
           tags: jaydanhoward/app:latest
