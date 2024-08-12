@@ -81,4 +81,6 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          username: ${{ secrets.HARBOR_USER}}
+          password: ${{ secrets.HARBOR_TOKEN}}
           tags: harbor-core.jaydanhoward.com/library/jaydanhoward:latest
