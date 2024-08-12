@@ -82,4 +82,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: harbor.jaydanhoward.com/library/jaydanhoward:latest
+          tags: harbor-core.jaydanhoward.com/library/jaydanhoward:latest
