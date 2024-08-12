@@ -59,7 +59,7 @@ jobs:
         run: cargo tarpaulin --verbose --workspace
 
   harbor-image:
-    name: Deploy to Digitalocean 
+    name: Push image to Harbor
     needs: [test, fmt, clippy, coverage]
     runs-on: ubuntu-latest
     steps:
