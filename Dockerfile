@@ -9,7 +9,7 @@ RUN mkdir -p /app
 WORKDIR /app
 RUN git clone https://github.com/jaydh/inject-git
 COPY . .
-RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
+#RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
 
 RUN cargo leptos build --release -vv
 
