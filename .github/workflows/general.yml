@@ -76,9 +76,7 @@ jobs:
           registry: harbor-core.jaydanhoward.com
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      -
-        uses: actions/checkout@v3
-        name: BuildAndPushImageOnHarbor
+      - name: BuildAndPushImageOnHarbor
         run: |
           docker build . -t harbor-core.jaydanhoward.com/library/jaydanhoward:latest
           docker push harbor-core.jaydanhoward.com/library/jaydanhoward:latest
