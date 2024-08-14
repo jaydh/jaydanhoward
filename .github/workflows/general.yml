@@ -77,8 +77,8 @@ jobs:
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
       -
-        name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          push: true
-          tags: harbor-core.jaydanhoward.com/library/jaydanhoward:latest
+        uses: actions/checkout@v3
+        name: BuildAndPushImageOnHarbor
+        run: |
+          docker build . -t harbor-core.jaydanhoward.com/library/jaydanhoward:latest
+          docker push harbor-core.jaydanhoward.com/library/jaydanhoward:latest
