@@ -15,7 +15,7 @@ RUN cargo leptos build --release -vv
 
 FROM debian:bullseye-slim AS runtime 
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates nginx \
+    && apt-get install -y --no-install-recommends openssl ca-certificates \
     && apt-get autoremove -y \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
@@ -32,6 +32,5 @@ ENV LEPTOS_SITE_ROOT="site"
 
 EXPOSE 8000
 
-COPY nginx.conf /etc/nginx/nginx.conf
 COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
