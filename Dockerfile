@@ -30,7 +30,7 @@ ENV APP_ENVIRONMENT="production"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:8000"
 ENV LEPTOS_SITE_ROOT="site"
 
-EXPOSE 8080
+EXPOSE 8000
 
 COPY nginx.conf /etc/nginx/nginx.conf
 COPY entrypoint.sh entrypoint.sh
