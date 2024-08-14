@@ -17,7 +17,7 @@ leptos = { version = "^0.6.11", features = ["nightly"] }
 leptos_meta = { version = "^0.6.11", features = ["nightly"] }
 leptos_actix = { version = "^0.6.11", optional = true }
 leptos_router = { version = "^0.6.11", features = ["nightly"] }
-wasm-bindgen = "^0.2.92"
+wasm-bindgen = "^0.2.93"
 web-sys = { version = "0.3.64", features = [
   "AbortController",
   "AbortSignal",
