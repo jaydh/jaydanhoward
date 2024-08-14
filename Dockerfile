@@ -32,5 +32,4 @@ ENV LEPTOS_SITE_ROOT="site"
 
 EXPOSE 8000
 
-COPY entrypoint.sh entrypoint.sh
-ENTRYPOINT ["./entrypoint.sh"]
+CMD ["./jaydanhoward"]

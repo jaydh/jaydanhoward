@@ -1,4 +1,7 @@
 #[cfg(feature = "ssr")]
+use tracing::info;
+
+#[cfg(feature = "ssr")]
 use serde_aux::field_attributes::deserialize_number_from_string;
 
 #[cfg(feature = "ssr")]
@@ -40,6 +43,8 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
         .try_into()
         .expect("Failed to parse APP_ENVIRONMENT");
     let environment_filename = format!("{}.yaml", environment.as_str());
+
+    info!("Loaded app environment from {}", &environment_filename);
 
     let settings = config::Config::builder()
         .add_source(config::File::from(
