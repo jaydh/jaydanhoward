@@ -9,16 +9,11 @@ RUN mkdir -p /app
 WORKDIR /app
 RUN git clone https://github.com/jaydh/inject-git
 COPY . .
-#RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
+RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
 
 RUN cargo leptos build --release -vv
 
-FROM debian:bullseye-slim AS runtime 
-RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
-    && apt-get autoremove -y \
-    && apt-get clean -y \
-    && rm -rf /var/lib/apt/lists/*
+FROM alpine AS runtime
 
 COPY --from=builder /app/target/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
