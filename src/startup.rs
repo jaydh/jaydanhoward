@@ -10,6 +10,7 @@ use {
     pulldown_cmark::{html, Options, Parser},
     std::env,
     std::fs::read_to_string,
+    tracing::info,
 };
 
 #[cfg(feature = "ssr")]
@@ -33,8 +34,12 @@ async fn convert_resume_md_to_html() -> String {
 pub async fn run() -> Result<(), std::io::Error> {
     let subscriber = get_subscriber("jaydanhoward".into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
+    dbg!("Server Starting");
     let conf = get_configuration(None).await.unwrap();
+    dbg!("Server conf found");
+
     let addr = conf.leptos_options.site_addr;
+    dbg!("Server add {}", &addr);
 
     let resume = convert_resume_md_to_html().await;
     let routes = generate_route_list(|| view! { <App/> });
