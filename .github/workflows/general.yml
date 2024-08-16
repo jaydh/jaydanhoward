@@ -59,7 +59,7 @@ jobs:
         run: cargo tarpaulin --verbose --workspace
 
   harbor-image:
-    name: Push image to Harbor
+    name: Push jaydanhoward image to Harbor
     needs: [test, fmt, clippy, coverage]
     runs-on: ubuntu-latest
     steps:
@@ -83,7 +83,7 @@ jobs:
           docker build . -t harbor-core.jaydanhoward.com/library/jaydanhoward:latest
           docker push harbor-core.jaydanhoward.com/library/jaydanhoward:latest
   harbor-lighthouse-image:
-    name: Push image to Harbor
+    name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy, coverage]
     runs-on: ubuntu-latest
     steps:
