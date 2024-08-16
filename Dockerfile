@@ -13,7 +13,7 @@ RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
 
 RUN cargo leptos build --release -vv
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:stable-slim AS runtime
 
 COPY --from=builder /app/target/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
