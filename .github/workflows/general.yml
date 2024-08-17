@@ -17,7 +17,7 @@ jobs:
     runs-on: arc-runner-set
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/bootstrap
+      - uses: ./.github/actions/bootstrap.yaml
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run tests
@@ -28,7 +28,7 @@ jobs:
     runs-on: arc-runner-set
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/bootstrap
+      - uses: ./.github/actions/bootstrap.yaml
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
@@ -40,7 +40,7 @@ jobs:
     runs-on: arc-runner-set
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/bootstrap
+      - uses: ./.github/actions/bootstrap.yaml
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
@@ -54,7 +54,7 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      - uses: ./.github/actions/bootstrap
+      - uses: ./.github/actions/bootstrap.yaml
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
       - name: Install tarpaulin
