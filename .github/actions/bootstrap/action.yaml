@@ -5,5 +5,5 @@ runs:
   steps:
     - run: |
         sudo apt-get update
-        sudo apt-get install -y curl build-essential pkg-config libssl-dev
+        sudo apt-get install -y curl build-essential pkg-config libssl-dev docker
       shell: bash
