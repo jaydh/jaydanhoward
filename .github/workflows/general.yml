@@ -65,11 +65,10 @@ jobs:
   harbor-image:
     name: Push jaydanhoward image to Harbor
     needs: [test, fmt, clippy, coverage]
-    runs-on: arc-runner-set
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-      - uses: ./.github/actions/bootstrap
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
