@@ -16,6 +16,10 @@ jobs:
     name: Test
     runs-on: arc-runner-set
     steps:
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -26,6 +30,10 @@ jobs:
     name: Rustfmt
     runs-on: arc-runner-set
     steps:
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -37,6 +45,10 @@ jobs:
     name: Clippy
     runs-on: arc-runner-set
     steps:
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -49,6 +61,10 @@ jobs:
     name: Code coverage
     runs-on: arc-runner-set
     steps:
+      - name: Install curl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl
       - name: Checkout repository
         uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
