@@ -1,24 +1,10 @@
-name: 'Apt update'
+name: 'Bootstrap'
 description: 'Install curl on the runner'
 runs:
   using: "composite"
   steps:
     - run: |
         sudo apt-get update
-      shell: bash
-name: 'Install curl'
-description: 'Install curl on the runner'
-runs:
-  using: "composite"
-  steps:
-    - run: |
         sudo apt-get install -y curl
-      shell: bash
-name: 'Install build-essentials'
-description: 'Install curl on the runner'
-runs:
-  using: "composite"
-  steps:
-    - run: |
         sudo apt-get install -y build-essentials
       shell: bash
