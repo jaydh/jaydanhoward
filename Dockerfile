@@ -14,7 +14,9 @@ RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
 RUN cargo leptos build --release -vv
 
 FROM debian:stable-slim AS runtime
-
+RUN apt-get update && apt-get install wget -y
+RUN wget http://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2_amd64.deb
+RUN dpkg -i libssl1.1_1.1.1f-1ubuntu2_amd64.deb
 COPY --from=builder /app/target/release/jaydanhoward /app/
 COPY --from=builder /app/target/site /app/site
 COPY --from=builder /app/Cargo.toml /app/
