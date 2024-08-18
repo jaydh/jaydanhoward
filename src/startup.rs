@@ -1,10 +1,11 @@
 #[cfg(feature = "ssr")]
 use {
     crate::components::App,
+    crate::prometheus_client::{query_prometheus, PrometheusData, PrometheusResult},
     crate::routes::{health_check, robots_txt, upload_lighthouse_report},
     crate::telemtry::{get_subscriber, init_subscriber},
     actix_files::Files,
-    actix_web::{web, HttpServer},
+    actix_web::{web, HttpServer, Responder},
     leptos::*,
     leptos_actix::{generate_route_list, LeptosRoutes},
     pulldown_cmark::{html, Options, Parser},
@@ -30,6 +31,25 @@ async fn convert_resume_md_to_html() -> String {
 }
 
 #[cfg(feature = "ssr")]
+async fn get_metrics() -> impl Responder {
+    let query = r#"sum(rate(container_cpu_usage_seconds_total[5m])) by (cluster)"#;
+
+    match query_prometheus(query).await {
+        Ok(data) => web::Json(data),
+        Err(e) => {
+            println!("Error querying Prometheus: {:?}", e);
+            web::Json(PrometheusData {
+                status: "error".to_string(),
+                data: PrometheusResult {
+                    result_type: "none".to_string(),
+                    result: vec![],
+                },
+            })
+        }
+    }
+}
+
+#[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
     let subscriber = get_subscriber("jaydanhoward".into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
@@ -37,6 +57,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     let addr = conf.leptos_options.site_addr;
 
     let resume = convert_resume_md_to_html().await;
+    let metrics = get_metrics().await;
     let routes = generate_route_list(|| view! { <App /> });
 
     let server = HttpServer::new(move || {

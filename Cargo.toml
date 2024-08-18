@@ -50,6 +50,7 @@ femark = { version = "0.1.4", optional = true }
 pulldown-cmark = { version = "0.9.3", optional = true }
 chrono = { version = "0.4.26", optional = true }
 rand = "0.8.5"
+reqwest = { version = "0.12.5", features = ["http2", "default-tls", "json", "gzip", "cookies", "multipart", "stream"] }
 
 [features]
 hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]

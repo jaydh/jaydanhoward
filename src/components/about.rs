@@ -1,4 +1,6 @@
+use crate::components::cluster_stats::ClusterStats;
 use crate::components::source_anchor::SourceAnchor;
+
 use leptos::*;
 
 #[component]
@@ -62,6 +64,7 @@ pub fn MeSection() -> impl IntoView {
 pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
+        <ClusterStats />
         <div class="w-5/6 mg:w-4/6 p-10 grow text-2xl flex flex-col">
             <div>
                 <MeSection />

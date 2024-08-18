@@ -2,6 +2,7 @@ mod about;
 mod app;
 mod beliefs;
 mod binary_nav_switcher;
+mod cluster_stats;
 mod dark_mode_toggle;
 mod dev;
 mod life;
