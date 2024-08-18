@@ -48,7 +48,7 @@ pub fn MeSection() -> impl IntoView {
                     <a href="https://www.astranis.com/" target="_blank" class="underline">
                         "Astranis"
                     </a>
-                    ", where we make dedicated microgeo satellites. I do everything from building UI and services for monitoring and commanding Satcom payloads to administering and planning disaster-recovery for our coporate cluster and production databases. I care a lot about writing reliable software, end to end."
+                    ", where we make dedicated microgeo satellites. I do everything from building UI and services for monitoring and commanding Satcom payloads, to administering and planning disaster-recovery for our coporate cluster and production databases. I care a lot about writing reliable software, end to end. That involves making sure software runs fast (whereever it runs) and it screams loud when it isn't (in a way that coaches people to pay attention)."
                 </p>
             </div>
             <div class="ml-auto">
