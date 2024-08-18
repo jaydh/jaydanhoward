@@ -15,11 +15,11 @@ pub fn Skills() -> impl IntoView {
             {routes
                 .into_iter()
                 .map(|(path, display_text)| {
-                    view! { <Link path=path display_text=display_text/> }
+                    view! { <Link path=path display_text=display_text /> }
                 })
                 .collect_view()}
         </div>
-        <Outlet/>
+        <Outlet />
     }
 }
 

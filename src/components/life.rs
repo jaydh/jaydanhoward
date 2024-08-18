@@ -250,8 +250,7 @@ fn Grid(
                                                             }
                                                         }
                                                     }
-                                                >
-                                                </div>
+                                                ></div>
                                             }
                                         })
                                         .collect_view()
@@ -276,7 +275,7 @@ pub fn Life() -> impl IntoView {
     let (alive_probability, set_alive_probability) = create_signal(0.6);
 
     view! {
-        <SourceAnchor href="#[git]"/>
+        <SourceAnchor href="#[git]" />
         <div class="flex flex-col items-center">
             <a
                 class="hover:underline relative block px-3 py-2 transition"
@@ -296,7 +295,7 @@ pub fn Life() -> impl IntoView {
                 set_cells
             />
             <div class="mt-20">
-                <Grid grid_size cells set_cells/>
+                <Grid grid_size cells set_cells />
             </div>
         </div>
     }

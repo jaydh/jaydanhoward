@@ -10,9 +10,9 @@ pub fn BinaryNavSwithcer(
 ) -> impl IntoView {
     view! {
         <div class="w-full flex flex-row gap-10 mb-20 items-center">
-            <Link path=a_path display_text=a_display_text/>
+            <Link path=a_path display_text=a_display_text />
             <div class="grow h-px bg-charcoal dark:bg-gray mx-4"></div>
-            <Link path=b_path display_text=b_display_text/>
+            <Link path=b_path display_text=b_display_text />
         </div>
     }
 }

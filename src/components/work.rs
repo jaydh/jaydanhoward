@@ -12,7 +12,7 @@ pub fn Work() -> impl IntoView {
                 b_path="dev"
                 b_display_text="Dev"
             />
-            <Outlet/>
+            <Outlet />
         </div>
     }
 }

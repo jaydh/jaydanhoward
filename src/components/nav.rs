@@ -38,7 +38,7 @@ pub fn Nav(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
 
                     Jay Dan Howard
                 </a>
-                <DarkModeToggle set_dark_mode_enabled=set_dark_mode_enabled/>
+                <DarkModeToggle set_dark_mode_enabled=set_dark_mode_enabled />
             </div>
             <div class="flex ml-auto items-center">
                 {routes

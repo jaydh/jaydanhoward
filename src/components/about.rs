@@ -1,200 +1,72 @@
-use crate::components::binary_nav_switcher::BinaryNavSwithcer;
 use crate::components::source_anchor::SourceAnchor;
-use leptos::ev::{TouchEvent, WheelEvent};
 use leptos::*;
-use leptos_router::{use_navigate, use_params_map, Outlet};
 
 #[component]
 pub fn PictureSection() -> impl IntoView {
     view! {
-        <div class="flex flex-col space-y-10">
-
-            <img
-                src="/assets/profile.webp"
-                class="grow h-auto max-w-full filter grayscale dark:opacity-50 object-cover"
-                srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
-                sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
-                alt="Picture of me"
-                height=672
-                width=504
-            />
-            <div class="grow absolute bottom-0 left-0 w-full h-20 ">
-                <div class="h-full w-full bg-gradient-to-b from-transparent to-charcoal"></div>
-            </div>
-            <div class="text-charcoal dark:text-gray text-3xl absolute top-1/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                "I'm Jay Dan Howard!"
-            </div>
-            <div class="text-gray text-3xl absolute top-3/4 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                I believe compassion makes tech worthwhile
-            </div>
-        </div>
+        <img
+            src="/assets/profile.webp"
+            class="h-auto max-w-full filter grayscale dark:opacity-50"
+            srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
+            sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
+            alt="Picture of me"
+            height=672
+            width=504
+        />
     }
 }
 
 #[component]
 pub fn MeSection() -> impl IntoView {
     view! {
-        <div class="flex flex-col space-y-10">
-            <p>
-                "Very few things are good in and of themselves, and tech is probably not one of them"
-            </p>
-            <p>
-                "I'm currently a software engineer at Astranis, where we make microgeo satellites. I work on tools to model satellite network performance and other tools to actually monitor that performance."
-            </p>
-            <p>
-                "I try to keep a low-key life and avoid the spotlight but with that said, I plan to change the world."
-            </p>
-        </div>
-    }
-}
+        <div class="flex flex-row">
+            <div class="flex flex-col space-y-10">
+                <p>
+                    "Thanks for checking out my k8s cluster! Unbeknownst to you, your browser is talking to some old computers and raspberry pis in my closet, thanks for asking. This website and cluster are my pet projects for exploring using "
+                    <a href="https://leptos.dev/" target="_blank" class="underline">
+                        Rust on the web
+                    </a> " and self-hosting "
+                    <a href="https://kubernetes.io/" target="_blank" class="underline">
+                        Kubernetes
+                    </a> " services for my personal use. "
+                    <a
+                        href="https://developers.cloudflare.com/cloudflare-one/"
+                        target="_blank"
+                        class="underline"
+                    >
+                        Cloudflare Tunnels
+                    </a>
+                    " enable you to securely connect to services on my cluster without me risking my apartment network."
+                </p>
+                <p>
+                    "As my girlfriend puts it: \"You setting up your cluster to use a distributed filesystem for self-hosting your personal Dropbox, container registry, and so on is like putting a rock in a diamond vault. You're never going to watch those motorcycle recordings.\" She's not wrong... but I "
+                    <em>"could"</em>", from anywhere. And that's pretty neat."
 
-#[component]
-pub fn SiteSection() -> impl IntoView {
-    view! {
-        <div class="flex flex-col space-y-10">
-
-            <p>
-                "This site exists to experiment with tech (currently that's Rust + Leptos + Tailwind), and to have a small corner of the internet where people can learn about me
-                (mostly in a software engineering context)"
-            </p>
-            <p>"I live in beautiful San Francisco"</p>
-            <p>
-                "I spend my AFK time walking my dog Lunabelle, wrenching on my motorcycle, and mindfully engaging in silliness"
-            </p>
-        </div>
-    }
-}
-
-#[component]
-pub fn ShowWithTransition<W>(children: ChildrenFn, when: W) -> impl IntoView
-where
-    W: Fn() -> bool + 'static,
-{
-    let memoized_when = create_memo(move |_| when());
-
-    view! {
-        <div
-            class="transition-all duration-3000 transform scale-y-0 opacity-0"
-            class=("opacity-100", move || memoized_when() == true)
-            class=("scale-y-100", move || memoized_when() == true)
-            class=("hidden", move || memoized_when() == false)
-        >
-            {children()}
+                </p>
+                <p>
+                    "I'm currently a software engineer at "
+                    <a href="https://www.astranis.com/" target="_blank" class="underline">
+                        "Astranis"
+                    </a>
+                    ", where we make dedicated microgeo satellites. I do everything from building UI and services for monitoring and commanding Satcom payloads to administering and planning disaster-recovery for our coporate cluster and production databases. I care a lot about writing reliable software, end to end."
+                </p>
+            </div>
+            <div class="ml-auto">
+                <PictureSection />
+            </div>
         </div>
     }
 }
 
 #[component]
 pub fn About() -> impl IntoView {
-    let params = use_params_map();
-    let (lock_scroll, set_lock_scroll) = create_signal(false);
-
-    let section_length = 4;
-    let section = move || {
-        params.with(|params| {
-            params
-                .get("section")
-                .cloned()
-                .unwrap()
-                .parse::<i32>()
-                .unwrap()
-        })
-    };
-
-    let (touch_start_y, set_touch_start_y) = create_signal(-1);
-
-    let down_available = move || section() < section_length;
-    let up_available = move || section() > 1;
-    let go_to_next_section =
-        move || use_navigate()(&format!("/about/{}", section() + 1), Default::default());
-
-    let go_to_prev_section =
-        move || use_navigate()(&format!("/about/{}", section() - 1), Default::default());
-
-    let handle_scroll = move |e: WheelEvent| {
-        if lock_scroll() {
-            return;
-        } else {
-            if e.delta_y() > 0.0 && section() < section_length {
-                go_to_next_section();
-            } else if e.delta_y() < 0.0 && section() > 1 {
-                go_to_prev_section();
-            }
-            set_lock_scroll(true);
-            leptos_dom::helpers::set_timeout(
-                move || set_lock_scroll(false),
-                core::time::Duration::from_secs(1),
-            );
-        }
-    };
-
-    let handle_touch_start = move |e: TouchEvent| match e.touches().item(0) {
-        Some(touchStart) => set_touch_start_y(touchStart.client_y()),
-        None => set_touch_start_y(-1),
-    };
-
-    let handle_touch_move = move |e: TouchEvent| match e.touches().item(0) {
-        Some(touchEnd) => {
-            if touch_start_y() > -1 {
-                let delta_y = touchEnd.client_y() - touch_start_y();
-                match delta_y {
-                    d if d.abs() < 200 => {}
-                    d if d < 0 && section() < section_length => {
-                        go_to_next_section();
-                        set_touch_start_y(-1);
-                    }
-                    d if d > 0 && section() > 1 => {
-                        go_to_prev_section();
-                        set_touch_start_y(-1);
-                    }
-                    _ => {}
-                }
-            }
-        }
-        None => set_touch_start_y(-1),
-    };
-
     view! {
-        <SourceAnchor href="#[git]"/>
-        <div
-            class="w-5/6 mg:w-4/6 lg:w-1/2 p-10 grow flex flex-col items-center text-2xl scroll-smooth items-center"
-            on:wheel=handle_scroll
-            on:touchstart=handle_touch_start
-            on:touchmove=handle_touch_move
-        >
-            <Show when=move || up_available()>
-                <i
-                    class="grow-0 mb-10 fas fa-chevron-up cursor-pointer"
-                    on:click=move |_| go_to_prev_section()
-                    on:touchend=move |_| go_to_prev_section()
-                ></i>
-            </Show>
-            <ShowWithTransition when=move || { section() == 1 }>
-                <PictureSection/>
-            </ShowWithTransition>
-            <ShowWithTransition when=move || { section() == 2 }>
-                <MeSection/>
-            </ShowWithTransition>
-            <ShowWithTransition when=move || { section() == 3 }>
-                <SiteSection/>
-            </ShowWithTransition>
-            <ShowWithTransition when=move || { section() == 4 }>
-                <BinaryNavSwithcer
-                    a_path="skills"
-                    a_display_text="Skills"
-                    b_path="beliefs"
-                    b_display_text="Beliefs"
-                />
-            </ShowWithTransition>
-            <Outlet/>
-            <Show when=move || down_available()>
-                <i
-                    class="grow-0 pb-20 mt-10 fas fa-chevron-down cursor-pointer"
-                    on:click=move |_| go_to_next_section()
-                    on:touchend=move |_| go_to_next_section()
-                ></i>
-            </Show>
-
+        <SourceAnchor href="#[git]" />
+        <div class="w-5/6 mg:w-4/6 p-10 grow text-2xl flex flex-col">
+            <div>
+                <MeSection />
+            </div>
+            <div></div>
         </div>
     }
 }

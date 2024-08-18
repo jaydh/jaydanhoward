@@ -27,7 +27,7 @@ pub fn Lighthouse() -> impl IntoView {
 #[component]
 pub fn Dev() -> impl IntoView {
     view! {
-        <SourceAnchor href="#[git]"/>
-        <Lighthouse/>
+        <SourceAnchor href="#[git]" />
+        <Lighthouse />
     }
 }

@@ -37,7 +37,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     let addr = conf.leptos_options.site_addr;
 
     let resume = convert_resume_md_to_html().await;
-    let routes = generate_route_list(|| view! { <App/> });
+    let routes = generate_route_list(|| view! { <App /> });
 
     let server = HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
@@ -52,7 +52,7 @@ pub async fn run() -> Result<(), std::io::Error> {
             .leptos_routes(
                 leptos_options.to_owned(),
                 routes.to_owned(),
-                || view! { <App/> },
+                || view! { <App /> },
             )
             .app_data(web::Data::new(leptos_options.to_owned()))
             .app_data(web::Data::new(resume.to_owned()))

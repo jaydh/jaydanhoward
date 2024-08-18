@@ -16,7 +16,7 @@ pub fn Resume() -> impl IntoView {
     let once = create_resource(|| (), |_| async move { actix_extract().await });
 
     view! {
-        <SourceAnchor href="#[git]"/>
+        <SourceAnchor href="#[git]" />
         <Suspense>
             {move || {
                 once.get()

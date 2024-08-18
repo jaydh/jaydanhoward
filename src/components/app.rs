@@ -47,12 +47,12 @@ fn FontAwesomeCss(env: String) -> impl IntoView {
             </>
         },
         _ => view! {
-            <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style"/>
-            <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style"/>
-            <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style"/>
-            <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css"/>
-            <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css"/>
-            <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css"/>
+            <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style" />
+            <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style" />
+            <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style" />
+            <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css" />
+            <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css" />
+            <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css" />
         }
         .into(),
     }
@@ -65,7 +65,7 @@ fn FontAwesome() -> impl IntoView {
         <Suspense>
             {move || {
                 once.get()
-                    .map(|env| view! { <FontAwesomeCss env=env.unwrap_or("dev".to_string())/> })
+                    .map(|env| view! { <FontAwesomeCss env=env.unwrap_or("dev".to_string()) /> })
             }}
 
         </Suspense>
@@ -78,66 +78,72 @@ pub fn App() -> impl IntoView {
     let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(initial_prefers_dark());
 
     view! {
-        <DarkAwareHTML dark_mode_enabled=dark_mode_enabled/>
+        <DarkAwareHTML dark_mode_enabled=dark_mode_enabled />
         <Meta
             name="description"
             content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust"
         />
-        <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
-        <FontAwesome/>
-        <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico"/>
-        <Title text="Jay Dan Howard"/>
+        <Stylesheet id="leptos" href="/pkg/leptos_start.css" />
+        <FontAwesome />
+        <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
+        <Title text="Jay Dan Howard" />
         <Router trailing_slash=leptos_router::TrailingSlash::Redirect>
             <main>
                 <div class="flex flex-col min-w-screen min-h-screen bg-gray text-charcoal dark:bg-charcoal dark:text-gray">
-                    <Nav set_dark_mode_enabled=set_dark_mode_enabled/>
+                    <Nav set_dark_mode_enabled=set_dark_mode_enabled />
                     <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
                         <Routes>
                             <Route
                                 path="/about"
-                                view=move || view! { <Redirect path="/about/1"/> }
+                                view=move || view! { <Redirect path="/about/1" /> }
                             />
                             <Route
                                 path="/about/4"
-                                view=move || view! { <Redirect path="/about/4/skills"/> }
+                                view=move || view! { <Redirect path="/about/4/skills" /> }
                             />
                             <Route path="/about/:section" view=About>
                                 <Route path="skills" view=Skills>
-                                    <Route path="experienced" view=Experienced/>
-                                    <Route path="proficient" view=Proficient/>
-                                    <Route path="interested" view=InterestedIn/>
+                                    <Route path="experienced" view=Experienced />
+                                    <Route path="proficient" view=Proficient />
+                                    <Route path="interested" view=InterestedIn />
                                     <Route
                                         path="/*any"
-                                        view=move || view! { <Redirect path="experienced"/> }
+                                        view=move || view! { <Redirect path="experienced" /> }
                                     />
                                 </Route>
-                                <Route path="beliefs" view=Beliefs/>
-                                <Route path="/*any" view=|| ()/>
+                                <Route path="beliefs" view=Beliefs />
+                                <Route path="/*any" view=|| () />
                             </Route>
                             <Route path="/about/:section" view=About>
                                 <Route path="skills" view=Skills>
-                                    <Route path="experienced" view=Experienced/>
-                                    <Route path="proficient" view=Proficient/>
-                                    <Route path="interested" view=InterestedIn/>
+                                    <Route path="experienced" view=Experienced />
+                                    <Route path="proficient" view=Proficient />
+                                    <Route path="interested" view=InterestedIn />
                                     <Route
                                         path="/*any"
-                                        view=move || view! { <Redirect path="experienced"/> }
+                                        view=move || view! { <Redirect path="experienced" /> }
                                     />
                                 </Route>
-                                <Route path="beliefs" view=Beliefs/>
-                                <Route path="/*any" view=|| ()/>
+                                <Route path="beliefs" view=Beliefs />
+                                <Route path="/*any" view=|| () />
                             </Route>
                             <Route path="/work" view=Work>
-                                <Route path="dev" view=Dev/>
+                                <Route path="dev" view=Dev />
                                 <Route path="projects" view=Projects>
-                                    <Route path="life" view=Life/>
-                                    <Route path="path" view=PathSearch/>
-                                    <Route path="/" view=move || view! { <Redirect path="life"/> }/>
+                                    <Route path="life" view=Life />
+                                    <Route path="path" view=PathSearch />
+                                    <Route
+                                        path="/"
+                                        view=move || view! { <Redirect path="life" /> }
+                                    />
                                 </Route>
-                                <Route path="/*any" view=move || view! { <Redirect path="dev"/> }/>
+                                <Route
+                                    path="/*any"
+                                    view=move || view! { <Redirect path="dev" /> }
+                                />
                             </Route>
-                            <Route path="/resume" view=Resume/>
-                            <Route path="/*any" view=move || view! { <Redirect path="/about"/> }/>
+                            <Route path="/resume" view=Resume />
+                            <Route path="/*any" view=move || view! { <Redirect path="/about" /> } />
                         </Routes>
                     </div>
                 </div>

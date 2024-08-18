@@ -591,7 +591,7 @@ pub fn PathSearch() -> impl IntoView {
     });
 
     view! {
-        <SourceAnchor href="#[git]"/>
+        <SourceAnchor href="#[git]" />
         <div class="flex flex-col items-center">
             <Controls
                 grid_size=grid_size
