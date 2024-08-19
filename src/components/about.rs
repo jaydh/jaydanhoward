@@ -6,22 +6,29 @@ use leptos::*;
 #[component]
 pub fn PictureSection() -> impl IntoView {
     view! {
-        <img
-            src="/assets/profile.webp"
-            class="h-auto max-w-full filter grayscale dark:opacity-50"
-            srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
-            sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
-            alt="Picture of me"
-            height=672
-            width=504
-        />
+        <div class="flex flex-col space-y-10">
+            <img
+                src="/assets/cluster.webp"
+                class="h-auto max-w-full filter grayscale dark:opacity-50 rounded-lg"
+                alt="Picture of cluster"
+            />
+            <img
+                src="/assets/profile.webp"
+                class="h-auto max-w-full filter grayscale dark:opacity-50 rounded-lg"
+                srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
+                sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
+                alt="Picture of me"
+                height=672
+                width=504
+            />
+        </div>
     }
 }
 
 #[component]
 pub fn MeSection() -> impl IntoView {
     view! {
-        <div class="flex flex-row">
+        <div class="flex flex-row space-x-12">
             <div class="flex flex-col space-y-10">
                 <p>
                     "Thanks for checking out my k8s cluster! Unbeknownst to you, your browser is talking to some old computers and raspberry pis in my closet, thanks for asking. This website and cluster are my pet projects for exploring using "
@@ -53,7 +60,7 @@ pub fn MeSection() -> impl IntoView {
                     ", where we make dedicated microgeo satellites. I do everything from building UI and services for monitoring and commanding Satcom payloads, to administering and planning disaster-recovery for our coporate cluster and production databases. I care a lot about writing reliable software, end to end. That involves making sure software runs fast (whereever it runs) and it screams loud when it isn't (in a way that coaches people to pay attention)."
                 </p>
             </div>
-            <div class="ml-auto">
+            <div>
                 <PictureSection />
             </div>
         </div>

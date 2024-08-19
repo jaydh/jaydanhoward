@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -21,17 +22,20 @@ pub struct PrometheusMetric {
     value: (f64, String),
 }
 
-pub async fn query_prometheus(query: &str) -> Result<PrometheusData, reqwest::Error> {
+pub async fn query_prometheus(query: &str) -> Result<PrometheusData, anyhow::Error> {
     let client = Client::new();
-    let base_url = std::env::var("PROMETHEUS_URL").unwrap();
+    match std::env::var("PROMETHEUS_URL") {
+        Ok(base_url) => {
+            let url = format!("{}/api/v1/query?query={}", base_url, query);
 
-    let url = format!("{}/api/v1/query?query={}", base_url, query);
-
-    let response = client
-        .get(&url)
-        .send()
-        .await?
-        .json::<PrometheusData>()
-        .await?;
-    Ok(response)
+            let response = client
+                .get(&url)
+                .send()
+                .await?
+                .json::<PrometheusData>()
+                .await?;
+            Ok(response)
+        }
+        Err(_) => Err(anyhow!("Prometheus URL not defined")),
+    }
 }

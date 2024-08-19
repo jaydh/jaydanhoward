@@ -51,8 +51,12 @@ async fn get_metrics() -> impl Responder {
 
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
+    use web_sys::console::warn;
+
     let subscriber = get_subscriber("jaydanhoward".into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
+    console_error_panic_hook::set_once();
+
     let conf = get_configuration(None).await.unwrap();
     let addr = conf.leptos_options.site_addr;
 

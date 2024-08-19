@@ -6,7 +6,6 @@ use reqwest::{Client, Url};
 
 #[server(ActixExtract, "/api")]
 pub async fn actix_extract() -> Result<String, ServerFnError<String>> {
-    dbg!("whaaaaa");
     let base_url = std::env::var("PROMETHEUS_URL")
         .context("Prometheus url not configured")
         .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
@@ -29,9 +28,8 @@ pub async fn actix_extract() -> Result<String, ServerFnError<String>> {
         .await
         .context("Failed to read response body")
         .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
-    dbg!("Body: {:?}", body);
 
-    Ok("what".into())
+    Ok("Test".into())
 }
 
 #[component]
@@ -40,11 +38,14 @@ pub fn ClusterStats() -> impl IntoView {
 
     view! {
         <SourceAnchor href="#[git]" />
-        {move || {
-            once.get()
-                .map(|string| {
-                    view! { <div>string</div> }
-                })
-        }}
+        <Suspense>
+
+            {move || {
+                once.get()
+                    .map(|string| {
+                        view! { <div/> }
+                    })
+            }}
+        </Suspense>
     }
 }
