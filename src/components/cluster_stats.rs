@@ -43,7 +43,7 @@ pub fn ClusterStats() -> impl IntoView {
             {move || {
                 once.get()
                     .map(|string| {
-                        view! { <div/> }
+                        view! { <div /> }
                     })
             }}
         </Suspense>
