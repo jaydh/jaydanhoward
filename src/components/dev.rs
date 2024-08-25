@@ -5,7 +5,7 @@ use leptos::*;
 pub fn Lighthouse() -> impl IntoView {
     view! {
         <div>
-            r#"Programmatically generated lighthouse report("#
+            "Here is a programmatically generated lighthouse report "
             <a
                 class="font-semibold underline"
                 href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh"
@@ -13,8 +13,7 @@ pub fn Lighthouse() -> impl IntoView {
                 rel="noreferrer"
             >
                 for every deploy
-            </a> r#")"#
-            . Note that the performance score here suffers from running chrome on small instance size, my local machine regularly get 99+.
+            </a> "that gets kicked off as part of a k8s job for every new deploy of this site."
         </div>
         <iframe
             src="/assets/lighthouse.html"

@@ -27,7 +27,7 @@ RUN groupadd -r chrome && useradd -r -g chrome -G audio,video chrome \
 
 USER chrome
 WORKDIR /home/chrome
-ENV LEPTOS_SITE_ADDR="https://jaydanhoward.com"
+ENV LEPTOS_SITE_ADDR="https://jaydanhoward.com/about/1"
 
 COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
