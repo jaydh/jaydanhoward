@@ -1,4 +1,4 @@
-FROM rustlang/rust:nightly-bullseye as builder
+FROM rustlang/rust:nightly-bullseye AS builder
 
 # If you’re using stable, use this instead
 # FROM rust:1.74-bullseye as builder
