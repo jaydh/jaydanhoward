@@ -25,5 +25,7 @@ if [ $retry_count -eq $MAX_RETRIES ]; then
 fi
 
 lighthouse --output-path lighthouse.html --chrome-flags="--no-sandbox --disable-dev-shm-usage --headless" $LEPTOS_SITE_TARGET_ADDR --no-enable-error-reporting
+
+echo "Update token: $LIGHTHOUSE_UPDATE_TOKEN"
 curl -u jay:$LIGHTHOUSE_UPDATE_TOKEN --location "$LEPTOS_SITE_API_ADDR" --form 'file=@"/home/chrome/lighthouse.html"'
 exit 0

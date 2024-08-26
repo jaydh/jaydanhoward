@@ -1,4 +1,4 @@
-FROM debian:stable-slim AS runtime
+FROM debian:bookworm-slim AS runtime
 
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends openssl ca-certificates curl gnupg chromium chromium-sandbox
