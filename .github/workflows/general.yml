@@ -65,7 +65,7 @@ jobs:
   harbor-image:
     name: Push jaydanhoward image to Harbor
     needs: [test, fmt, clippy, coverage]
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -86,7 +86,7 @@ jobs:
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy, coverage]
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
