@@ -16,7 +16,7 @@ jobs:
     name: Test
     runs-on: arc-runner-set
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/bootstrap
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -27,7 +27,7 @@ jobs:
     name: Rustfmt
     runs-on: arc-runner-set
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/bootstrap
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -39,7 +39,7 @@ jobs:
     name: Clippy
     runs-on: arc-runner-set
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/bootstrap
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -53,7 +53,7 @@ jobs:
     runs-on: arc-runner-set
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - uses: ./.github/actions/bootstrap
       - uses: dtolnay/rust-toolchain@nightly
       - uses: Swatinem/rust-cache@v2
@@ -68,7 +68,7 @@ jobs:
     runs-on: arc-runner-set
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
@@ -89,7 +89,7 @@ jobs:
     runs-on: arc-runner-set
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
