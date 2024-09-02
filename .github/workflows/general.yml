@@ -72,6 +72,12 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/bootstrap
+      - name: Post-bootstrap system info
+        run: |
+          echo "Updated Git version:"
+          git --version
+          echo "\nUpdated system packages:"
+          dpkg -l | grep -E 'git|curl|build-essential|pkg-config|libssl-dev|docker'
       - name: Debug information
         run: |
           pwd
