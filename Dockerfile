@@ -17,8 +17,10 @@ RUN rustup target add wasm32-unknown-unknown
 
 RUN mkdir -p /app
 WORKDIR /app
-RUN git clone https://github.com/jaydh/inject-git
 COPY . .
+RUN ls -a
+
+RUN git clone https://github.com/jaydh/inject-git
 RUN cargo run --manifest-path=./inject-git/Cargo.toml ./src
 
 RUN cargo leptos build --release -vv
