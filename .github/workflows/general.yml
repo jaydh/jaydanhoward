@@ -69,9 +69,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: ./.github/actions/bootstrap
+      - name: Debug information
+        run: |
+          pwd
+          ls -la
+          git status
       - name: Get tags
         run: git fetch --tags origin
+        working-directory: ${{ github.workspace }}
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
