@@ -1,9 +1,18 @@
 name: 'Bootstrap'
-description: 'Install curl on the runner'
+description: 'Bootstrap deps'
 runs:
   using: "composite"
   steps:
     - run: |
         sudo apt-get update
+      shell: bash
+  steps:
+    - run: |
         sudo apt-get install -y curl build-essential pkg-config libssl-dev docker
+      shell: bash
+  steps:
+    - run: |
+       sudo add-apt-repository -y ppa:git-core/ppa && \
+       sudo apt-get update && \
+       sudo apt-get install -y git
       shell: bash
