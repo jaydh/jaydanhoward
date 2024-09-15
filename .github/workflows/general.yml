@@ -15,6 +15,7 @@ jobs:
   test:
     name: Test
     runs-on: arc-runner-set
+    container: ubuntu:latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -25,6 +26,7 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: arc-runner-set
+    container: ubuntu:latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -36,6 +38,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: arc-runner-set
+    container: ubuntu:latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -48,6 +51,7 @@ jobs:
   coverage:
     name: Code coverage
     runs-on: arc-runner-set
+    container: ubuntu:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -62,6 +66,7 @@ jobs:
     name: Push jaydanhoward image to Harbor
     needs: [test, fmt, clippy, coverage]
     runs-on: arc-runner-set
+    container: ubuntu:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,6 +90,7 @@ jobs:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy, coverage]
     runs-on: arc-runner-set
+    container: ubuntu:latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
