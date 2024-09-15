@@ -15,7 +15,7 @@ jobs:
   test:
     name: Test
     runs-on: arc-runner-set
-    container: ubuntu:latest
+    container: harbor-core.jaydanhoward.com/library/arc@sha256:8fa99f1975c222f5479028e6d947cca7babdef520e267167a99eeb3289da0eab
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -26,7 +26,7 @@ jobs:
   fmt:
     name: Rustfmt
     runs-on: arc-runner-set
-    container: ubuntu:latest
+    container: harbor-core.jaydanhoward.com/library/arc@sha256:8fa99f1975c222f5479028e6d947cca7babdef520e267167a99eeb3289da0eab
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -38,7 +38,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: arc-runner-set
-    container: ubuntu:latest
+    container: harbor-core.jaydanhoward.com/library/arc@sha256:8fa99f1975c222f5479028e6d947cca7babdef520e267167a99eeb3289da0eab
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -51,7 +51,7 @@ jobs:
   coverage:
     name: Code coverage
     runs-on: arc-runner-set
-    container: ubuntu:latest
+    container: harbor-core.jaydanhoward.com/library/arc@sha256:8fa99f1975c222f5479028e6d947cca7babdef520e267167a99eeb3289da0eab
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -90,7 +90,7 @@ jobs:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy, coverage]
     runs-on: arc-runner-set
-    container: ubuntu:latest
+    container: harbor-core.jaydanhoward.com/library/arc@sha256:8fa99f1975c222f5479028e6d947cca7babdef520e267167a99eeb3289da0eab
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
