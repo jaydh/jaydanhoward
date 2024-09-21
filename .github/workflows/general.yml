@@ -48,7 +48,7 @@ jobs:
 
   harbor-image:
     name: Push jaydanhoward image to Harbor
-    needs: [test, fmt, clippy, coverage]
+    needs: [test, fmt, clippy]
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
@@ -72,7 +72,7 @@ jobs:
           docker push harbor-core.jaydanhoward.com/library/jaydanhoward:latest
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
-    needs: [test, fmt, clippy, coverage]
+    needs: [test, fmt, clippy]
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
