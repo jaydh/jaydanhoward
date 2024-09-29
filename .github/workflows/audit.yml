@@ -1,14 +1,18 @@
 name: Security audit
 on:
+  push:
+    branches:
+      - main
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 * * * *'
   push:
     paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
 jobs:
   security_audit:
-    runs-on: ubuntu-latest
+    runs-on: arc-runner-set
+    container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - uses: actions/checkout@v3
       - uses: taiki-e/install-action@cargo-deny
