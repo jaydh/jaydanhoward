@@ -12,6 +12,7 @@ jobs:
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@cargo-deny
       - name: Scan for vulnerabilities
         run: cargo deny check advisories
