@@ -11,3 +11,15 @@ node_modules/
 test-results/
 end2end/playwright-report/
 playwright/.cache/
+
+# Bazel workspace files
+bazel-*
+
+# Bazel build outputs
+/bazel-out/
+/bazel-bin/
+/bazel-testlogs/
+/bazel-workspace/
+
+# Bazel symlinks
+/bazel-*
