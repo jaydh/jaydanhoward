@@ -69,7 +69,7 @@ jobs:
       - name: BuildAndPushImageOnHarbor
         run: |
           docker build . -t harbor-core.jaydanhoward.com/library/jaydanhoward:latest
-          docker push harbor-core.jaydanhoward.com/library/jaydanhoward:latest
+          docker push harbor.home.local/library/jaydanhoward:latest
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy]
@@ -91,5 +91,5 @@ jobs:
       - name: BuildAndPushImageOnHarbor
         run: |
           docker build . -t harbor-core.jaydanhoward.com/library/lighthouse:latest
-          docker push harbor-core.jaydanhoward.com/library/lighthouse:latest
+          docker push harbor.home.local/library/lighthouse:latest
         working-directory: lighthouse
