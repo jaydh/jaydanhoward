@@ -11,6 +11,7 @@ use {
     pulldown_cmark::{html, Options, Parser},
     std::env,
     std::fs::read_to_string,
+    tracing::log,
 };
 
 #[cfg(feature = "ssr")]
@@ -51,8 +52,6 @@ async fn get_metrics() -> impl Responder {
 
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
-    use web_sys::console::warn;
-
     let subscriber = get_subscriber("jaydanhoward".into(), "debug".into(), std::io::stdout);
     init_subscriber(subscriber);
     console_error_panic_hook::set_once();
@@ -64,6 +63,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     let metrics = get_metrics().await;
     let routes = generate_route_list(|| view! { <App /> });
 
+    log::info!("Starting Server.");
     let server = HttpServer::new(move || {
         let leptos_options = &conf.leptos_options;
         let site_root = &leptos_options.site_root;
