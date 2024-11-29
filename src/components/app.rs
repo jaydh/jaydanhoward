@@ -28,12 +28,6 @@ fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
     }
 }
 
-#[server(Env, "/api")]
-pub async fn get_env() -> Result<String, ServerFnError> {
-    std::env::var("APP_ENVIRONMENT")
-        .map_err(|_| ServerFnError::ServerError("Misconfigured Environment".to_string()))
-}
-
 #[component]
 fn FontAwesomeCss(env: String) -> impl IntoView {
     match env.as_str() {
@@ -60,15 +54,8 @@ fn FontAwesomeCss(env: String) -> impl IntoView {
 
 #[component]
 fn FontAwesome() -> impl IntoView {
-    let once = create_resource(|| (), |_| async move { get_env().await });
     view! {
-        <Suspense>
-            {move || {
-                once.get()
-                    .map(|env| view! { <FontAwesomeCss env=env.unwrap_or("dev".to_string()) /> })
-            }}
-
-        </Suspense>
+        <FontAwesomeCss env=std::env::var("APP_ENVIRONMENT").unwrap_or("dev".to_string()) />
     }
 }
 

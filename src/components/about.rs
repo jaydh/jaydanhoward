@@ -37,7 +37,7 @@ pub fn MeSection() -> impl IntoView {
                     </a> " and self-hosting "
                     <a href="https://kubernetes.io/" target="_blank" class="underline">
                         Kubernetes
-                    </a> " services for my personal use. "
+                    </a> ". "
                     <a
                         href="https://developers.cloudflare.com/cloudflare-one/"
                         target="_blank"
@@ -77,7 +77,6 @@ pub fn About() -> impl IntoView {
             <div>
                 <MeSection />
             </div>
-            <div></div>
         </div>
     }
 }
