@@ -12,6 +12,7 @@ use crate::components::work::Work;
 use leptos::*;
 use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
 use leptos_router::{Redirect, Route, Router, Routes};
+use tracing::instrument;
 
 #[component]
 fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
@@ -62,6 +63,7 @@ fn FontAwesome() -> impl IntoView {
 }
 
 #[component]
+#[instrument]
 pub fn App() -> impl IntoView {
     provide_meta_context();
     let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(initial_prefers_dark());
