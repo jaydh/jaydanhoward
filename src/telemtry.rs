@@ -19,13 +19,10 @@ where
 {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
-    let leptos_filter =
-        EnvFilter::try_new("leptos=warn,leptos_meta=warn,leptos_router=warn,app=info").unwrap();
 
     let formatting_layer = BunyanFormattingLayer::new(name, sink);
     Registry::default()
         .with(env_filter)
-        .with(leptos_filter)
         .with(JsonStorageLayer)
         .with(formatting_layer)
 }
