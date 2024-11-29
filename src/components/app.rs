@@ -29,18 +29,21 @@ fn DarkAwareHTML(dark_mode_enabled: ReadSignal<bool>) -> impl IntoView {
 }
 
 #[component]
-fn FontAwesomeCss(env: String) -> impl IntoView {
-    match env.as_str() {
-        "production" => view! {
-            <>
-                <script
-                    src="https://kit.fontawesome.com/6ae5d22557.js"
-                    crossorigin="anonymous"
-                    async="true"
-                ></script>
-            </>
-        },
-        _ => view! {
+fn FontAwesomeCss() -> impl IntoView {
+    #[cfg(not(debug_assertions))] // release mode
+    {
+        view! {
+            <script
+                src="https://kit.fontawesome.com/6ae5d22557.js"
+                crossorigin="anonymous"
+                async="true"
+            ></script>
+        }
+    }
+
+    #[cfg(debug_assertions)] // dev mode
+    {
+        view! {
             <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style" />
             <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style" />
             <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style" />
@@ -48,14 +51,13 @@ fn FontAwesomeCss(env: String) -> impl IntoView {
             <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css" />
             <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css" />
         }
-        .into(),
     }
 }
 
 #[component]
 fn FontAwesome() -> impl IntoView {
     view! {
-        <FontAwesomeCss env=std::env::var("APP_ENVIRONMENT").unwrap_or("dev".to_string()) />
+        <FontAwesomeCss  />
     }
 }
 

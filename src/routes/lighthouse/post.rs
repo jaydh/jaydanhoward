@@ -15,6 +15,7 @@ use {
     base64::Engine,
     futures_util::StreamExt as _,
     std::io::Write,
+    tracing::instrument,
 };
 
 #[cfg(feature = "ssr")]
@@ -44,6 +45,7 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
 }
 
 #[cfg(feature = "ssr")]
+#[instrument(skip(payload))]
 pub async fn upload_lighthouse_report(
     request: HttpRequest,
     mut payload: Multipart,
