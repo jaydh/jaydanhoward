@@ -19,9 +19,9 @@ RUN git clone https://github.com/jaydh/inject-git \
 FROM gcr.io/distroless/cc-debian12:nonroot
 WORKDIR /app
 
-COPY --from=builder /app/target/release/jaydanhoward /app/
-COPY --from=builder /app/target/site /app/site
-COPY --from=builder /app/Cargo.toml /app/
+COPY --from=builder --chown=nonroot:nonroot /app/target/release/jaydanhoward /app/
+COPY --from=builder --chown=nonroot:nonroot /app/target/site /app/site
+COPY --from=builder --chown=nonroot:nonroot /app/Cargo.toml /app/
 
 ENV RUST_LOG="info" \
     APP_ENVIRONMENT="production" \
