@@ -15,7 +15,7 @@ use {
     base64::Engine,
     futures_util::StreamExt as _,
     std::io::Write,
-    tracing::instrument,
+    tracing::{instrument, log},
 };
 
 #[cfg(feature = "ssr")]
@@ -50,10 +50,12 @@ pub async fn upload_lighthouse_report(
     request: HttpRequest,
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
+    log::info!("Recieved upload_lighthouse_report");
     let credentials = basic_authentication(request.headers());
     if credentials.is_err() {
         return Ok(HttpResponse::BadRequest().finish());
     }
+    log::info!("Valid credentials upload_lighthouse_report");
 
     let mut file = std::fs::OpenOptions::new()
         .create(true)
