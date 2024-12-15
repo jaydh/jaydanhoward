@@ -54,7 +54,7 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Copy ca cert
         run: |
-          sudo cp /certs/ca/tls.crt /etc/ssl/certs/ca-certificates.crt
+          sudo cp /usr/local/share/ca-certificates/ca.crt /etc/ssl/certs/ca-certificates.crt
       - name: Create BuildKit Configuration
         run: |
           cat <<EOF > buildkitd.toml
@@ -89,7 +89,7 @@ jobs:
         uses: docker/setup-qemu-action@v3
       - name: Copy ca cert
         run: |
-          sudo cp /certs/ca/tls.crt /etc/ssl/certs/ca-certificates.crt
+          sudo cp /usr/local/share/ca-certificates/ca.crt /etc/ssl/certs/ca-certificates.crt
       - name: Create BuildKit Configuration
         run: |
           cat <<EOF > buildkitd.toml
