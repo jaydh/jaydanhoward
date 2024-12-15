@@ -67,9 +67,7 @@ jobs:
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: BuildAndPushImageOnHarbor
-        run: |
-          docker build . -t harbor.home.local/library/jaydanhoward:latest
-          docker push harbor.home.local/library/jaydanhoward:latest
+        run: docker buildx build  --platform linux/amd64,linux/arm64 -t harbor.home.local/library/jaydanhoward:latest --push .
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy]
@@ -89,7 +87,5 @@ jobs:
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: BuildAndPushImageOnHarbor
-        run: |
-          docker build . -t harbor.home.local/library/lighthouse:latest
-          docker push harbor.home.local/library/lighthouse:latest
+        run: docker buildx build -t harbor.home.local/library/lighthouse:latest --push .
         working-directory: lighthouse
