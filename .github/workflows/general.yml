@@ -11,7 +11,7 @@ env:
 jobs:
   test:
     name: Test
-    runs-on: arc-runner-set
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -20,7 +20,7 @@ jobs:
         run: cargo test
   fmt:
     name: Rustfmt
-    runs-on: arc-runner-set
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
   harbor-image:
     name: Push jaydanhoward image to Harbor
     needs: [test, fmt, clippy]
-    runs-on: arc-runner-set
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - name: Checkout repository
