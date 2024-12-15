@@ -58,7 +58,7 @@ jobs:
       - name: Create BuildKit Configuration
         run: |
           cat <<EOF > buildkitd.toml
-          [harbor.home.local]
+          [registry."harbor.home.local"]
             http = false
             insecure = false
             ca=["/etc/ssl/certs/ca-certificates.crt"]
@@ -75,8 +75,6 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: sleep
-        run: sleep 360000
       - name: BuildAndPushImageOnHarbor
         run: docker buildx build  --platform linux/amd64,linux/arm64 -t harbor.home.local/library/jaydanhoward:latest --push .
   harbor-ligthouse-image:
@@ -95,7 +93,7 @@ jobs:
       - name: Create BuildKit Configuration
         run: |
           cat <<EOF > buildkitd.toml
-          [harbor.home.local]
+          [registry."harbor.home.local"]
             http = false
             insecure = false
             ca=["/etc/ssl/certs/ca-certificates.crt"]
