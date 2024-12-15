@@ -58,6 +58,8 @@ jobs:
       - name: Create BuildKit Configuration
         run: |
           cat <<EOF > buildkitd.toml
+          [dns]
+            nameservers=["192.168.5.50","1.1.1.1","8.8.8.8"]
           [registry."harbor.home.local"]
             http = false
             insecure = false
@@ -93,6 +95,8 @@ jobs:
       - name: Create BuildKit Configuration
         run: |
           cat <<EOF > buildkitd.toml
+          [dns]
+            nameservers=["192.168.5.50","1.1.1.1","8.8.8.8"]
           [registry."harbor.home.local"]
             http = false
             insecure = false
