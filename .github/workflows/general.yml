@@ -31,7 +31,7 @@ jobs:
         run: cargo fmt --check
   clippy:
     name: Clippy
-    runs-on: arc-runner-set
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - uses: actions/checkout@v4
@@ -82,7 +82,7 @@ jobs:
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy]
-    runs-on: arc-runner-set
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - name: Checkout repository
