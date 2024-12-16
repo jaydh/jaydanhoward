@@ -3,6 +3,13 @@ module(
     version = "1.0",
 )
 
+bazel_dep(
+    name = "rules_pkg",
+    version = "1.0.1",
+)
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+
+
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
@@ -194,7 +201,6 @@ crate.spec(
 crate.from_specs()
 use_repo(crate, "crates")
 
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
 http_file(
     name = "tailwind_x86",
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",

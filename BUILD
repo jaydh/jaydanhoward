@@ -1,5 +1,6 @@
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
+load("@rules_pkg//:pkg.bzl", "pkg_tar")
 
 deps = [
         "@crates//:actix-files",
@@ -28,6 +29,21 @@ deps = [
         "@crates//:tracing-subscriber",
         "@rules_rust//tools/runfiles",
     ]
+
+rust_shared_library(
+    name = "jaydanhoward.wasm",
+    srcs = glob([
+        "src/**/*.rs",
+    ]),
+    crate_features = ["hydrate"],
+    crate_name = "jaydanhoward",
+    rustc_env = {
+        "SERVER_FN_OVERRIDE_KEY": "bazel",
+    },
+    tags = ["manual"],
+    visibility = ["//visibility:public"],
+    deps = deps,
+)
 
 rust_library(
     name = "jaydanhoward",
@@ -58,21 +74,6 @@ rust_binary(
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     deps = deps + [":jaydanhoward"]
-)
-
-rust_shared_library(
-    name = "jaydanhoward.wasm",
-    srcs = glob([
-        "src/**/*.rs",
-    ]),
-    crate_features = ["hydrate"],
-    crate_name = "jaydanhoward",
-    rustc_env = {
-        "SERVER_FN_OVERRIDE_KEY": "bazel",
-    },
-    tags = ["manual"],
-    visibility = ["//visibility:public"],
-    deps = deps,
 )
 
 exports_files(["tailwind.config.js"])
