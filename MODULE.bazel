@@ -60,6 +60,5 @@ crate.spec(package = "chrono", version = "0.4.26")
 crate.spec(package = "rand", version = "0.8.5")
 crate.spec(package = "reqwest", version = "0.12.5", features = ["http2", "rustls-tls", "json", "gzip", "cookies", "multipart", "stream"])
 
-
 crate.from_specs()
 use_repo(crate, "crates")

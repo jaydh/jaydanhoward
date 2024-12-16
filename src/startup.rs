@@ -1,4 +1,3 @@
-#[cfg(feature = "ssr")]
 use {
     crate::components::App,
     crate::prometheus_client::{query_prometheus, PrometheusData, PrometheusResult},
@@ -9,12 +8,13 @@ use {
     leptos::*,
     leptos_actix::{generate_route_list, LeptosRoutes},
     pulldown_cmark::{html, Options, Parser},
+    runfiles::{rlocation, Runfiles},
     std::env,
-    std::fs::read_to_string,
+    std::fs::{read_to_string, File},
+    std::io::prelude::*,
     tracing::log,
 };
 
-#[cfg(feature = "ssr")]
 async fn convert_resume_md_to_html() -> String {
     let site_dir = env::var("LEPTOS_SITE_ROOT").unwrap();
 
@@ -31,7 +31,6 @@ async fn convert_resume_md_to_html() -> String {
     }
 }
 
-#[cfg(feature = "ssr")]
 async fn get_metrics() -> impl Responder {
     let query = r#"sum(rate(container_cpu_usage_seconds_total[5m])) by (cluster)"#;
 
@@ -50,13 +49,21 @@ async fn get_metrics() -> impl Responder {
     }
 }
 
-#[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
     let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
     console_error_panic_hook::set_once();
 
-    let conf = get_configuration(None).await.unwrap();
+    let r = Runfiles::create().expect("Must run using bazel with runfiles");
+    let leptos_toml_path =
+        rlocation!(r, "_main/jaydanhoward/leptos.toml").expect("Failed to locate runfile");
+    let mut leptos_toml_file = File::open(leptos_toml_path)?;
+    let mut leptos_toml_contents = String::new();
+    let _ = leptos_toml_file.read_to_string(&mut leptos_toml_contents);
+
+    let conf = get_configuration(Some(&leptos_toml_contents))
+        .await
+        .unwrap();
     let addr = conf.leptos_options.site_addr;
 
     let resume = convert_resume_md_to_html().await;
