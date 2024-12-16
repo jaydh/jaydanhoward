@@ -15,22 +15,6 @@ use {
     tracing::log,
 };
 
-async fn convert_resume_md_to_html() -> String {
-    let site_dir = env::var("LEPTOS_SITE_ROOT").unwrap();
-
-    match read_to_string(format!("{}/resume.md", site_dir)) {
-        Ok(markdown_content) => {
-            let options = Options::empty();
-            let parser = Parser::new_ext(&markdown_content, options);
-            let mut html_output = String::new();
-            html::push_html(&mut html_output, parser);
-
-            html_output
-        }
-        Err(_) => "<div />".into(),
-    }
-}
-
 async fn get_metrics() -> impl Responder {
     let query = r#"sum(rate(container_cpu_usage_seconds_total[5m])) by (cluster)"#;
 
@@ -55,19 +39,16 @@ pub async fn run() -> Result<(), std::io::Error> {
     console_error_panic_hook::set_once();
 
     let r = Runfiles::create().expect("Must run using bazel with runfiles");
-    let leptos_toml_path =
-        rlocation!(r, "_main/jaydanhoward/leptos.toml").expect("Failed to locate runfile");
-    let mut leptos_toml_file = File::open(leptos_toml_path)?;
-    let mut leptos_toml_contents = String::new();
-    let _ = leptos_toml_file.read_to_string(&mut leptos_toml_contents);
+    let leptos_toml_path = rlocation!(r, "_main/leptos.toml").expect("Failed to locate runfile");
 
-    let conf = get_configuration(Some(&leptos_toml_contents))
+    let conf = get_configuration(Some(&leptos_toml_path.to_string_lossy().to_string()))
         .await
-        .unwrap();
+        .expect("Failed to read conf");
+
     let addr = conf.leptos_options.site_addr;
 
-    let resume = convert_resume_md_to_html().await;
     let metrics = get_metrics().await;
+
     let routes = generate_route_list(|| view! { <App /> });
 
     log::info!("Starting Server on {}", addr);
@@ -87,7 +68,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                 || view! { <App /> },
             )
             .app_data(web::Data::new(leptos_options.to_owned()))
-            .app_data(web::Data::new(resume.to_owned()))
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?
