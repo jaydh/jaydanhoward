@@ -4,7 +4,7 @@ module(
 )
 
 # Add rules_rust dependency
-bazel_dep(name = "rules_rust", version = "0.54.1")
+bazel_dep(name = "rules_rust", version = "0.55.6")
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
@@ -15,9 +15,51 @@ use_repo(rust, "rust_toolchains")
 register_toolchains("@rust_toolchains//:all")
 
 crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
-crate.from_cargo(
-    name = "crates",
-    cargo_lockfile = "//:Cargo.lock",  # Optional
-    manifests = ["//:Cargo.toml"],     # Your manifest files
-)
+crate.spec(package = "actix-files", version = "0.6")
+crate.spec(package = "actix-web", version = "4.8", features = ["macros", "rustls-0_23"])
+crate.spec(package = "console_error_panic_hook", version = "0.1")
+crate.spec(package = "config", version = "0.14.1", features = ["yaml"])
+crate.spec(package = "cfg-if", version = "1")
+crate.spec(package = "http", version = "0.2")
+crate.spec(package = "leptos", version = "0.6.15", features = ["nightly", "rustls"])
+crate.spec(package = "leptos_meta", version = "0.6.15", features = ["nightly"])
+crate.spec(package = "leptos_actix", version = "0.6.15")
+crate.spec(package = "leptos_router", version = "0.6.15", features = ["nightly"])
+crate.spec(package = "wasm-bindgen", version = "0.2.99")
+crate.spec(package = "web-sys", version = "0.3.70", features = [
+  "AbortController",
+  "AbortSignal",
+  "HtmlDocument",
+  "MediaQueryList",
+  "Touch",
+  "TouchEvent",
+  "TouchEventInit",
+  "TouchInit",
+  "TouchList",
+  "Window"
+])
+crate.spec(package = "serde", version = "1.0.183")
+crate.spec(package = "serde-aux", version = "1")
+crate.spec(package = "serde_json", version = "1")
+crate.spec(package = "anyhow", version = "1.0.72")
+crate.spec(package = "tokio", version = "1", features = ["macros", "rt-multi-thread"])
+crate.spec(package = "tracing", version = "0.1.19")
+crate.spec(package = "tracing-actix-web", version = "0.7")
+crate.spec(package = "tracing-bunyan-formatter", version = "0.3")
+crate.spec(package = "tracing-log", version = "0.1.1")
+crate.spec(package = "tracing-subscriber", version = "0.3", features = ["registry", "env-filter"])
+crate.spec(package = "actix-multipart", version = "0.6")
+crate.spec(package = "futures", version = "0.3.28")
+crate.spec(package = "futures-util", version = "0.3.28")
+crate.spec(package = "secrecy", version = "0.8.0")
+crate.spec(package = "base64", version = "0.21.2")
+crate.spec(package = "thiserror", version = "1.0.47")
+crate.spec(package = "femark", version = "0.1.4")
+crate.spec(package = "pulldown-cmark", version = "0.9.3")
+crate.spec(package = "chrono", version = "0.4.26")
+crate.spec(package = "rand", version = "0.8.5")
+crate.spec(package = "reqwest", version = "0.12.5", features = ["http2", "rustls-tls", "json", "gzip", "cookies", "multipart", "stream"])
+
+
+crate.from_specs()
 use_repo(crate, "crates")

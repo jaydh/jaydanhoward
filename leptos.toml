@@ -1,0 +1,20 @@
+[package.metadata.leptos]
+output-name = "leptos_start"
+site-root = "target/site"
+site-pkg-dir = "pkg"
+style-file = "assets/main.css"
+assets-dir = "assets"
+site-addr = "127.0.0.1:8000"
+reload-port = 8001
+end2end-cmd = "npx playwright test"
+end2end-dir = "end2end"
+browserquery = "defaults"
+watch = false
+env = "DEV"
+bin-features = ["ssr"]
+bin-default-features = false
+lib-features = ["hydrate"]
+lib-default-features = false
+lib-profile-release = "wasm-release"
+tailwind-input-file = "assets/main.css"
+tailwind-config-file = "tailwind.config.js"
