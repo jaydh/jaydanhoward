@@ -50,6 +50,9 @@ rust_binary(
     data = [
         "leptos.toml",
         "//assets:static",
+        "//assets/fonts:fonts",
+        "//assets/fontawesome/css:css",
+        "//assets/fontawesome/webfonts:webfonts",
     ],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
@@ -69,26 +72,7 @@ rust_shared_library(
     },
     tags = ["manual"],
     visibility = ["//visibility:public"],
-    deps = [
-        "@crates//:actix-files",
-        "@crates//:actix-web",
-        "@crates//:anyhow",
-        "@crates//:config",
-        "@crates//:cfg-if",
-        "@crates//:leptos",
-        "@crates//:leptos_actix",
-        "@crates//:leptos_meta",
-        "@crates//:leptos_router",
-        "@crates//:serde",
-        "@crates//:tokio",
-        "@crates//:tokio-stream",
-        "@crates//:tracing",
-        "@crates//:tracing-actix-web",
-        "@crates//:tracing-flame",
-        "@crates//:tracing-subscriber",
-        "@crates//:wasm_bindgen",
-        "@rules_rust//tools/runfiles",
-    ],
+    deps = deps,
 )
 
 exports_files(["tailwind.config.js"])

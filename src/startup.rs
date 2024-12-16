@@ -40,6 +40,7 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let r = Runfiles::create().expect("Must run using bazel with runfiles");
     let leptos_toml_path = rlocation!(r, "_main/leptos.toml").expect("Failed to locate runfile");
+    let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate assets");
 
     let conf = get_configuration(Some(&leptos_toml_path.to_string_lossy().to_string()))
         .await
@@ -61,7 +62,10 @@ pub async fn run() -> Result<(), std::io::Error> {
             .route("/health_check", web::get().to(health_check))
             .route("/robots.txt", web::get().to(robots_txt))
             .service(Files::new("/pkg", format!("{site_root}/pkg")))
-            .service(Files::new("/assets", site_root))
+            .service(Files::new(
+                "/assets",
+                assets_path.to_string_lossy().to_string(),
+            ))
             .leptos_routes(
                 leptos_options.to_owned(),
                 routes.to_owned(),
