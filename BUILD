@@ -1,6 +1,7 @@
 load("@crates//:defs.bzl", "aliases", "all_crate_deps")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen")
 
 deps = [
         "@crates//:actix-files",
@@ -42,7 +43,10 @@ rust_shared_library(
     },
     tags = ["manual"],
     visibility = ["//visibility:public"],
-    deps = deps,
+    deps = deps + [
+        "@crates//:wasm-bindgen",
+        "@crates//:web-sys"
+    ],
 )
 
 rust_library(
@@ -64,6 +68,7 @@ rust_binary(
     ]),
     crate_features = ["ssr"],
     data = [
+        ":jaydanhoward_wasm",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",

@@ -1,3 +1,4 @@
+#[cfg(feature = "ssr")]
 use {
     crate::components::App,
     crate::prometheus_client::{query_prometheus, PrometheusData, PrometheusResult},
@@ -15,6 +16,7 @@ use {
     tracing::log,
 };
 
+#[cfg(feature = "ssr")]
 async fn get_metrics() -> impl Responder {
     let query = r#"sum(rate(container_cpu_usage_seconds_total[5m])) by (cluster)"#;
 
@@ -33,6 +35,7 @@ async fn get_metrics() -> impl Responder {
     }
 }
 
+#[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
     let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
