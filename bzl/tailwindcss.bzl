@@ -63,7 +63,7 @@ tailwindcss = rule(
             aspects = [_srcs_aspect],
         ),
         "_tailwindcss": attr.label(
-            default = "@tailwindcss//:tailwindcss-cli",
+            default = "@tailwind_x86//file",
             executable = True,
             cfg = "exec",
         ),

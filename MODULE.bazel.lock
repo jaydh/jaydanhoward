@@ -277,7 +277,7 @@
     "@@rules_rust+//crate_universe:extension.bzl%crate": {
       "os:linux,arch:amd64": {
         "bzlTransitiveDigest": "Al/+DOzRJoYEq8TpcYzL7BJQSNnR0ZvrGF+/6Ibjqxw=",
-        "usagesDigest": "2UYx/WUnsFIc5GeCZsmCfRylqEDgXgvU+dJ/PXV5O/s=",
+        "usagesDigest": "/91a28wUjIynl/h5+zIZLvnQV9h3bMN/uUhCrCfZ8QQ=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
