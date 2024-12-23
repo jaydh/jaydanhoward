@@ -1,7 +1,13 @@
-load("@crates//:defs.bzl", "aliases", "all_crate_deps")
+load("@crates//:defs.bzl", "aliases")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
-load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen")
+load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
+load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen_toolchain")
+
+rust_bindgen_toolchain(
+    name = "wasm_bindgen_toolchain",
+    bindgen = "@wasm_bindgen//:wasm-bindgen",
+)
 
 deps = [
         "@crates//:actix-files",
@@ -32,7 +38,7 @@ deps = [
     ]
 
 rust_shared_library(
-    name = "jaydanhoward.wasm",
+    name = "jaydanhoward_wasm",
     srcs = glob([
         "src/**/*.rs",
     ]),
@@ -43,10 +49,18 @@ rust_shared_library(
     },
     tags = ["manual"],
     visibility = ["//visibility:public"],
-    deps = deps + [
-        "@crates//:wasm-bindgen",
-        "@crates//:web-sys"
+    deps = [
+        "@wasm_crate//:leptos_router",
+        "@wasm_crate//:cfg-if",
+        "@wasm_crate//:wasm-bindgen",
+        "@wasm_crate//:web-sys"
     ],
+)
+
+js_rust_wasm_bindgen(
+    name = "jaydanhoward_wasm_bindgen",
+    target = "web",
+    wasm_file = ":jaydanhoward_wasm",
 )
 
 rust_library(
@@ -68,7 +82,7 @@ rust_binary(
     ]),
     crate_features = ["ssr"],
     data = [
-        ":jaydanhoward_wasm",
+        "jaydanhoward_wasm_bindgen",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",
@@ -78,7 +92,11 @@ rust_binary(
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
-    deps = deps + [":jaydanhoward"]
+    deps = deps + [":jaydanhoward"],
+    aliases = aliases({
+        "serde-aux": "serde_aux"
+    }),
+
 )
 
 exports_files(["tailwind.config.js"])

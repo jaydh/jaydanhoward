@@ -2,30 +2,47 @@ module(
     name = "jaydanhoward",
     version = "1.0",
 )
-
 bazel_dep(
     name = "rules_pkg",
     version = "1.0.1",
 )
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
-
+bazel_dep(name = "rules_rust", version = "0.55.6")
+bazel_dep(name = "rules_rust_bindgen", version = "0.55.6")
+bazel_dep(name = "rules_rust_wasm_bindgen", version = "0.55.6")
+bazel_dep(name = "platforms", version = "0.0.10")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
+http_file(
+    name = "tailwind_x86",
+    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
+    executable = True
+)
 
-# Add rules_rust dependency
-bazel_dep(name = "rules_rust", version = "0.55.6")
-bazel_dep(name = "rules_rust_bindgen", version = "0.55.6")
-bazel_dep(name = "rules_rust_wasm_bindgen", version = "0.55.6")
+http_file(
+    name = "tailwind_arm",
+    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
+    executable = True
+)
+
+http_archive(
+    name = "wasm_bindgen",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-aarch64-unknown-linux-gnu.tar.gz"],
+    sha256 = "7e1654f08020abcc9bc131f15159d7be68579088c02f1e4486e09a9de3d49e54",
+    build_file = "@//:wasm_bindgen.BUILD",
+    strip_prefix = "wasm-bindgen-0.2.99-aarch64-unknown-linux-gnu",
+)
 
 rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
 rust.toolchain(
-    edition = "2021",
+    edition = "2021"
 )
 use_repo(rust, "rust_toolchains")
 
 register_toolchains("@rust_toolchains//:all")
+register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")
 
 crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
 crate.spec(
@@ -82,22 +99,6 @@ crate.spec(
 crate.spec(
     package = "wasm-bindgen",
     version = "0.2.99",
-)
-crate.spec(
-    features = [
-        "AbortController",
-        "AbortSignal",
-        "HtmlDocument",
-        "MediaQueryList",
-        "Touch",
-        "TouchEvent",
-        "TouchEventInit",
-        "TouchInit",
-        "TouchList",
-        "Window",
-    ],
-    package = "web-sys",
-    version = "0.3.70",
 )
 crate.spec(
     package = "serde",
@@ -200,18 +201,48 @@ crate.spec(
     package = "reqwest",
     version = "0.12.5",
 )
-crate.from_specs()
+crate.from_specs(name = "crates")
 use_repo(crate, "crates")
 
-http_file(
-    name = "tailwind_x86",
-    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
-    executable = True
-)
+wasm_crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
 
-http_file(
-    name = "tailwind_arm",
-    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
-    executable = True
+wasm_crate.spec(
+    features = [
+        "nightly",
+    ],
+    package = "leptos",
+    version = "0.6.15",
 )
+wasm_crate.spec(
+    features = ["nightly"],
+    package = "leptos_meta",
+    version = "0.6.15",
+)
+wasm_crate.spec(
+    features = ["nightly"],
+    package = "leptos_router",
+    version = "0.6.15",
+)
+wasm_crate.spec(
+    package = "cfg-if",
+    version = "1",
+)
+wasm_crate.spec(
+    features = [
+        "AbortController",
+        "AbortSignal",
+        "HtmlDocument",
+        "MediaQueryList",
+        "Touch",
+        "TouchEvent",
+        "TouchEventInit",
+        "TouchInit",
+        "TouchList",
+        "Window",
+    ],
+    package = "web-sys",
+    version = "0.3.70",
+)
+wasm_crate.from_specs(name = "wasm_crate")
+use_repo(wasm_crate, "wasm_crate")
 
