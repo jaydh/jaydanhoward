@@ -1,5 +1,4 @@
 use crate::components::about::About;
-use crate::components::dark_mode_toggle::initial_prefers_dark;
 use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
@@ -45,7 +44,7 @@ fn FontAwesome() -> impl IntoView {
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
-    let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(initial_prefers_dark());
+    let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(true);
 
     view! {
         <head>

@@ -50,16 +50,17 @@ rust_shared_library(
     tags = ["manual"],
     visibility = ["//visibility:public"],
     deps = [
-        "@crates//:anyhow",
-        "@crates//:serde",
-        "@crates//:rand",
-        "@crates//:console_error_panic_hook",
+        "@wasm_crate//:anyhow",
+        "@wasm_crate//:serde",
+        "@wasm_crate//:rand",
+        "@wasm_crate//:console_error_panic_hook",
         "@wasm_crate//:leptos",
         "@wasm_crate//:leptos_router",
-        "@crates//:leptos_meta",
+        "@wasm_crate//:leptos_meta",
         "@wasm_crate//:cfg-if",
         "@wasm_crate//:wasm-bindgen",
-        "@wasm_crate//:web-sys"
+        "@wasm_crate//:web-sys",
+        "@wasm_crate//:getrandom"
     ],
 )
 

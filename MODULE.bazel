@@ -206,7 +206,22 @@ crate.from_specs(name = "crates")
 use_repo(crate, "crates")
 
 wasm_crate = use_extension("@rules_rust//crate_universe:extension.bzl", "crate")
-
+wasm_crate.spec(
+    package = "anyhow",
+    version = "1.0.72",
+)
+wasm_crate.spec(
+    package = "serde",
+    version = "1.0.183",
+)
+wasm_crate.spec(
+    package = "rand",
+    version = "0.8.5",
+)
+wasm_crate.spec(
+    package = "console_error_panic_hook",
+    version = "0.1",
+)
 wasm_crate.spec(
     features = [
         "nightly",
@@ -228,6 +243,12 @@ wasm_crate.spec(
     version = "1",
 )
 wasm_crate.spec(
+    package = "getrandom",
+    version = "0.2",
+    features = ["js"]
+)
+
+wasm_crate.spec(
     features = [
         "AbortController",
         "AbortSignal",
@@ -246,12 +267,7 @@ wasm_crate.spec(
 wasm_crate.from_specs(name = "wasm_crate")
 use_repo(wasm_crate, "wasm_crate")
 
-
-
-rust_wasm_bindgen_dependencies = use_repo_rule("@rules_rust//rust:extensions.bzl", "rust_wasm_bindgen_dependencies")
-rust_wasm_bindgen_register_toolchains = use_repo_rule("@rules_rust//rust:extensions.bzl", "rust_wasm_bindgen_register_toolchains")
-
-rust_wasm_bindgen_dependencies(name="rust_wasm_bindgen_dependencies")
-rust_wasm_bindgen_register_toolchains(name="rust_wasm_bindgen_register_toolchains")
-
-register_toolchains("@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm32_toolchain", "@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm64_toolchain",)
+register_toolchains(
+    "@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm32_toolchain", 
+    "@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm64_toolchain"
+)
