@@ -225,16 +225,22 @@ wasm_crate.spec(
 wasm_crate.spec(
     features = [
         "nightly",
+        "hydrate"
     ],
+    default_features = False,
     package = "leptos",
     version = "0.7.2",
 )
 wasm_crate.spec(
     package = "leptos_meta",
+    default_features = False,
     version = "0.7.2",
 )
 wasm_crate.spec(
-    features = ["nightly"],
+    features = [
+        "nightly",
+    ],
+    default_features = False,
     package = "leptos_router",
     version = "0.7.2",
 )
@@ -267,6 +273,7 @@ wasm_crate.spec(
 wasm_crate.from_specs(name = "wasm_crate")
 use_repo(wasm_crate, "wasm_crate")
 
+register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")
 register_toolchains(
     "@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm32_toolchain", 
     "@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm64_toolchain"

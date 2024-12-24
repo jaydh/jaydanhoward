@@ -37,32 +37,30 @@ deps = [
         "@rules_rust//tools/runfiles",
     ]
 
-rust_shared_library(
-    name = "jaydanhoward_wasm",
+rust_binary(
+    name = "jaydanhoward_wasm_test",
     srcs = glob([
         "src/**/*.rs",
     ]),
     crate_features = ["hydrate"],
-    crate_name = "jaydanhoward",
+    target_compatible_with = ["@platforms//cpu:wasm32"],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
-    tags = ["manual"],
-    visibility = ["//visibility:public"],
     deps = [
         "@wasm_crate//:anyhow",
-        "@wasm_crate//:serde",
         "@wasm_crate//:rand",
         "@wasm_crate//:console_error_panic_hook",
-        "@wasm_crate//:leptos",
-        "@wasm_crate//:leptos_router",
-        "@wasm_crate//:leptos_meta",
         "@wasm_crate//:cfg-if",
         "@wasm_crate//:wasm-bindgen",
         "@wasm_crate//:web-sys",
-        "@wasm_crate//:getrandom"
+        "@wasm_crate//:getrandom",
+        "@wasm_crate//:leptos",
+        "@wasm_crate//:leptos_router",
+        "@wasm_crate//:leptos_meta",
     ],
 )
+
 
 js_rust_wasm_bindgen(
     name = "jaydanhoward_wasm_bindgen",
