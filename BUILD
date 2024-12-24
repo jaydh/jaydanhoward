@@ -70,6 +70,7 @@ js_rust_wasm_bindgen(
 
 rust_library(
     name = "jaydanhoward",
+    visibility = ["//visibility:public"],
     srcs = glob([
         "src/**/*.rs",
     ]),

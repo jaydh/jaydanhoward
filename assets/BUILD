@@ -3,7 +3,7 @@ load("//bzl:tailwindcss.bzl", "tailwindcss")
 tailwindcss(
     name = "style",
     src = "tailwind.css",
-    target = "//:jaydanhoward_wasm",
+    target = "//:jaydanhoward",
     visibility = ["//visibility:public"],
 )
 
