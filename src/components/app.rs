@@ -1,15 +1,13 @@
 use crate::components::about::About;
-use crate::components::beliefs::Beliefs;
 use crate::components::dark_mode_toggle::initial_prefers_dark;
 use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::projects::Projects;
-use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::prelude::*;
-use leptos_meta::{provide_meta_context, Link, Meta, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
 use leptos_router::components::*;
 use leptos_router::path;
 
@@ -66,6 +64,17 @@ pub fn App() -> impl IntoView {
         >
             <Router>
                 <main>
+                    <Html
+                        {..}
+                        lang="he"
+                        dir="rtl"
+                        class=move || {
+                            match dark_mode_enabled() {
+                                true => "dark",
+                                false => "light",
+                            }
+                        }
+                    />
                     <Nav set_dark_mode_enabled=set_dark_mode_enabled />
                     <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
                         <Routes fallback=|| "Not found">
