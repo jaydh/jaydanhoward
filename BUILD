@@ -88,7 +88,6 @@ rust_binary(
     ]),
     crate_features = ["ssr"],
     data = [
-        "jaydanhoward_wasm_bindgen",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",

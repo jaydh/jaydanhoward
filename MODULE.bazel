@@ -82,21 +82,20 @@ crate.spec(
         "rustls",
     ],
     package = "leptos",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 crate.spec(
-    features = ["nightly"],
     package = "leptos_meta",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 crate.spec(
     package = "leptos_actix",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 crate.spec(
     features = ["nightly"],
     package = "leptos_router",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 crate.spec(
     package = "wasm-bindgen",
@@ -213,17 +212,16 @@ wasm_crate.spec(
         "nightly",
     ],
     package = "leptos",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 wasm_crate.spec(
-    features = ["nightly"],
     package = "leptos_meta",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 wasm_crate.spec(
     features = ["nightly"],
     package = "leptos_router",
-    version = "0.6.15",
+    version = "0.7.2",
 )
 wasm_crate.spec(
     package = "cfg-if",

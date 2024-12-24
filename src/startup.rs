@@ -26,9 +26,6 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let addr = conf.leptos_options.site_addr;
 
-    let conf = get_configuration(None).unwrap();
-    let addr = conf.leptos_options.site_addr;
-
     let routes = generate_route_list(|| view! { <App /> });
 
     log::info!("Starting Server on {}", addr);
