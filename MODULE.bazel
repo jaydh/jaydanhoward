@@ -7,9 +7,6 @@ bazel_dep(
     version = "1.0.1",
 )
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
-bazel_dep(name = "rules_rust", version = "0.55.6")
-bazel_dep(name = "rules_rust_bindgen", version = "0.55.6")
-bazel_dep(name = "rules_rust_wasm_bindgen", version = "0.55.6")
 bazel_dep(name = "platforms", version = "0.0.10")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")

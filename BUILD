@@ -1,6 +1,5 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
-load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen_toolchain")
 
 platform(
     name = "wasm",
@@ -10,18 +9,31 @@ platform(
     ],
 )
 
-rust_binary(
+rust_shared_library(
     name = "jaydanhoward_wasm",
     edition = "2021",
     srcs = glob([
         "src/**/*.rs",
     ]),
+    tags = ["manual"],
     crate_features = ["hydrate"],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     platform = ":wasm",
     visibility = ["//visibility:public"],
+    deps = [
+        "@wasm_crates//:anyhow",
+        "@wasm_crates//:cfg-if",
+        "@wasm_crates//:console_error_panic_hook",
+        "@wasm_crates//:leptos",
+        "@wasm_crates//:leptos_meta",
+        "@wasm_crates//:leptos_router",
+        "@wasm_crates//:rand",
+        "@wasm_crates//:serde",
+        "@wasm_crates//:wasm-bindgen",
+        "@wasm_crates//:web-sys",
+    ]
 )
 
 server_deps = [
