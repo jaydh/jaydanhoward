@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -22,7 +21,9 @@ pub struct PrometheusMetric {
     value: (f64, String),
 }
 
+#[cfg(feature = "ssr")]
 pub async fn query_prometheus(query: &str) -> Result<PrometheusData, anyhow::Error> {
+    use reqwest::Client;
     let client = Client::new();
     match std::env::var("PROMETHEUS_URL") {
         Ok(base_url) => {

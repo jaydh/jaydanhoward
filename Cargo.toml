@@ -13,10 +13,10 @@ console_error_panic_hook = "0.1"
 config = { version = "0.14.1", default-features = false, features = ["yaml"] }
 cfg-if = "1"
 http = { version = "0.2", optional = true }
-leptos = { version = "0.6.15", features = ["nightly", "rustls"] }
-leptos_meta = { version = "0.6.15", features = ["nightly"] }
-leptos_actix = { version = "0.6.15", optional = true }
-leptos_router = { version = "0.6.15", features = ["nightly"] }
+leptos = { version = "0.7.2", features = ["nightly", "rustls"], optional = true }
+leptos_meta = { version = "0.7.2" }
+leptos_actix = { version = "0.7.2", optional = true }
+leptos_router = { version = "0.7.2", features = ["nightly"] }
 wasm-bindgen = "=0.2.99"
 web-sys = { version = "0.3.70", features = [
   "AbortController",
@@ -46,14 +46,14 @@ futures-util = { version = "0.3.28", optional = true}
 secrecy = { version = "0.8.0", optional = true }
 base64 = { version = "0.21.2", optional = true } 
 thiserror = "1.0.47"
-femark = { version = "0.1.4", optional = true }
 pulldown-cmark = { version = "0.9.3", optional = true }
 chrono = { version = "0.4.26", optional = true }
 rand = "0.8.5"
-reqwest = { version = "=0.12.5", features = ["http2", "rustls-tls", "json", "gzip", "cookies", "multipart", "stream"], default-features = false }
+getrandom = { version = "0.2", features = ["js"] }
+reqwest = { version = "=0.12.9", features = ["http2", "rustls-tls", "json", "gzip", "cookies", "multipart", "stream"], default-features = false, optional = true}
 
 [features]
-hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+hydrate = ["leptos/hydrate"]
 ssr = [
   "dep:actix-files",
   "dep:actix-web",
@@ -70,9 +70,9 @@ ssr = [
   "dep:base64",
   "dep:serde-aux",
   "dep:serde_json",
-  "dep:femark",
   "dep:pulldown-cmark",
   "dep:chrono",
+  "dep:reqwest",
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",

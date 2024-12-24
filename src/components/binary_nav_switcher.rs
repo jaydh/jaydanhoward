@@ -1,5 +1,5 @@
 use crate::components::link::Link;
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn BinaryNavSwithcer(

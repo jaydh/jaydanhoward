@@ -1,6 +1,6 @@
 use crate::components::binary_nav_switcher::BinaryNavSwithcer;
-use leptos::*;
-use leptos_router::Outlet;
+use leptos::prelude::*;
+use leptos_router::nested_router::Outlet;
 
 #[component]
 pub fn Work() -> impl IntoView {
