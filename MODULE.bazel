@@ -26,8 +26,8 @@ http_file(
 
 http_archive(
     name = "wasm_bindgen",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-aarch64-unknown-linux-gnu.tar.gz"],
-    sha256 = "7e1654f08020abcc9bc131f15159d7be68579088c02f1e4486e09a9de3d49e54",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-x86_64-unknown-linux-musl.tar.gz"],
+    sha256 = "0ae33d77b6f4fe09b294fa245764dbb05a3a1aeefeb7696cb365760d3abbdc51",
     build_file = "@//:wasm_bindgen.BUILD",
-    strip_prefix = "wasm-bindgen-0.2.99-aarch64-unknown-linux-gnu",
+    strip_prefix = "wasm-bindgen-0.2.99-x86_64-unknown-linux-musl",
 )
