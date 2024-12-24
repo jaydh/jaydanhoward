@@ -47,12 +47,6 @@ pub fn App() -> impl IntoView {
     let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(true);
 
     view! {
-        <head>
-            <Meta
-                name="description"
-                content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust"
-            />
-        </head>
         <Stylesheet href="/assets/style.css" />
         <FontAwesome />
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
@@ -65,8 +59,6 @@ pub fn App() -> impl IntoView {
                 <main>
                     <Html
                         {..}
-                        lang="he"
-                        dir="rtl"
                         class=move || {
                             match dark_mode_enabled() {
                                 true => "dark",
