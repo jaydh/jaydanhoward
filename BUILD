@@ -18,7 +18,7 @@ rust_bindgen_toolchain(
 
 rust_binary(
     name = "jaydanhoward_wasm",
-    visibility = ["//visibility:public"],
+    edition = "2021",
     srcs = glob([
         "src/**/*.rs",
     ]),
@@ -27,6 +27,7 @@ rust_binary(
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     platform = ":wasm",
+    visibility = ["//visibility:public"],
 )
 
 
@@ -34,6 +35,7 @@ js_rust_wasm_bindgen(
     name = "jaydanhoward_wasm_bindgen",
     target = "web",
     wasm_file = ":jaydanhoward_wasm",
+    visibility = ["//visibility:public"],
 )
 
 server_deps = [
@@ -83,6 +85,7 @@ rust_binary(
     crate_features = ["ssr"],
     edition = "2021",
     data = [
+        ":jaydanhoward_wasm_bindgen",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",

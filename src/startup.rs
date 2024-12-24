@@ -1,19 +1,15 @@
 #[cfg(feature = "ssr")]
-use {
-    crate::components::App,
-    crate::routes::{health_check, robots_txt, upload_lighthouse_report},
-    crate::telemtry::{get_subscriber, init_subscriber},
-    actix_files::Files,
-    actix_web::{web, HttpServer},
-    leptos::prelude::*,
-    leptos_actix::{generate_route_list, LeptosRoutes},
-    leptos_meta::Meta,
-    runfiles::{rlocation, Runfiles},
-    tracing::log,
-};
-
-#[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
+    use crate::components::App;
+    use crate::routes::{health_check, robots_txt, upload_lighthouse_report};
+    use crate::telemtry::{get_subscriber, init_subscriber};
+    use actix_files::Files;
+    use actix_web::{web, HttpServer};
+    use leptos::prelude::*;
+    use leptos_actix::{generate_route_list, LeptosRoutes};
+    use runfiles::{rlocation, Runfiles};
+    use tracing::log;
+
     let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
     console_error_panic_hook::set_once();
@@ -40,7 +36,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                 "/assets",
                 assets_path.to_string_lossy().to_string(),
             ))
-            .service(Files::new("/pkg", pkg_path.to_string_lossy().to_string()))
+            .service(Files::new("/pkg", "./"))
             .leptos_routes(routes, {
                 let leptos_options = conf.leptos_options.clone();
                 move || {
@@ -50,10 +46,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                             <head>
                                 <meta charset="utf-8"/>
                                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                                <Meta
-                                    name="description"
-                                    content="Welcome to Jay Dan Howards's Portfolio | Full-Stack Software Engineer in Health-Tech | Exploring Rust - Explore my projects, expertise, and journey in health-tech development. Discover how I leverage my skills to innovate and create in the world of health technology, with a passion for learning Rust"
-                                />
                                 <AutoReload options=leptos_options.clone() />
                                 <HydrationScripts options=leptos_options.clone()/>
                             </head>
