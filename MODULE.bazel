@@ -270,7 +270,7 @@ wasm_crate.spec(
     package = "web-sys",
     version = "0.3.70",
 )
-wasm_crate.from_specs(name = "wasm_crate")
+wasm_crate.from_specs(name="wasm_crate")
 use_repo(wasm_crate, "wasm_crate")
 
 register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")

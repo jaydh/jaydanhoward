@@ -38,12 +38,12 @@ deps = [
     ]
 
 rust_binary(
-    name = "jaydanhoward_wasm_test",
+    name = "jaydanhoward_wasm",
+    visibility = ["//visibility:public"],
     srcs = glob([
         "src/**/*.rs",
     ]),
     crate_features = ["hydrate"],
-    target_compatible_with = ["@platforms//cpu:wasm32"],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
