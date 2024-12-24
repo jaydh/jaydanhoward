@@ -2,4 +2,3 @@
 output-name = "jaydanhoward_wasm"
 site-root = "./jaydanhoward"
 site-addr = "127.0.0.1:8000"
-site-pkg-dir = "pkg"
