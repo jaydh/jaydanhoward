@@ -1,6 +1,5 @@
-use leptos::*;
+use leptos::prelude::*;
 use leptos_meta::Meta;
-use leptos_router::ActionForm;
 
 #[server(ToggleDarkMode, "/api")]
 pub async fn toggle_dark_mode(prefers_dark: bool) -> Result<bool, ServerFnError> {
@@ -23,26 +22,26 @@ pub async fn toggle_dark_mode(prefers_dark: bool) -> Result<bool, ServerFnError>
 }
 
 #[cfg(not(feature = "ssr"))]
-pub fn initial_prefers_dark() -> bool {
-    use wasm_bindgen::JsCast;
-
-    let doc = document().unchecked_into::<web_sys::HtmlDocument>();
-    let cookie = doc.cookie().unwrap_or_default();
-    match cookie.contains("darkmode=") {
-        true => cookie.contains("darkmode=true"),
-        false => get_client_prefers_dark(),
-    }
-}
-
-#[cfg(not(feature = "ssr"))]
 pub fn get_client_prefers_dark() -> bool {
-    let w = window();
+    let w = web_sys::window().expect("Failed to get window");
     match w.match_media("(prefers-color-scheme: dark)") {
         Ok(o) => match o {
             Some(media_query_list) => media_query_list.matches(),
             None => false,
         },
         Err(..) => false,
+    }
+}
+
+#[cfg(not(feature = "ssr"))]
+pub fn initial_prefers_dark() -> bool {
+    use wasm_bindgen::JsCast;
+
+    let doc = document().unchecked_into::<leptos::web_sys::HtmlDocument>();
+    let cookie = doc.cookie().unwrap_or_default();
+    match cookie.contains("darkmode=") {
+        true => cookie.contains("darkmode=true"),
+        false => get_client_prefers_dark(),
     }
 }
 
@@ -65,7 +64,7 @@ pub fn initial_prefers_dark() -> bool {
 pub fn DarkModeToggle(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
     let initial = initial_prefers_dark();
 
-    let toggle_dark_mode_action = create_server_action::<ToggleDarkMode>();
+    let toggle_dark_mode_action = ServerAction::<ToggleDarkMode>::new();
     let input = toggle_dark_mode_action.input();
     let value = toggle_dark_mode_action.value();
 

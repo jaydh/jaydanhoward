@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn SourceAnchor(href: &'static str) -> impl IntoView {

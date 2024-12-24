@@ -1,7 +1,7 @@
 use crate::components::cluster_stats::ClusterStats;
 use crate::components::source_anchor::SourceAnchor;
 
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn PictureSection() -> impl IntoView {

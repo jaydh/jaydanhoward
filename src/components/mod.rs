@@ -10,7 +10,6 @@ mod link;
 mod nav;
 mod path_search;
 mod projects;
-mod resume;
 mod skills;
 mod source_anchor;
 mod work;
