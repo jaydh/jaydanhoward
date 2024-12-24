@@ -1,4 +1,3 @@
 [package.metadata.leptos]
-output-name = "jaydanhoward_wasm"
-site-root = "./jaydanhoward"
+output-name = "jaydanhoward"
 site-addr = "127.0.0.1:8000"

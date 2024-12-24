@@ -1,6 +1,5 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
-load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
 load("@rules_rust_bindgen//:defs.bzl", "rust_bindgen_toolchain")
 
 platform(
@@ -27,14 +26,6 @@ rust_binary(
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     platform = ":wasm",
-    visibility = ["//visibility:public"],
-)
-
-
-js_rust_wasm_bindgen(
-    name = "jaydanhoward_wasm_bindgen",
-    target = "web",
-    wasm_file = ":jaydanhoward_wasm",
     visibility = ["//visibility:public"],
 )
 
@@ -85,7 +76,7 @@ rust_binary(
     crate_features = ["ssr"],
     edition = "2021",
     data = [
-        ":jaydanhoward_wasm_bindgen",
+        "//pkg:jaydanhoward",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",
