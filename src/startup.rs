@@ -37,7 +37,6 @@ pub async fn run() -> Result<(), std::io::Error> {
             .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
             .route("/health_check", web::get().to(health_check))
             .route("/robots.txt", web::get().to(robots_txt))
-            .service(Files::new("/pkg", format!("{site_root}/pkg")))
             .service(Files::new(
                 "/assets",
                 assets_path.to_string_lossy().to_string(),
