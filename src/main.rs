@@ -6,5 +6,5 @@ async fn main() -> () {
     let _ = run().await;
 }
 
-#[cfg(not(any(feature = "ssr", feature = "csr")))]
+#[cfg(not(any(feature = "ssr")))]
 pub fn main() {}

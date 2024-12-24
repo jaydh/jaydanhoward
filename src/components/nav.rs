@@ -1,11 +1,10 @@
 use crate::components::dark_mode_toggle::DarkModeToggle;
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn Nav(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
-    let routes = vec![("/about/1", "About"), ("/work", "Work")];
+    let routes = vec![("/about", "About"), ("/work", "Work")];
     let contact_links = vec![
-        ("/resume", "fa-regular fa-file-lines", false),
         (
             "https://github.com/jaydh",
             "fa-brands fa-github-square",

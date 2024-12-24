@@ -1,5 +1,5 @@
 use crate::components::source_anchor::SourceAnchor;
-use leptos::*;
+use leptos::prelude::*;
 
 #[component]
 pub fn Lighthouse() -> impl IntoView {
