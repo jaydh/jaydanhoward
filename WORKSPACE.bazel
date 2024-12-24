@@ -1,20 +1,127 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-# To find additional information on this release or newer ones visit:
-# https://github.com/bazelbuild/rules_rust/releases
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_archive(
     name = "rules_rust",
-    integrity = "sha256-Weev1uz2QztBlDA88JX6A1N72SucD1V8lBsaliM0TTg=",
-    urls = ["https://github.com/bazelbuild/rules_rust/releases/download/0.48.0/rules_rust-v0.48.0.tar.gz"],
+    integrity = "sha256-8TBqrAsli3kN8BrZq8arsN8LZUFsdLTvJ/Sqsph4CmQ=",
+    urls = ["https://github.com/bazelbuild/rules_rust/releases/download/0.56.0/rules_rust-0.56.0.tar.gz"],
 )
 
 load("@rules_rust//rust:repositories.bzl", "rules_rust_dependencies", "rust_register_toolchains")
 
 rules_rust_dependencies()
-
 rust_register_toolchains()
-load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository", "render_config")
 
+load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository", "render_config")
+crates_repository(
+    name = "server_crates",
+    cargo_lockfile = "//:Cargo.server.lock",
+    lockfile = "//:Cargo.Bazel.server.lock",
+    packages = {
+        "anyhow": crate.spec(
+            version = "1.0.72",
+        ),
+        "actix-files": crate.spec(
+            version = "0.6",
+        ),
+        "actix-multipart": crate.spec(
+            version = "0.6",
+        ),
+        "actix-web": crate.spec(
+            version = "4.8",
+            features = [
+                "macros",
+                "rustls-0_23",
+            ],
+        ),
+        "base64": crate.spec(
+            version = "0.22.1",
+        ),
+        "cfg-if": crate.spec(
+            version = "1",
+        ),
+        "config": crate.spec(
+            version = "0.14.1",
+            features = ["yaml"]
+        ),
+        "console_error_panic_hook": crate.spec(
+            version = "0.1",
+        ),
+        "futures": crate.spec(
+            version = "0.3.28",
+        ),
+        "futures-util": crate.spec(
+            version = "0.3.28",
+        ),
+        "http": crate.spec(
+            version = "0.2",
+        ),
+        "leptos": crate.spec(
+            version = "0.7.2",
+            features = ["ssr", "nightly"]
+        ),
+        "leptos_actix": crate.spec(
+            version = "0.7.2",
+        ),
+        "leptos_meta": crate.spec(
+            version = "0.7.2",
+        ),
+        "leptos_router": crate.spec(
+            version = "0.7.2",
+            features = ["nightly"]
+        ),
+        "rand": crate.spec(
+            version = "0.8.5",
+        ),
+        "reqwest": crate.spec(
+            version = "0.12.9",
+            features = [
+                "http2", 
+                "rustls-tls", 
+                "json", 
+                "gzip", 
+                "cookies", 
+                "multipart", 
+                "stream"
+            ]
+        ),
+        "serde": crate.spec(
+            version = "1.0.183",
+        ),
+        "serde-aux": crate.spec(
+            version = "4",
+        ),
+        "serde_json": crate.spec(
+            version = "1",
+        ),
+       "thiserror": crate.spec(
+            version = "1.0.47",
+        ),
+       "tokio": crate.spec(
+            version = "1",
+            features = ["macros", "rt-multi-thread"]
+        ),
+       "tracing": crate.spec(
+            version = "0.1.19",
+        ),
+       "tracing-actix-web": crate.spec(
+            version = "0.7.15",
+        ),
+       "tracing-bunyan-formatter": crate.spec(
+            version = "0.3",
+        ),
+       "tracing-log": crate.spec(
+            version = "0.1.1",
+        ),
+       "tracing-subscriber": crate.spec(
+            version = "0.3",
+            features = ["registry", "env-filter"]
+        ),
+    },
+    render_config = render_config(
+        default_package_name = ""
+    ),
+)
 
 crates_repository(
     name = "wasm_crates",
@@ -26,11 +133,9 @@ crates_repository(
             features = ["hydrate", "nightly"]
         ),
     },
-    render_config = render_config(
-        default_package_name = ""
-    ),
 )
 
 load("@wasm_crates//:defs.bzl", "crate_repositories")
+load("@server_crates//:defs.bzl", "crate_repositories")
 
 crate_repositories()

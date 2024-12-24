@@ -1,4 +1,3 @@
-load("@crates//:defs.bzl", "aliases")
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
@@ -37,6 +36,34 @@ js_rust_wasm_bindgen(
     wasm_file = ":jaydanhoward_wasm",
 )
 
+server_deps = [
+    "@server_crates//:actix-files",
+    "@server_crates//:actix-multipart",
+    "@server_crates//:actix-web",
+    "@server_crates//:anyhow",
+    "@server_crates//:base64",
+    "@server_crates//:cfg-if",
+    "@server_crates//:config",
+    "@server_crates//:console_error_panic_hook",
+    "@server_crates//:futures",
+    "@server_crates//:futures-util",
+    "@server_crates//:leptos",
+    "@server_crates//:leptos_actix",
+    "@server_crates//:leptos_meta",
+    "@server_crates//:leptos_router",
+    "@server_crates//:rand",
+    "@server_crates//:reqwest",
+    "@server_crates//:serde",
+    "@server_crates//:serde-aux",
+    "@server_crates//:thiserror",
+    "@server_crates//:tokio",
+    "@server_crates//:tracing",
+    "@server_crates//:tracing-bunyan-formatter",
+    "@server_crates//:tracing-log",
+    "@server_crates//:tracing-subscriber",
+    "@rules_rust//tools/runfiles",
+]
+
 rust_library(
     name = "jaydanhoward",
     visibility = ["//visibility:public"],
@@ -44,36 +71,8 @@ rust_library(
         "src/**/*.rs",
     ]),
     crate_features = ["ssr"],
-    aliases = aliases({
-        "serde-aux": "serde_aux"
-    }),
-    deps = [
-        "@crates//:actix-files",
-        "@crates//:actix-multipart",
-        "@crates//:actix-web",
-        "@crates//:anyhow",
-        "@crates//:base64",
-        "@crates//:cfg-if",
-        "@crates//:config",
-        "@crates//:console_error_panic_hook",
-        "@crates//:futures-util",
-        "@crates//:leptos",
-        "@crates//:leptos_actix",
-        "@crates//:leptos_meta",
-        "@crates//:leptos_router",
-        "@crates//:pulldown-cmark",
-        "@crates//:rand",
-        "@crates//:reqwest",
-        "@crates//:serde",
-        "@crates//:serde-aux",
-        "@crates//:thiserror",
-        "@crates//:tokio",
-        "@crates//:tracing",
-        "@crates//:tracing-bunyan-formatter",
-        "@crates//:tracing-log",
-        "@crates//:tracing-subscriber",
-        "@rules_rust//tools/runfiles",
-    ]
+    edition = "2021",
+    deps = server_deps
 )
 
 rust_binary(
@@ -82,6 +81,7 @@ rust_binary(
         "src/**/*.rs",
     ]),
     crate_features = ["ssr"],
+    edition = "2021",
     data = [
         "leptos.toml",
         "//assets:static",
@@ -92,34 +92,7 @@ rust_binary(
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
-    deps = [":jaydanhoward"] + [
-        "@crates//:actix-files",
-        "@crates//:actix-multipart",
-        "@crates//:actix-web",
-        "@crates//:anyhow",
-        "@crates//:base64",
-        "@crates//:cfg-if",
-        "@crates//:config",
-        "@crates//:console_error_panic_hook",
-        "@crates//:futures-util",
-        "@crates//:leptos",
-        "@crates//:leptos_actix",
-        "@crates//:leptos_meta",
-        "@crates//:leptos_router",
-        "@crates//:pulldown-cmark",
-        "@crates//:rand",
-        "@crates//:reqwest",
-        "@crates//:serde",
-        "@crates//:serde-aux",
-        "@crates//:thiserror",
-        "@crates//:tokio",
-        "@crates//:tracing",
-        "@crates//:tracing-bunyan-formatter",
-        "@crates//:tracing-log",
-        "@crates//:tracing-subscriber",
-        "@rules_rust//tools/runfiles",
-
-    ],
+    deps = [":jaydanhoward"] + server_deps,
 )
 
 exports_files(["tailwind.config.js"])
