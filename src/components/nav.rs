@@ -3,7 +3,7 @@ use leptos::prelude::*;
 
 #[component]
 pub fn Nav(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
-    let routes = vec![("/about/1", "About"), ("/work", "Work")];
+    let routes = vec![("/about", "About"), ("/work", "Work")];
     let contact_links = vec![
         (
             "https://github.com/jaydh",

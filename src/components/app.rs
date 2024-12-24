@@ -10,7 +10,8 @@ use crate::components::skills::{Experienced, InterestedIn, Proficient, Skills};
 use crate::components::work::Work;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Link, Meta, Stylesheet, Title};
-use leptos_router::components::{Redirect, Route, Router, Routes};
+use leptos_router::components::*;
+use leptos_router::path;
 
 #[component]
 fn FontAwesomeCss() -> impl IntoView {
@@ -66,7 +67,32 @@ pub fn App() -> impl IntoView {
             <Router>
                 <main>
                     <Nav set_dark_mode_enabled=set_dark_mode_enabled />
-                    <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center"></div>
+                    <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
+                        <Routes fallback=|| "Not found">
+                            <Route
+                                path=path!("/")
+                                view=move || view! { <Redirect path="/about" /> }
+                            />
+                            <Route path=path!("about") view=About />
+                            <ParentRoute path=path!("work") view=Work>
+                                <Route
+                                    path=path!("")
+                                    view=move || view! { <Redirect path="/work/dev" /> }
+                                />
+                                <Route path=path!("dev") view=Dev />
+                                <ParentRoute path=path!("projects") view=Projects>
+                                    <Route path=path!("life") view=Life />
+                                    <Route path=path!("path") view=PathSearch />
+                                    <Route
+                                        path=path!("")
+                                        view=move || {
+                                            view! { <Redirect path="/work/projects/life" /> }
+                                        }
+                                    />
+                                </ParentRoute>
+                            </ParentRoute>
+                        </Routes>
+                    </div>
                 </main>
             </Router>
         </div>
