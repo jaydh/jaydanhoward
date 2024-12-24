@@ -1,1 +1,4 @@
-build --@rules_rust//rust/toolchain/channel=nightly --enable_workspace
+common --enable_bzlmod
+common --enable_workspace
+
+build --@rules_rust//rust/toolchain/channel=nightly
