@@ -10,11 +10,6 @@ platform(
     ],
 )
 
-rust_bindgen_toolchain(
-    name = "wasm_bindgen_toolchain",
-    bindgen = "@wasm_bindgen//:wasm-bindgen",
-)
-
 rust_binary(
     name = "jaydanhoward_wasm",
     edition = "2021",
