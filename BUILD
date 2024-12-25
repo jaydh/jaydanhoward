@@ -39,7 +39,7 @@ server_deps = [
 ]
 
 
-rust_binary(
+rust_shared_library(
     name = "jaydanhoward",
     edition = "2021",
     srcs = glob([
@@ -55,10 +55,12 @@ rust_binary(
     deps = [
         "@wasm_crates//:anyhow",
         "@wasm_crates//:cfg-if",
+        "@wasm_crates//:console_log",
         "@wasm_crates//:console_error_panic_hook",
         "@wasm_crates//:leptos",
         "@wasm_crates//:leptos_meta",
         "@wasm_crates//:leptos_router",
+        "@wasm_crates//:log",
         "@wasm_crates//:rand",
         "@wasm_crates//:serde",
         "@wasm_crates//:wasm-bindgen",

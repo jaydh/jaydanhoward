@@ -7,6 +7,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     use actix_web::{web, HttpServer};
     use leptos::prelude::*;
     use leptos_actix::{generate_route_list, LeptosRoutes};
+    use leptos_meta::MetaTags;
     use runfiles::{rlocation, Runfiles};
     use tracing::log;
 
@@ -45,6 +46,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                                 <meta charset="utf-8"/>
                                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                                 <HydrationScripts options=leptos_options.clone()/>
+                                <MetaTags/>
                             </head>
                             <body>
                                 <App/>

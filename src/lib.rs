@@ -1,9 +1,9 @@
-use cfg_if::cfg_if;
+mod components;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
-    use app::*;
+    use crate::components::App;
 
     // initializes logging using the `log` crate
     _ = console_log::init_with_level(log::Level::Debug);

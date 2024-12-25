@@ -158,6 +158,9 @@ crates_repository(
         "cfg-if": crate.spec(
             version = "1",
         ),
+        "console_log": crate.spec(
+            version = "1.0.0",
+        ),
         "console_error_panic_hook": crate.spec(
             version = "0.1",
         ),
@@ -175,6 +178,9 @@ crates_repository(
         "leptos_router": crate.spec(
             version = "0.7.2",
             features = ["nightly"]
+        ),
+        "log": crate.spec(
+            version = "0.4.22",
         ),
         "rand": crate.spec(
             version = "0.8.5",

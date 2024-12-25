@@ -1,5 +1,5 @@
 {
-  "checksum": "e772a23f3269fd1e7dbecec95d7d232cc21e7b0071a562a0b804369f7536d344",
+  "checksum": "79431618e05ac45c1988a7ad76bcdb8a9d7d014e3abd058e17eb7af874c1576a",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -1424,6 +1424,64 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "console_log 1.0.0": {
+      "name": "console_log",
+      "version": "1.0.0",
+      "package_url": "https://github.com/iamcodemaker/console_log",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/console_log/1.0.0/download",
+          "sha256": "be8aed40e4edbf4d3b4431ab260b63fdc40f5780a4766824329ea0f1eefe3c0f"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "console_log",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "console_log",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "log 0.4.22",
+              "target": "log"
+            },
+            {
+              "id": "web-sys 0.3.76",
+              "target": "web_sys"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2018",
+        "version": "1.0.0"
+      },
+      "license": "MIT/Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "const_format 0.2.34": {
       "name": "const_format",
       "version": "0.2.34",
@@ -1906,6 +1964,10 @@
               "target": "console_error_panic_hook"
             },
             {
+              "id": "console_log 1.0.0",
+              "target": "console_log"
+            },
+            {
               "id": "getrandom 0.2.15",
               "target": "getrandom"
             },
@@ -1920,6 +1982,10 @@
             {
               "id": "leptos_router 0.7.2",
               "target": "leptos_router"
+            },
+            {
+              "id": "log 0.4.22",
+              "target": "log"
             },
             {
               "id": "rand 0.8.5",
@@ -14237,10 +14303,12 @@
     "anyhow 1.0.95",
     "cfg-if 1.0.0",
     "console_error_panic_hook 0.1.7",
+    "console_log 1.0.0",
     "getrandom 0.2.15",
     "leptos 0.7.2",
     "leptos_meta 0.7.2",
     "leptos_router 0.7.2",
+    "log 0.4.22",
     "rand 0.8.5",
     "serde 1.0.216",
     "serde-aux 4.5.0",
