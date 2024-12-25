@@ -63,10 +63,13 @@ pub async fn upload_lighthouse_report(
     let r = Runfiles::create().expect("Must run using bazel with runfiles");
     let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate main");
     let file_path = format!("{}/lighthouse.html", assets_path.to_string_lossy());
+
     let mut file = std::fs::OpenOptions::new()
+        .create(true)
         .truncate(true)
         .write(true)
-        .open(&file_path)?;
+        .open(&file_path)
+        .expect("Failed to open file");
 
     let mut file_contents: Vec<u8> = Vec::new();
     while let Some(item) = payload.next().await {
@@ -76,6 +79,7 @@ pub async fn upload_lighthouse_report(
             file_contents.extend_from_slice(&chunk);
         }
     }
+
     let _ = file.write_all(&file_contents);
 
     log::info!("Successfully written report to {}", &file_path);
