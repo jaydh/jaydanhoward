@@ -24,6 +24,8 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
+      - name: Install Bazelisk
+        uses: bazelbuild/setup-bazelisk@v2
       - name: Bazel Action
         run: |
           bazel run jaydanhoward_image_push
