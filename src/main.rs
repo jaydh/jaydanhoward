@@ -1,5 +1,4 @@
 mod components;
-mod configuration;
 mod prometheus_client;
 mod routes;
 mod startup;
