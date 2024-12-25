@@ -19,17 +19,15 @@ pub async fn run() -> Result<(), std::io::Error> {
     let leptos_toml_path = rlocation!(r, "_main/leptos.toml").expect("Failed to locate runfile");
     let main_path = rlocation!(r, "_main").expect("Failed to locate main");
 
-    let conf = get_configuration(Some(&leptos_toml_path.to_string_lossy().to_string()))
+    let conf = get_configuration(Some(leptos_toml_path.to_string_lossy().as_ref()))
         .expect("Failed to read conf");
 
     let addr = conf.leptos_options.site_addr;
 
     log::info!("Starting Server on {}", addr);
 
-    let server = HttpServer::new(move || {
+    HttpServer::new(move || {
         let routes = generate_route_list(App);
-        let leptos_options = &conf.leptos_options;
-        let site_root = &leptos_options.site_root;
 
         actix_web::App::new()
             .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
@@ -58,12 +56,10 @@ pub async fn run() -> Result<(), std::io::Error> {
                     }
                 }
             })
-            .service(Files::new("/", main_path.to_string_lossy().to_string()))
+            .service(Files::new("/", main_path.to_string_lossy().as_ref()))
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?
     .run()
-    .await;
-
-    server
+    .await
 }
