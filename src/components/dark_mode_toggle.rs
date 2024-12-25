@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_meta::Meta;
 
-#[server(ToggleDarkMode, "/api")]
+#[server]
 pub async fn toggle_dark_mode(prefers_dark: bool) -> Result<bool, ServerFnError> {
     use actix_web::http::header::{HeaderMap, HeaderValue, SET_COOKIE};
     use leptos_actix::{ResponseOptions, ResponseParts};
@@ -61,25 +61,18 @@ pub fn initial_prefers_dark() -> bool {
 }
 
 #[component]
-pub fn DarkModeToggle(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView {
+pub fn DarkModeToggle(
+    dark_mode_enabled: ReadSignal<bool>,
+    set_dark_mode_enabled: WriteSignal<bool>,
+) -> impl IntoView {
     let initial = initial_prefers_dark();
 
-    let toggle_dark_mode_action = ServerAction::<ToggleDarkMode>::new();
-    let input = toggle_dark_mode_action.input();
-    let value = toggle_dark_mode_action.value();
-
-    let prefers_dark = move || match (input(), value()) {
-        (Some(submission), _) => submission.prefers_dark,
-        (_, Some(Ok(value))) => value,
-        _ => initial,
-    };
-
     create_effect(move |_| {
-        set_dark_mode_enabled(prefers_dark());
+        set_dark_mode_enabled(initial);
     });
 
     let color_scheme = move || {
-        if prefers_dark() {
+        if dark_mode_enabled() {
             "dark".to_string()
         } else {
             "light".to_string()
@@ -88,15 +81,19 @@ pub fn DarkModeToggle(set_dark_mode_enabled: WriteSignal<bool>) -> impl IntoView
 
     view! {
         <Meta name="color-scheme" content=color_scheme />
-        <ActionForm action=toggle_dark_mode_action>
-            <input type="hidden" name="prefers_dark" value=move || (!prefers_dark()).to_string() />
-            <button
-                type="submit"
-                class="fixed bottom-12 right-20"
-                aria-label="light-dark-mode-toggle"
-            >
-                <i class="far fa-lightbulb"></i>
-            </button>
-        </ActionForm>
+        <input type="hidden" name="prefers_dark" value=move || (!dark_mode_enabled()).to_string() />
+        <button
+            type="submit"
+            class="fixed bottom-12 right-20"
+            aria-label="light-dark-mode-toggle"
+            on:click=move |_| {
+                let dark_mode = dark_mode_enabled();
+                leptos::task::spawn_local(async move {
+                    let _ = toggle_dark_mode(!dark_mode).await;
+                });
+            }
+        >
+            <i class="far fa-lightbulb"></i>
+        </button>
     }
 }

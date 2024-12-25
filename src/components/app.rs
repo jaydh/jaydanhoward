@@ -66,7 +66,10 @@ pub fn App() -> impl IntoView {
                             }
                         }
                     />
-                    <Nav set_dark_mode_enabled=set_dark_mode_enabled />
+                    <Nav
+                        dark_mode_enabled=dark_mode_enabled
+                        set_dark_mode_enabled=set_dark_mode_enabled
+                    />
                     <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
                         <Routes fallback=|| "Not found">
                             <Route
