@@ -9,10 +9,25 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 jobs:
+  clippy:
+    name: Push jaydanhoward image to Harbor
+    runs-on: arc-runner-set-k8s
+    container: ${{ vars.RUNNER_IMAGE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Bazelisk
+        uses: bazelbuild/setup-bazelisk@v2
+      - name: Clippy
+        run: |
+          bazel build clippy
   harbor-image:
     name: Push jaydanhoward image to Harbor
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
+    needs: [clippy]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,13 +41,14 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Install Bazelisk
         uses: bazelbuild/setup-bazelisk@v2
-      - name: Bazel Action
+      - name: Bazel Push
         run: |
           bazel run jaydanhoward_image_push
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
+    needs: [clippy]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
