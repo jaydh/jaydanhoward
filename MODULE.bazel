@@ -1,0 +1,55 @@
+module(
+    name = "jaydanhoward",
+    version = "1.0",
+)
+
+bazel_dep(
+    name = "rules_pkg",
+    version = "1.0.1",
+)
+bazel_dep(name = "bazel_skylib", version = "1.7.1")
+bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "aspect_bazel_lib", version = "2.10.0")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_file(
+    name = "tailwind_x86",
+    executable = True,
+    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
+)
+
+http_file(
+    name = "tailwind_arm",
+    executable = True,
+    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
+)
+
+http_archive(
+    name = "wasm_bindgen",
+    build_file = "@//:wasm_bindgen.BUILD",
+    sha256 = "0ae33d77b6f4fe09b294fa245764dbb05a3a1aeefeb7696cb365760d3abbdc51",
+    strip_prefix = "wasm-bindgen-0.2.99-x86_64-unknown-linux-musl",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-x86_64-unknown-linux-musl.tar.gz"],
+)
+
+bazel_dep(name = "rules_oci", version = "2.2.0")
+
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "distroless_base",
+    image = "gcr.io/distroless/base",
+    platforms = ["linux/amd64"],
+    tag = "latest",
+)
+
+oci.pull(
+    name = "distroless_cc",
+    image = "gcr.io/distroless/cc",
+    platforms = ["linux/amd64"],
+    tag = "latest",
+)
+
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_cc")
