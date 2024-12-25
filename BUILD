@@ -1,6 +1,7 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push")
 
 server_deps = [
     "@server_crates//:actix-files",
@@ -30,6 +31,20 @@ server_deps = [
     "@rules_rust//tools/runfiles",
 ]
 
+wasm_deps = [
+    "@wasm_crates//:anyhow",
+    "@wasm_crates//:cfg-if",
+    "@wasm_crates//:console_log",
+    "@wasm_crates//:console_error_panic_hook",
+    "@wasm_crates//:leptos",
+    "@wasm_crates//:leptos_meta",
+    "@wasm_crates//:leptos_router",
+    "@wasm_crates//:log",
+    "@wasm_crates//:rand",
+    "@wasm_crates//:serde",
+    "@wasm_crates//:wasm-bindgen",
+    "@wasm_crates//:web-sys",
+]
 
 rust_shared_library(
     name = "jaydanhoward",
@@ -43,20 +58,7 @@ rust_shared_library(
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     visibility = ["//visibility:public"],
-    deps = [
-        "@wasm_crates//:anyhow",
-        "@wasm_crates//:cfg-if",
-        "@wasm_crates//:console_log",
-        "@wasm_crates//:console_error_panic_hook",
-        "@wasm_crates//:leptos",
-        "@wasm_crates//:leptos_meta",
-        "@wasm_crates//:leptos_router",
-        "@wasm_crates//:log",
-        "@wasm_crates//:rand",
-        "@wasm_crates//:serde",
-        "@wasm_crates//:wasm-bindgen",
-        "@wasm_crates//:web-sys",
-    ]
+    deps = wasm_deps
 )
 
 js_rust_wasm_bindgen(
@@ -85,6 +87,20 @@ rust_binary(
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     deps = server_deps,
+)
+
+pkg_tar(
+    name = "jaydanhoward_tar",
+    srcs = [":jaydanhoward_bin"],
+)
+
+oci_image(
+    name = "jaydanhoward_image",
+    base = "@distroless_base",
+    entrypoint = ["/app/jaydanhoward/jaydanhoward_bin"],
+    tars = [
+        ":jaydanhoward_tar",
+    ],
 )
 
 exports_files(["tailwind.config.js"])
