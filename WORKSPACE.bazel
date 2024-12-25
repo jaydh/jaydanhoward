@@ -169,15 +169,15 @@ crates_repository(
             version = "0.7.2",
             features = ["hydrate", "nightly"]
         ),
-        "rand": crate.spec(
-            version = "0.8.5",
-        ),
         "leptos_meta": crate.spec(
             version = "0.7.2",
         ),
         "leptos_router": crate.spec(
             version = "0.7.2",
             features = ["nightly"]
+        ),
+        "rand": crate.spec(
+            version = "0.8.5",
         ),
         "serde": crate.spec(
             version = "1.0.183",

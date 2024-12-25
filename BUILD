@@ -10,33 +10,6 @@ platform(
     ],
 )
 
-rust_binary(
-    name = "jaydanhoward",
-    edition = "2021",
-    srcs = glob([
-        "src/**/*.rs",
-    ]),
-    tags = ["manual"],
-    crate_features = ["hydrate"],
-    rustc_env = {
-        "SERVER_FN_OVERRIDE_KEY": "bazel",
-    },
-    platform = ":wasm",
-    visibility = ["//visibility:public"],
-    deps = [
-        "@wasm_crates//:anyhow",
-        "@wasm_crates//:cfg-if",
-        "@wasm_crates//:console_error_panic_hook",
-        "@wasm_crates//:leptos",
-        "@wasm_crates//:leptos_meta",
-        "@wasm_crates//:leptos_router",
-        "@wasm_crates//:rand",
-        "@wasm_crates//:serde",
-        "@wasm_crates//:wasm-bindgen",
-        "@wasm_crates//:web-sys",
-    ]
-)
-
 server_deps = [
     "@server_crates//:actix-files",
     "@server_crates//:actix-multipart",
@@ -65,6 +38,41 @@ server_deps = [
     "@rules_rust//tools/runfiles",
 ]
 
+
+rust_binary(
+    name = "jaydanhoward",
+    edition = "2021",
+    srcs = glob([
+        "src/**/*.rs",
+    ]),
+    tags = ["manual"],
+    crate_features = ["hydrate"],
+    rustc_env = {
+        "SERVER_FN_OVERRIDE_KEY": "bazel",
+    },
+    platform = ":wasm",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@wasm_crates//:anyhow",
+        "@wasm_crates//:cfg-if",
+        "@wasm_crates//:console_error_panic_hook",
+        "@wasm_crates//:leptos",
+        "@wasm_crates//:leptos_meta",
+        "@wasm_crates//:leptos_router",
+        "@wasm_crates//:rand",
+        "@wasm_crates//:serde",
+        "@wasm_crates//:wasm-bindgen",
+        "@wasm_crates//:web-sys",
+    ]
+)
+
+js_rust_wasm_bindgen(
+    name = "jaydanhoward_wasm",
+    target = "web",
+    wasm_file = ":jaydanhoward",
+    visibility = ["//visibility:public"],
+)
+
 rust_binary(
     name = "jaydanhoward_bin",
     srcs = glob([
@@ -73,8 +81,7 @@ rust_binary(
     crate_features = ["ssr"],
     edition = "2021",
     data = [
-        ":jaydanhoward",
-        "//pkg:jaydanhoward_wasm",
+        ":jaydanhoward_wasm",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",
@@ -84,7 +91,7 @@ rust_binary(
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
-    deps = [":jaydanhoward"] + server_deps,
+    deps = server_deps,
 )
 
 exports_files(["tailwind.config.js"])

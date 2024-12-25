@@ -35,11 +35,6 @@ pub async fn run() -> Result<(), std::io::Error> {
             .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
             .route("/health_check", web::get().to(health_check))
             .route("/robots.txt", web::get().to(robots_txt))
-            .service(Files::new(
-                "/assets",
-                assets_path.to_string_lossy().to_string(),
-            ))
-            .service(Files::new("/pkg", pkg_path.to_string_lossy().to_string()))
             .leptos_routes(routes, {
                 let leptos_options = conf.leptos_options.clone();
                 move || {
@@ -58,6 +53,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                     }
                 }
             })
+            .service(Files::new("/", "./"))
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?
