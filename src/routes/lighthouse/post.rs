@@ -82,5 +82,7 @@ pub async fn upload_lighthouse_report(
 
     let _ = file.write_all(&file_contents);
 
+    log::info!("Successfully written report to {}", &file_path);
+
     Ok(HttpResponse::Ok().finish())
 }
