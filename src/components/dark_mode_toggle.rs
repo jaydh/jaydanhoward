@@ -68,7 +68,7 @@ pub fn DarkModeToggle(
 ) -> impl IntoView {
     let initial = initial_prefers_dark();
 
-    create_effect(move |_| {
+    Effect::new(move |_| {
         set_dark_mode_enabled(initial);
     });
 

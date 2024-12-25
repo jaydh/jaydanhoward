@@ -7,7 +7,7 @@ pub fn Link(path: &'static str, display_text: &'static str) -> impl IntoView {
     let location = use_location();
     let pathname = move || location.pathname.get();
 
-    let is_match = move || pathname().contains(&path);
+    let is_match = move || pathname().contains(path);
     let is_not_match = move || !is_match();
 
     view! {

@@ -25,7 +25,7 @@ pub fn Nav(
         ),
     ];
 
-    let (show_contact_links, set_show_contact_links) = create_signal(false);
+    let (show_contact_links, set_show_contact_links) = signal(false);
 
     view! {
         <nav class="sticky flex flex-row pointer-events-auto m-20 text-xl">
@@ -76,7 +76,7 @@ pub fn Nav(
                     </button>
                     <div class="absolute mt-10">
                         <Show when=move || {
-                            show_contact_links() == true
+                            show_contact_links()
                         }>
                             {contact_links
                                 .clone()

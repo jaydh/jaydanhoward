@@ -28,7 +28,7 @@ struct CellVec(Vec<Cell>);
 impl fmt::Display for CellVec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, item) in self.0.iter().enumerate() {
-            write!(f, "Item {}: {}\n", i, item)?;
+            writeln!(f, "Item {}: {}", i, item)?;
         }
         Ok(())
     }
@@ -61,7 +61,7 @@ fn prepare_neighbors(cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>
     set_cells(CellVec(next_cells));
 }
 
-fn get_alive_neighbor_count(cell: &Cell, cells: &Vec<Cell>) -> i32 {
+fn get_alive_neighbor_count(cell: &Cell, cells: &[Cell]) -> i32 {
     let mut count = 0;
     for other_cell_index in &cell.neighbors {
         if cells[*other_cell_index].alive {
@@ -76,15 +76,13 @@ fn calculate_next(cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>) {
     let mut next_cells = current_cells.clone();
 
     for cell in &mut next_cells {
-        let alive_neighbor_count = get_alive_neighbor_count(&cell, current_cells);
+        let alive_neighbor_count = get_alive_neighbor_count(cell, current_cells);
         if cell.alive {
             if alive_neighbor_count != 2 && alive_neighbor_count != 3 {
                 cell.alive = false;
             }
-        } else {
-            if alive_neighbor_count == 3 {
-                cell.alive = true;
-            }
+        } else if alive_neighbor_count == 3 {
+            cell.alive = true;
         }
     }
 
@@ -116,8 +114,8 @@ fn Controls(
     cells: ReadSignal<CellVec>,
     set_cells: WriteSignal<CellVec>,
 ) -> impl IntoView {
-    let (interval_handle, set_interval_handle) = create_signal(None::<IntervalHandle>);
-    let (interval_ms, set_interval_ms) = create_signal(200);
+    let (interval_handle, set_interval_handle) = signal(None::<IntervalHandle>);
+    let (interval_ms, set_interval_ms) = signal(200);
 
     let create_simulation_interval = move || {
         if let Some(handle) = interval_handle() {
@@ -222,8 +220,8 @@ fn Grid(
                                             view! {
                                                 <div
                                                     class="w-10 h-10 border-2 border-charcoal dark:border-gray"
-                                                    class=("bg-charcoal", move || is_alive() == true)
-                                                    class=("dark:bg-gray", move || is_alive() == true)
+                                                    class=("bg-charcoal", move || is_alive())
+                                                    class=("dark:bg-gray", move || is_alive())
                                                     on:click=move |_| {
                                                         match cells()
                                                             .0
@@ -269,11 +267,11 @@ fn Grid(
 
 #[component]
 pub fn Life() -> impl IntoView {
-    let (cells, set_cells) = create_signal::<CellVec>(CellVec(Vec::new()));
+    let (cells, set_cells) = signal::<CellVec>(CellVec(Vec::new()));
     let alive_cells = move || cells().0.into_iter().filter(|c| c.alive).count();
 
-    let (grid_size, set_grid_size) = create_signal(25);
-    let (alive_probability, set_alive_probability) = create_signal(0.6);
+    let (grid_size, set_grid_size) = signal(25);
+    let (alive_probability, set_alive_probability) = signal(0.6);
 
     view! {
         <SourceAnchor href="#[git]" />

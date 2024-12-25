@@ -2,6 +2,7 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_l
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("@rules_rust//rust:defs.bzl", "rust_clippy")
 
 server_deps = [
     "@server_crates//:actix-files",
@@ -117,6 +118,14 @@ oci_push(
     image = ":jaydanhoward_image",
     repository = "harbor.home.local/library/jaydanhoward",
     remote_tags = ["latest"]
+)
+
+rust_clippy(
+    name = "clippy",
+    testonly = True,
+    deps = [
+        ":jaydanhoward_bin",
+    ],
 )
 
 exports_files(["tailwind.config.js"])
