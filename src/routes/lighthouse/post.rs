@@ -43,7 +43,7 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
         Err(_) => return Err(LighthouseError::DisabledError()),
     }
 
-    return Ok(());
+    Ok(())
 }
 
 #[cfg(feature = "ssr")]
@@ -64,7 +64,7 @@ pub async fn upload_lighthouse_report(
     let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate main");
 
     let mut file = std::fs::OpenOptions::new()
-        .create(true)
+        .truncate(true)
         .write(true)
         .open(format!("{}/lighthouse.html", assets_path.to_string_lossy()))?;
 

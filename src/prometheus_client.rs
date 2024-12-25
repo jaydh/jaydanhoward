@@ -22,6 +22,7 @@ pub struct PrometheusMetric {
 }
 
 #[cfg(feature = "ssr")]
+#[allow(dead_code)]
 pub async fn query_prometheus(query: &str) -> Result<PrometheusData, anyhow::Error> {
     use reqwest::Client;
     let client = Client::new();

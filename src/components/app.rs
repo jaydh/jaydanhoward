@@ -6,7 +6,7 @@ use crate::components::path_search::PathSearch;
 use crate::components::projects::Projects;
 use crate::components::work::Work;
 use leptos::prelude::*;
-use leptos_meta::{provide_meta_context, Html, Link, Meta, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Stylesheet, Title};
 use leptos_router::components::*;
 use leptos_router::path;
 
@@ -44,7 +44,7 @@ fn FontAwesome() -> impl IntoView {
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
-    let (dark_mode_enabled, set_dark_mode_enabled) = create_signal(true);
+    let (dark_mode_enabled, set_dark_mode_enabled) = signal(true);
 
     view! {
         <Stylesheet href="/assets/style.css" />
