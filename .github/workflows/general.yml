@@ -50,24 +50,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Copy ca cert
-        run: |
-          sudo cp /usr/local/share/ca-certificates/ca.crt /etc/ssl/certs/ca-certificates.crt
-      - uses: docker/metadata-action@v3
-        id: metadata
-        with:
-          images: harbor.home.local/library/jaydanhoward
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - uses: int128/kaniko-action@v1
+      - name: Bazel Action
+        uses: ngalaiko/bazel-action@2.0.0
         with:
-          push: true
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
+          args: run jaydanhoward_image_push
+
   harbor-ligthouse-image:
     name: Push lighthouse image to Harbor
     needs: [test, fmt, clippy]
