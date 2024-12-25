@@ -2,7 +2,6 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_l
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
-load("//bzl:runfiles.bzl", "runfiles")
 
 server_deps = [
     "@server_crates//:actix-files",
@@ -90,15 +89,11 @@ rust_binary(
     deps = server_deps,
 )
 
-runfiles(
-    name = "jaydanhoward_runfiles",
-    binary = ":jaydanhoward_bin",
-    root = "/app",
-)
-
 pkg_tar(
     name = "jaydanhoward_tar",
-    srcs = [":jaydanhoward_runfiles"],
+    srcs = [":jaydanhoward_bin"],
+    package_dir = "/app",
+    include_runfiles = True
 )
 
 oci_image(
