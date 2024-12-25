@@ -1,7 +1,8 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_push")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("//bzl:runfiles.bzl", "runfiles")
 
 server_deps = [
     "@server_crates//:actix-files",
@@ -89,18 +90,31 @@ rust_binary(
     deps = server_deps,
 )
 
+runfiles(
+    name = "jaydanhoward_runfiles",
+    binary = ":jaydanhoward_bin",
+    root = "/app",
+)
+
 pkg_tar(
     name = "jaydanhoward_tar",
-    srcs = [":jaydanhoward_bin"],
+    srcs = [":jaydanhoward_runfiles"],
 )
 
 oci_image(
     name = "jaydanhoward_image",
-    base = "@distroless_base",
-    entrypoint = ["/app/jaydanhoward/jaydanhoward_bin"],
+    base = "@distroless_cc",
+    entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
     ],
 )
+
+oci_load(
+    name = "jaydanhoward_image_load",
+    image = ":jaydanhoward_image",
+    repo_tags = ["harbor.home.local/library/jaydanhoward:latest"]
+)
+
 
 exports_files(["tailwind.config.js"])

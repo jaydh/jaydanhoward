@@ -9,6 +9,7 @@ bazel_dep(
 )
 bazel_dep(name = "bazel_skylib", version = "1.7.1")
 bazel_dep(name = "platforms", version = "0.0.10")
+bazel_dep(name = "aspect_bazel_lib", version = "2.10.0")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
@@ -43,4 +44,12 @@ oci.pull(
     platforms = ["linux/amd64"],
     tag = "latest",
 )
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64")
+
+oci.pull(
+    name = "distroless_cc",
+    image = "gcr.io/distroless/cc",
+    platforms = ["linux/amd64"],
+    tag = "latest",
+)
+
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_cc")
