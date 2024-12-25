@@ -79,7 +79,7 @@ struct VecCoordinate(Vec<CoordinatePair>);
 impl fmt::Display for VecCoordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, item) in self.0.iter().enumerate() {
-            write!(f, "Item {}: {}\n", i, item)?;
+            writeln!(f, "Item {}: {}", i, item)?;
         }
         Ok(())
     }
@@ -183,8 +183,8 @@ fn add_candidates(
 
     set_current_path_candidates.update(|path| {
         if viable_neighbors.iter().any(|c| {
-            distance(&corners.first().unwrap(), c)
-                < distance(&corners.first().unwrap(), &current_cell().unwrap())
+            distance(corners.first().unwrap(), c)
+                < distance(corners.first().unwrap(), &current_cell().unwrap())
         }) {
             path.0.extend(viable_neighbors);
             path.0.sort_by(|a, b| {
@@ -271,6 +271,7 @@ fn add_candidates_walls(
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn calculate_next(
     grid_size: ReadSignal<u64>,
     grid: ReadSignal<Grid>,
@@ -312,7 +313,7 @@ fn calculate_next(
 
             set_current_cell(Some(*next_visit_coord));
             set_grid.update(|grid| {
-                let cell = grid.0.get_mut(&next_visit_coord).unwrap();
+                let cell = grid.0.get_mut(next_visit_coord).unwrap();
                 cell.visited = true;
             });
         }
@@ -336,8 +337,8 @@ fn Controls(
     algorithm: ReadSignal<Algorithm>,
     set_algorithm: WriteSignal<Algorithm>,
 ) -> impl IntoView {
-    let (interval_handle, set_interval_handle) = create_signal(None::<IntervalHandle>);
-    let (interval_ms, set_interval_ms) = create_signal(200);
+    let (interval_handle, set_interval_handle) = signal(None::<IntervalHandle>);
+    let (interval_ms, set_interval_ms) = signal(200);
     let visited_count = move || grid().0.values().filter(|c| c.visited).count();
 
     let create_simulation_interval = move || {
@@ -532,31 +533,31 @@ fn SearchGrid(
                                             view! {
                                                 <div
                                                     class="w-10 h-10 border-2 border-charcoal dark:border-gray"
-                                                    class=("bg-green-500", move || is_start_cell() == true)
-                                                    class=("bg-yellow-500", move || is_end_cell() == true)
-                                                    class=("bg-red-500", move || { is_current_cell() == true })
+                                                    class=("bg-green-500", move || is_start_cell())
+                                                    class=("bg-yellow-500", move || is_end_cell())
+                                                    class=("bg-red-500", move || { is_current_cell() })
 
                                                     class=(
                                                         "bg-blue-500",
                                                         move || {
-                                                            is_start_cell() == false && is_end_cell() == false
-                                                                && is_current_cell() == false && is_visited() == true
+                                                            !is_start_cell() && !is_end_cell() && !is_current_cell()
+                                                                && is_visited()
                                                         },
                                                     )
 
                                                     class=(
                                                         "bg-charcoal",
                                                         move || {
-                                                            is_start_cell() == false && is_end_cell() == false
-                                                                && is_visited() == false && is_passable() == true
+                                                            !is_start_cell() && !is_end_cell() && !is_visited()
+                                                                && is_passable()
                                                         },
                                                     )
 
                                                     class=(
                                                         "dark:bg-gray",
                                                         move || {
-                                                            is_start_cell() == false && is_end_cell() == false
-                                                                && is_visited() == false && is_passable() == true
+                                                            !is_start_cell() && !is_end_cell() && !is_visited()
+                                                                && is_passable()
                                                         },
                                                     )
 
@@ -579,17 +580,16 @@ fn SearchGrid(
 
 #[component]
 pub fn PathSearch() -> impl IntoView {
-    let (grid_size, set_grid_size) = create_signal(25);
-    let (grid, set_grid) = create_signal(Grid(HashMap::new()));
-    let (obstacle_probability, set_obstacle_probability) = create_signal(0.2);
-    let (current_cell, set_current_cell) = create_signal(None::<CoordinatePair>);
-    let (algorithm, set_algorithm) = create_signal(Algorithm::Wall);
+    let (grid_size, set_grid_size) = signal(25);
+    let (grid, set_grid) = signal(Grid(HashMap::new()));
+    let (obstacle_probability, set_obstacle_probability) = signal(0.2);
+    let (current_cell, set_current_cell) = signal(None::<CoordinatePair>);
+    let (algorithm, set_algorithm) = signal(Algorithm::Wall);
 
-    let (start_cell_coord, set_start_cell_coord) = create_signal(None::<CoordinatePair>);
-    let (end_cell_coord, set_end_cell_coord) = create_signal(None::<CoordinatePair>);
-    let (current_path_candidates, set_current_path_candidates) = create_signal(VecCoordinate {
-        0: Vec::<CoordinatePair>::new(),
-    });
+    let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
+    let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
+    let (current_path_candidates, set_current_path_candidates) =
+        signal(VecCoordinate(Vec::<CoordinatePair>::new()));
 
     view! {
         <SourceAnchor href="#[git]" />
