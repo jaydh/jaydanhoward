@@ -117,5 +117,10 @@ oci_load(
     repo_tags = ["harbor.home.local/library/jaydanhoward:latest"]
 )
 
+oci_push(
+    name = "jaydanhoward_image_push",
+    image = ":jaydanhoward_image",
+    repository = "harbor.home.local/library/jaydanhoward",
+)
 
 exports_files(["tailwind.config.js"])
