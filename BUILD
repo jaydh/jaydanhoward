@@ -44,6 +44,7 @@ wasm_deps = [
     "@wasm_crates//:serde",
     "@wasm_crates//:wasm-bindgen",
     "@wasm_crates//:web-sys",
+    "@rules_rust//tools/runfiles",
 ]
 
 rust_shared_library(

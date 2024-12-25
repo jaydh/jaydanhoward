@@ -1,3 +1,5 @@
+use runfiles::{rlocation, Runfiles};
+
 #[cfg(feature = "ssr")]
 #[derive(thiserror::Error, Debug)]
 pub enum LighthouseError {
@@ -55,12 +57,16 @@ pub async fn upload_lighthouse_report(
     if credentials.is_err() {
         return Ok(HttpResponse::BadRequest().finish());
     }
+
     log::info!("Valid credentials upload_lighthouse_report");
+
+    let r = Runfiles::create().expect("Must run using bazel with runfiles");
+    let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate main");
 
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
-        .open("site/lighthouse.html")?;
+        .open(format!("{}/lighthouse.html", assets_path.to_string_lossy()))?;
 
     let mut file_contents: Vec<u8> = Vec::new();
     while let Some(item) = payload.next().await {
