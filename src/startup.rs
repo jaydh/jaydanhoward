@@ -17,7 +17,7 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let r = Runfiles::create().expect("Must run using bazel with runfiles");
     let leptos_toml_path = rlocation!(r, "_main/leptos.toml").expect("Failed to locate runfile");
-    let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate assets");
+    let main_path = rlocation!(r, "_main").expect("Failed to locate main");
 
     let conf = get_configuration(Some(&leptos_toml_path.to_string_lossy().to_string()))
         .expect("Failed to read conf");
@@ -58,7 +58,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                     }
                 }
             })
-            .service(Files::new("/", "./"))
+            .service(Files::new("/", main_path.to_string_lossy().to_string()))
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?

@@ -108,6 +108,7 @@ oci_image(
     tars = [
         ":jaydanhoward_tar",
     ],
+    workdir = "/app/jaydanhoward_bin.runfiles",
 )
 
 oci_load(

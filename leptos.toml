@@ -1,4 +1,4 @@
 [package.metadata.leptos]
 output-name = "jaydanhoward_wasm"
-site-addr = "127.0.0.1:8000"
+site-addr = "0.0.0.0:8000"
 site-pkg-dir = "./jaydanhoward_wasm"
