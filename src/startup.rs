@@ -34,6 +34,7 @@ pub async fn run() -> Result<(), std::io::Error> {
 
         actix_web::App::new()
             .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
+            .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             .route("/health_check", web::get().to(health_check))
             .route("/robots.txt", web::get().to(robots_txt))
             .leptos_routes(routes, {

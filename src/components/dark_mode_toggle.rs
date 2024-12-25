@@ -89,7 +89,10 @@ pub fn DarkModeToggle(
             on:click=move |_| {
                 let dark_mode = dark_mode_enabled();
                 leptos::task::spawn_local(async move {
-                    let _ = toggle_dark_mode(!dark_mode).await;
+                    let next = toggle_dark_mode(!dark_mode)
+                        .await
+                        .expect("Failed to update dark mode");
+                    set_dark_mode_enabled(next);
                 });
             }
         >

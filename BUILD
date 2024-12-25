@@ -2,14 +2,6 @@ load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_l
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
 
-platform(
-    name = "wasm",
-    constraint_values = [
-        "@platforms//cpu:wasm32",
-        "@platforms//os:none",
-    ],
-)
-
 server_deps = [
     "@server_crates//:actix-files",
     "@server_crates//:actix-multipart",
@@ -50,7 +42,6 @@ rust_shared_library(
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
-    platform = ":wasm",
     visibility = ["//visibility:public"],
     deps = [
         "@wasm_crates//:anyhow",
