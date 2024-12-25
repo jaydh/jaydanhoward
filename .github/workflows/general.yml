@@ -11,7 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 jobs:
   clippy:
-    name: Push jaydanhoward image to Harbor
+    name: Run Clippy
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
