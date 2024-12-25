@@ -49,7 +49,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                             <head>
                                 <meta charset="utf-8"/>
                                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-                                <AutoReload options=leptos_options.clone() />
                                 <HydrationScripts options=leptos_options.clone()/>
                             </head>
                             <body>

@@ -11,7 +11,7 @@ platform(
 )
 
 rust_binary(
-    name = "jaydanhoward_so",
+    name = "jaydanhoward",
     edition = "2021",
     srcs = glob([
         "src/**/*.rs",
@@ -65,17 +65,6 @@ server_deps = [
     "@rules_rust//tools/runfiles",
 ]
 
-rust_library(
-    name = "jaydanhoward",
-    visibility = ["//visibility:public"],
-    srcs = glob([
-        "src/**/*.rs",
-    ]),
-    crate_features = ["ssr"],
-    edition = "2021",
-    deps = server_deps
-)
-
 rust_binary(
     name = "jaydanhoward_bin",
     srcs = glob([
@@ -84,6 +73,7 @@ rust_binary(
     crate_features = ["ssr"],
     edition = "2021",
     data = [
+        ":jaydanhoward",
         "//pkg:jaydanhoward_wasm",
         "leptos.toml",
         "//assets:static",

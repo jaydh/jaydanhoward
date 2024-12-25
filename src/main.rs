@@ -1,7 +1,14 @@
+mod components;
+mod configuration;
+mod prometheus_client;
+mod routes;
+mod startup;
+mod telemtry;
+
 #[cfg(feature = "ssr")]
 #[actix_web::main]
 async fn main() -> () {
-    use jaydanhoward::startup::run;
+    use startup::run;
 
     let _ = run().await;
 }
