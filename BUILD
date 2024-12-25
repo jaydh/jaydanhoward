@@ -1,5 +1,6 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
+load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
 
 platform(
     name = "wasm",
@@ -9,8 +10,8 @@ platform(
     ],
 )
 
-rust_shared_library(
-    name = "jaydanhoward_wasm",
+rust_binary(
+    name = "jaydanhoward_so",
     edition = "2021",
     srcs = glob([
         "src/**/*.rs",
@@ -83,7 +84,7 @@ rust_binary(
     crate_features = ["ssr"],
     edition = "2021",
     data = [
-        "//pkg:jaydanhoward",
+        "//pkg:jaydanhoward_wasm",
         "leptos.toml",
         "//assets:static",
         "//assets/fonts:fonts",
