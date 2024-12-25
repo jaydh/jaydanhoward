@@ -1,8 +1,9 @@
 name: Rust
 on:
+  pull_request:
+    branches: ["main"]
   push:
-    branches:
-      - main
+    branches: ["main"]
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -24,6 +25,7 @@ jobs:
         run: |
           bazel build clippy
   harbor-image:
+    if: github.event_name == 'push'
     name: Push jaydanhoward image to Harbor
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
@@ -45,6 +47,7 @@ jobs:
         run: |
           bazel run jaydanhoward_image_push
   harbor-ligthouse-image:
+    if: github.event_name == 'push'
     name: Push lighthouse image to Harbor
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
