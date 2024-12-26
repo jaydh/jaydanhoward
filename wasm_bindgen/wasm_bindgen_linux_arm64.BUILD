@@ -1,8 +1,8 @@
 load("@bazel_skylib//rules:native_binary.bzl", "native_binary")
 
 native_binary(
-    name = "wasm_bindgen_linux_x86_64",
+    name = "wasm_bindgen_linux_arm64",
     src = "wasm-bindgen",
-    out = "wasm_bindgen_linux_x86_64",
+    out = "wasm_bindgen_linux_arm64",
     visibility = ["//visibility:public"],
 )
