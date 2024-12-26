@@ -51,26 +51,27 @@ pub fn App() -> impl IntoView {
         <FontAwesome />
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
         <Title text="Jay Dan Howard" />
-        <div
-            id="root"
-            class="flex flex-col min-w-screen min-h-screen bg-gray text-charcoal dark:bg-charcoal dark:text-gray"
-        >
-            <Router>
-                <main>
-                    <Html
-                        {..}
-                        class=move || {
-                            match dark_mode_enabled() {
-                                true => "dark",
-                                false => "light",
-                            }
-                        }
-                    />
-                    <Nav
-                        dark_mode_enabled=dark_mode_enabled
-                        set_dark_mode_enabled=set_dark_mode_enabled
-                    />
-                    <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
+        <main>
+            <Html
+                {..}
+                class=move || {
+                    match dark_mode_enabled() {
+                        true => "dark",
+                        false => "light",
+                    }
+                }
+            />
+            <div
+                id="root"
+                class="flex flex-col min-w-screen min-h-screen bg-gray text-charcoal dark:bg-charcoal dark:text-gray"
+            >
+                <Nav
+                    dark_mode_enabled=dark_mode_enabled
+                    set_dark_mode_enabled=set_dark_mode_enabled
+                />
+                <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
+                    <Router>
+
                         <Routes fallback=|| "Not found">
                             <Route
                                 path=path!("/")
@@ -95,9 +96,9 @@ pub fn App() -> impl IntoView {
                                 </ParentRoute>
                             </ParentRoute>
                         </Routes>
-                    </div>
-                </main>
-            </Router>
-        </div>
+                    </Router>
+                </div>
+            </div>
+        </main>
     }
 }
