@@ -221,6 +221,6 @@ load("@server_crates//:defs.bzl", server_crates = "crate_repositories")
 wasm_crate_repositories()
 server_crates()
 
-register_toolchains("//wasm_bindgen/rust:wasm_bindgen_toolchain")
+register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")
 register_toolchains("@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm32_toolchain")
 register_toolchains("@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm64_toolchain")
