@@ -25,11 +25,6 @@ pub async fn run() -> Result<(), std::io::Error> {
     let addr = conf.leptos_options.site_addr;
 
     log::info!("Starting Server on {}", addr);
-    let paths = std::fs::read_dir("/app/jaydanhoward_bin.runfiles/_main/assets")?; // "./" is the current directory
-
-    for path in paths {
-        println!("{}", path?.path().display());
-    }
     HttpServer::new(move || {
         let routes = generate_route_list(App);
 
