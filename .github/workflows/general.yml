@@ -44,7 +44,7 @@ jobs:
         uses: bazelbuild/setup-bazelisk@v2
       - name: Bazel Build
         run: |
-          bazel run jaydanhoward_image
+          bazel build jaydanhoward_image
       - name: Bazel Push
         if: github.event_name == 'push'
         run: |
