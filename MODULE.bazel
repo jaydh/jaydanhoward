@@ -16,24 +16,50 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
 http_file(
-    name = "tailwind_x86",
+    name = "tailwind_linux_x86_64",
     executable = True,
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
+    sha256 = "33f254b54c8754f16efbe2be1de38ca25192630dc36f164595a770d4bbf4d893"
 )
 
 http_file(
-    name = "tailwind_arm",
+    name = "tailwind_linux_arm64",
     executable = True,
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
+    sha256 = "1e6746bba6f3d34d7550889a1a009ab90ee3794a5ebce60ed10688ad10680a87"
+)
+
+http_file(
+    name = "tailwind_mac_arm64",
+    executable = True,
+    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64",
+    sha256 = "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3"
 )
 
 http_archive(
-    name = "wasm_bindgen",
-    build_file = "@//:wasm_bindgen.BUILD",
+    name = "wasm_bindgen_linux_x86_64",
+    build_file = "//wasm_bindgen:wasm_bindgen_linux_x86_64.BUILD",
     sha256 = "0ae33d77b6f4fe09b294fa245764dbb05a3a1aeefeb7696cb365760d3abbdc51",
     strip_prefix = "wasm-bindgen-0.2.99-x86_64-unknown-linux-musl",
     urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-x86_64-unknown-linux-musl.tar.gz"],
 )
+
+http_archive(
+    name = "wasm_bindgen_linux_arm64",
+    build_file = "//wasm_bindgen:wasm_bindgen_linux_arm64.BUILD",
+    sha256 = "7e1654f08020abcc9bc131f15159d7be68579088c02f1e4486e09a9de3d49e54",
+    strip_prefix = "wasm-bindgen-0.2.99-aarch64-unknown-linux-gnu",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-aarch64-unknown-linux-gnu.tar.gz"],
+)
+
+http_archive(
+    name = "wasm_bindgen_mac_arm64",
+    build_file = "//wasm_bindgen:wasm_bindgen_mac_arm64.BUILD",
+    sha256 = "e80d43ef00d0f94da07f77f42109bb10b86eb9a2a8c3dceae279c4655e77d99a",
+    strip_prefix = "wasm-bindgen-0.2.99-aarch64-apple-darwin",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-aarch64-apple-darwin.tar.gz"],
+)
+
 
 bazel_dep(name = "rules_oci", version = "2.2.0")
 
