@@ -33,11 +33,10 @@ _srcs_aspect = aspect(
 def _impl(ctx):
     f = ctx.actions.declare_file("%s.css" % ctx.label.name)
     si = ctx.attr.target[SrcsInfo]
-
     ctx.actions.run(
         outputs = [f],
         inputs = depset([ctx.file.src, ctx.file._tailwindcss_config], transitive = [si.srcs]),
-        executable = ctx.executable._tailwindcss,
+        executable = ctx.file.exe,
         arguments = [
             "--input",
             ctx.file.src.path,
@@ -62,9 +61,9 @@ tailwindcss = rule(
             mandatory = True,
             aspects = [_srcs_aspect],
         ),
-        "_tailwindcss": attr.label(
-            default = "@tailwind_x86//file",
-            executable = True,
+        "binary": attr.label(
+            mandatory = True,
+            allow_single_file = True,
             cfg = "exec",
         ),
         "_tailwindcss_config": attr.label(

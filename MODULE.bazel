@@ -19,12 +19,21 @@ http_file(
     name = "tailwind_x86",
     executable = True,
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
+    sha256 = "7d24f7fa191d2193b78cd5f5a42a6093e14409521908529f42d80b11fde1f1d4"
 )
 
 http_file(
-    name = "tailwind_arm",
+    name = "tailwind_arm64",
     executable = True,
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
+    sha256 = "69b1378b8133192d7d2feb12a116fa12d035594f58db3eff215879e4ad8cf39b"
+)
+
+http_file(
+    name = "tailwind_mac_arm64",
+    executable = True,
+    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64",
+    sha256 = "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3"
 )
 
 http_archive(
