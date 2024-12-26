@@ -30,7 +30,7 @@ WORKDIR /home/chrome
 
 ENV LEPTOS_SITE_HEALTH_ADDR="https://jaydanhoward.com/health_check"
 ENV LEPTOS_SITE_API_ADDR="https://jaydanhoward.com/api/lighthouse"
-ENV LEPTOS_SITE_TARGET_ADDR="https://jaydanhoward.com/about/1"
+ENV LEPTOS_SITE_TARGET_ADDR="https://jaydanhoward.com/about"
 
 COPY entrypoint.sh entrypoint.sh
 ENTRYPOINT ["./entrypoint.sh"]
