@@ -50,7 +50,6 @@ jobs:
         run: |
           bazel run jaydanhoward_image_push
   harbor-image-arm:
-    if: github.event_name == 'push'
     name: Push jaydanhoward image to Harbor
     runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
