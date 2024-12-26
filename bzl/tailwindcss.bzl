@@ -36,7 +36,7 @@ def _impl(ctx):
     ctx.actions.run(
         outputs = [f],
         inputs = depset([ctx.file.src, ctx.file._tailwindcss_config], transitive = [si.srcs]),
-        executable = ctx.file.exe,
+        executable = ctx.file.binary,
         arguments = [
             "--input",
             ctx.file.src.path,
