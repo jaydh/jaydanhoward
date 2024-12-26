@@ -25,7 +25,6 @@ jobs:
         run: |
           bazel build clippy
   harbor-image:
-    if: github.event_name == 'push'
     name: Push jaydanhoward image to Harbor
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
@@ -43,7 +42,11 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Install Bazelisk
         uses: bazelbuild/setup-bazelisk@v2
+      - name: Bazel Build
+        run: |
+          bazel run jaydanhoward_image
       - name: Bazel Push
+        if: github.event_name == 'push'
         run: |
           bazel run jaydanhoward_image_push
   harbor-image-arm:
@@ -65,7 +68,11 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Install Bazelisk
         uses: bazelbuild/setup-bazelisk@v2
+      - name: Bazel Build
+        run: |
+          bazel run jaydanhoward_image
       - name: Bazel Push
+        if: github.event_name == 'push'
         run: |
           bazel run jaydanhoward_image_push
   harbor-ligthouse-image:
