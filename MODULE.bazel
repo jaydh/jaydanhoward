@@ -26,7 +26,7 @@ http_file(
     name = "tailwind_linux_arm64",
     executable = True,
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
-    sha256 = "69b1378b8133192d7d2feb12a116fa12d035594f58db3eff215879e4ad8cf39b"
+    sha256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 )
 
 http_file(
