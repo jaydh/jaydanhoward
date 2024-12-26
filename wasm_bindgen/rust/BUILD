@@ -4,7 +4,11 @@ load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_vendor")
 
 rust_bindgen_toolchain(
     name = "wasm_bindgen_toolchain_impl",
-    bindgen = "@wasm_bindgen//:wasm_bindgen_cli",
+    bindgen = select({
+        "//:linux_arm64": "@wasm_bindgen//:wasm_bindgen_linux_arm64",
+        "//:linux_x86_64": "@wasm_bindgen//:wasm_bindgen_linux_x86_64",
+        "//:macos_arm64": "@wasm_bindgen//:wasm_bindgen_mac_arm64",
+    })
 )
 
 toolchain(
