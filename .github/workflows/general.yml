@@ -25,7 +25,7 @@ jobs:
         run: |
           bazel build clippy
   harbor-image:
-    name: Push jaydanhoward image to Harbor
+    name: Build JDH Image - x86_64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [clippy]
@@ -50,7 +50,7 @@ jobs:
         run: |
           bazel run jaydanhoward_image_push
   harbor-image-arm:
-    name: Push jaydanhoward image to Harbor
+    name: Build JDH Image - Arm
     runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [clippy]
@@ -76,7 +76,7 @@ jobs:
           bazel run jaydanhoward_image_push
   harbor-ligthouse-image:
     if: github.event_name == 'push'
-    name: Push lighthouse image to Harbor
+    name: Build lighthouse image
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [clippy]
