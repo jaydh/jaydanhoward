@@ -249,7 +249,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "iJZZ9aBHnYHHAy1nTAK++jt2xuVOmEK880oZBsgVW3I=",
-        "usagesDigest": "+r9HPSGUWpmRTIMWwNeslSCtt/GA1CUFoWwshgTvcY8=",
+        "usagesDigest": "tCWoJvI81+9Ep0mDMtp4B7V83LwGsdUDVJt9UUmOHWQ=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -294,43 +294,43 @@
               "reproducible": true
             }
           },
-          "distroless_cc_linux_amd64": {
+          "distroless_cc_debian12_linux_amd64": {
             "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
             "attributes": {
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/cc",
+              "repository": "distroless/cc-debian12",
               "identifier": "latest",
               "platform": "linux/amd64",
-              "target_name": "distroless_cc_linux_amd64",
+              "target_name": "distroless_cc_debian12_linux_amd64",
               "bazel_tags": []
             }
           },
-          "distroless_cc_linux_arm64_v8": {
+          "distroless_cc_debian12_linux_arm64_v8": {
             "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
             "attributes": {
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/cc",
+              "repository": "distroless/cc-debian12",
               "identifier": "latest",
               "platform": "linux/arm64/v8",
-              "target_name": "distroless_cc_linux_arm64_v8",
+              "target_name": "distroless_cc_debian12_linux_arm64_v8",
               "bazel_tags": []
             }
           },
-          "distroless_cc": {
+          "distroless_cc_debian12": {
             "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_alias",
             "attributes": {
-              "target_name": "distroless_cc",
+              "target_name": "distroless_cc_debian12",
               "scheme": "https",
               "registry": "gcr.io",
-              "repository": "distroless/cc",
+              "repository": "distroless/cc-debian12",
               "identifier": "latest",
               "platforms": {
-                "@@platforms//cpu:x86_64": "@distroless_cc_linux_amd64",
-                "@@platforms//cpu:arm64": "@distroless_cc_linux_arm64_v8"
+                "@@platforms//cpu:x86_64": "@distroless_cc_debian12_linux_amd64",
+                "@@platforms//cpu:arm64": "@distroless_cc_debian12_linux_arm64_v8"
               },
-              "bzlmod_repository": "distroless_cc",
+              "bzlmod_repository": "distroless_cc_debian12",
               "reproducible": true
             }
           },
@@ -682,9 +682,9 @@
             "distroless_base",
             "distroless_base_linux_amd64",
             "distroless_base_linux_arm64_v8",
-            "distroless_cc",
-            "distroless_cc_linux_amd64",
-            "distroless_cc_linux_arm64_v8"
+            "distroless_cc_debian12",
+            "distroless_cc_debian12_linux_amd64",
+            "distroless_cc_debian12_linux_arm64_v8"
           ],
           "explicitRootModuleDirectDevDeps": [],
           "useAllRepos": "NO",
