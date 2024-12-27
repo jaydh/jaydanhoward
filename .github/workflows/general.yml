@@ -66,6 +66,7 @@ jobs:
     name: Push JDH Multi-arch Image 
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
+    steps:
      - name: Checkout repository
         uses: actions/checkout@v4
         with:
