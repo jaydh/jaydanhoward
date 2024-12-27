@@ -18,22 +18,22 @@ http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_
 http_file(
     name = "tailwind_linux_x86_64",
     executable = True,
+    sha256 = "33f254b54c8754f16efbe2be1de38ca25192630dc36f164595a770d4bbf4d893",
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
-    sha256 = "33f254b54c8754f16efbe2be1de38ca25192630dc36f164595a770d4bbf4d893"
 )
 
 http_file(
     name = "tailwind_linux_arm64",
     executable = True,
+    sha256 = "1e6746bba6f3d34d7550889a1a009ab90ee3794a5ebce60ed10688ad10680a87",
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
-    sha256 = "1e6746bba6f3d34d7550889a1a009ab90ee3794a5ebce60ed10688ad10680a87"
 )
 
 http_file(
     name = "tailwind_mac_arm64",
     executable = True,
+    sha256 = "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3",
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64",
-    sha256 = "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3"
 )
 
 http_archive(
@@ -60,7 +60,6 @@ http_archive(
     urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.99/wasm-bindgen-0.2.99-aarch64-apple-darwin.tar.gz"],
 )
 
-
 bazel_dep(name = "rules_oci", version = "2.2.0")
 
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
@@ -73,7 +72,6 @@ oci.pull(
     ],
     tag = "latest",
 )
-
 oci.pull(
     name = "distroless_cc",
     image = "gcr.io/distroless/cc",
@@ -84,4 +82,4 @@ oci.pull(
     tag = "latest",
 )
 
-use_repo(oci, "distroless_base", "distroless_cc")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc", "distroless_cc_linux_amd64", "distroless_cc_linux_arm64_v8")
