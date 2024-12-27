@@ -131,7 +131,6 @@ jobs:
       - name: Push Index List
         run: docker manifest push harbor.home.local/library/jaydanhoward:latest
   harbor-ligthouse-image:
-    if: github.event_name == 'push'
     name: Build lighthouse image
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
@@ -149,6 +148,31 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: BuildAndPushImageOnHarbor
+      - name: Build Image
         run: "docker build -t harbor.home.local/library/lighthouse:latest .\ndocker push harbor.home.local/library/lighthouse:latest \n"
+        working-directory: lighthouse
+  harbor-ligthouse-image-push:
+    if: github.event_name == 'push'
+    name: Push lighthouse image
+    runs-on: arc-runner-set
+    container: ${{ vars.RUNNER_IMAGE_URL }}
+    needs: [clippy]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.home.local
+          username: ${{ secrets.HARBOR_USER}}
+          password: ${{ secrets.HARBOR_TOKEN}}
+      - name: Build Image
+        run: docker build -t harbor.home.local/library/lighthouse:latest .
+        working-directory: lighthouse
+      - name: Push Image
+        run: docker push harbor.home.local/library/lighthouse:latest
         working-directory: lighthouse
