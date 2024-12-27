@@ -68,8 +68,8 @@ oci.pull(
     name = "distroless_base",
     image = "gcr.io/distroless/base",
     platforms = [
-        "linux/amd64"
-        "linux/arm64/v8"
+        "linux/amd64",
+        "linux/arm64/v8",
     ],
     tag = "latest",
 )
@@ -78,8 +78,8 @@ oci.pull(
     name = "distroless_cc",
     image = "gcr.io/distroless/cc",
     platforms = [
-        "linux/amd64"
-        "linux/arm64/v8"
+        "linux/amd64",
+        "linux/arm64/v8",
     ],
     tag = "latest",
 )
