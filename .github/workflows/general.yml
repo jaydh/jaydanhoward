@@ -101,11 +101,9 @@ jobs:
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64_push
   harbor-image-list-push:
-    if: github.event_name == 'push'
     name: Push JDH Multi-arch Image
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -124,10 +122,15 @@ jobs:
           docker pull harbor.home.local/library/jaydanhoward:latest-arm64
           docker pull harbor.home.local/library/jaydanhoward:latest-amd64
       - name: Create Index List
-        run: |
-          docker manifest create harbor.home.local/library/jaydanhoward:latest \
-            harbor.home.local/library/jaydanhoward:latest-arm64 \
-            harbor.home.local/library/jaydanhoward:latest-amd64
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 1
+          max_attempts: 5
+          retry_on: error
+          command: |
+            docker manifest create harbor.home.local/library/jaydanhoward:latest \
+              harbor.home.local/library/jaydanhoward:latest-arm64 \
+              harbor.home.local/library/jaydanhoward:latest-amd64
       - name: Push Index List
         # Domain lookup is flakey
         uses: nick-fields/retry@v3
