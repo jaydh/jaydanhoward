@@ -83,7 +83,7 @@ jobs:
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [harbor-image-arm64]
-    name: Push JDH - arm64
+    name: Push JDH Image - arm64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
