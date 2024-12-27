@@ -126,8 +126,8 @@ jobs:
       - name: Create Index List
         run: |
           docker manifest create harbor.home.local/library/jaydanhoward:latest \
-            harbor.home.local/library/jaydanhoward:latest-arm64 --arch arm64 --os linux \
-            harbor.home.local/library/jaydanhoward:latest-amd64 ----arch amd64 --os linux
+            harbor.home.local/library/jaydanhoward:latest-arm64 \
+            harbor.home.local/library/jaydanhoward:latest-amd64
       - name: Push Index List
         run: docker manifest push harbor.home.local/library/jaydanhoward:latest
   harbor-ligthouse-image:
