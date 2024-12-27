@@ -63,7 +63,7 @@ jobs:
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
   harbor-image-arm64:
     needs: [clippy]
-    name: Build JDH - arm64
+    name: Build JDH Image - arm64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
