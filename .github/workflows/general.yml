@@ -63,11 +63,11 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Build
         run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image
+          bazel --bazelrc=.bazelrc.ci build --host_cpu=arm64-v8 jaydanhoward_image
       - name: Bazel Push
         if: github.event_name == 'push'
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_push
+          bazel --bazelrc=.bazelrc.ci run --host_cpu=arm64-v8 jaydanhoward_image_push
   harbor-ligthouse-image:
     if: github.event_name == 'push'
     name: Build lighthouse image
