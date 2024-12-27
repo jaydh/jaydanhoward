@@ -67,20 +67,19 @@ jobs:
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
-     - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Login to Harbor
-        uses: docker/login-action@v3
-        with:
-          registry: harbor.home.local
-          username: ${{ secrets.HARBOR_USER}}
-          password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Bazel Push
-        run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_push
-
+       - name: Checkout repository
+          uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+        - name: Login to Harbor
+          uses: docker/login-action@v3
+          with:
+            registry: harbor.home.local
+            username: ${{ secrets.HARBOR_USER}}
+            password: ${{ secrets.HARBOR_TOKEN}}
+        - name: Bazel Push
+          run: |
+            bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_push
   harbor-ligthouse-image:
     if: github.event_name == 'push'
     name: Build lighthouse image
