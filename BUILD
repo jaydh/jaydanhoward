@@ -116,13 +116,31 @@ pkg_tar(
 )
 
 oci_image(
-    name = "jaydanhoward_image",
+    name = "jaydanhoward_image_amd64",
     base = "@distroless_cc",
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
+)
+
+oci_image(
+    name = "jaydanhoward_image_arm64",
+    base = "@distroless_cc",
+    entrypoint = ["/app/jaydanhoward_bin"],
+    tars = [
+        ":jaydanhoward_tar",
+    ],
+    workdir = "/app/jaydanhoward_bin.runfiles",
+)
+
+oci_image_index(
+    name = "jaydanhoward_image",
+    images = [
+        ":jaydanhoward_image_amd64",
+        ":jaydanhoward_image_arm64",
+    ]
 )
 
 oci_load(
