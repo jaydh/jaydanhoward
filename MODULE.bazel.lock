@@ -249,7 +249,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "iJZZ9aBHnYHHAy1nTAK++jt2xuVOmEK880oZBsgVW3I=",
-        "usagesDigest": "3x8DbRztS/ZpbiSi6K02ZsauOyMrPiKgoyWh8El7jqA=",
+        "usagesDigest": "+r9HPSGUWpmRTIMWwNeslSCtt/GA1CUFoWwshgTvcY8=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -266,6 +266,18 @@
               "bazel_tags": []
             }
           },
+          "distroless_base_linux_arm64_v8": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
+            "attributes": {
+              "scheme": "https",
+              "registry": "gcr.io",
+              "repository": "distroless/base",
+              "identifier": "latest",
+              "platform": "linux/arm64/v8",
+              "target_name": "distroless_base_linux_arm64_v8",
+              "bazel_tags": []
+            }
+          },
           "distroless_base": {
             "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_alias",
             "attributes": {
@@ -275,7 +287,8 @@
               "repository": "distroless/base",
               "identifier": "latest",
               "platforms": {
-                "@@platforms//cpu:x86_64": "@distroless_base_linux_amd64"
+                "@@platforms//cpu:x86_64": "@distroless_base_linux_amd64",
+                "@@platforms//cpu:arm64": "@distroless_base_linux_arm64_v8"
               },
               "bzlmod_repository": "distroless_base",
               "reproducible": true
@@ -293,6 +306,18 @@
               "bazel_tags": []
             }
           },
+          "distroless_cc_linux_arm64_v8": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
+            "attributes": {
+              "scheme": "https",
+              "registry": "gcr.io",
+              "repository": "distroless/cc",
+              "identifier": "latest",
+              "platform": "linux/arm64/v8",
+              "target_name": "distroless_cc_linux_arm64_v8",
+              "bazel_tags": []
+            }
+          },
           "distroless_cc": {
             "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_alias",
             "attributes": {
@@ -302,7 +327,8 @@
               "repository": "distroless/cc",
               "identifier": "latest",
               "platforms": {
-                "@@platforms//cpu:x86_64": "@distroless_cc_linux_amd64"
+                "@@platforms//cpu:x86_64": "@distroless_cc_linux_amd64",
+                "@@platforms//cpu:arm64": "@distroless_cc_linux_arm64_v8"
               },
               "bzlmod_repository": "distroless_cc",
               "reproducible": true
@@ -655,8 +681,10 @@
           "explicitRootModuleDirectDeps": [
             "distroless_base",
             "distroless_base_linux_amd64",
+            "distroless_base_linux_arm64_v8",
             "distroless_cc",
-            "distroless_cc_linux_amd64"
+            "distroless_cc_linux_amd64",
+            "distroless_cc_linux_arm64_v8"
           ],
           "explicitRootModuleDirectDevDeps": [],
           "useAllRepos": "NO",

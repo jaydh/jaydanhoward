@@ -41,11 +41,12 @@ jobs:
       - name: Bazel Build
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_amd64
-  harbor-image-arm64:
-    name: Build JDH Image - arm64
-    runs-on: arc-runner-set-arm-k8s
+  harbor-image-x86_64-push:
+    if: github.event_name == 'push'
+    name: Push JDH Image - x86_64
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [clippy]
+    needs: [clippy, harbor-image-x86_64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -59,11 +60,10 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Build
         run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
-  harbor-image-index:
-    if: github.event_name == 'push'
-    needs: [harbor-image-arm64, harbor-image-x86_64]
-    name: Push JDH Multi-arch Image
+          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
+  harbor-image-arm64:
+    needs: [clippy]
+    name: Build JDH - arm64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
@@ -79,7 +79,27 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Push
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_push
+          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
+  harbor-image-arm64-push:
+    if: github.event_name == 'push'
+    needs: [harbor-image-arm64, harbor-image-x86_64]
+    name: Push JDH - arm64
+    runs-on: arc-runner-set-k8s
+    container: ${{ vars.RUNNER_IMAGE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Login to Harbor
+        uses: docker/login-action@v3
+        with:
+          registry: harbor.home.local
+          username: ${{ secrets.HARBOR_USER}}
+          password: ${{ secrets.HARBOR_TOKEN}}
+      - name: Bazel Push
+        run: |
+          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64_push
   harbor-ligthouse-image:
     if: github.event_name == 'push'
     name: Build lighthouse image
