@@ -46,7 +46,7 @@ jobs:
     name: Push JDH Image - x86_64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [clippy, harbor-image-x86_64]
+    needs: [harbor-image-x86_64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
