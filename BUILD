@@ -123,10 +123,6 @@ oci_image(
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
-    ],
 )
 
 oci_image(
@@ -137,10 +133,6 @@ oci_image(
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
-    target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:arm64",
-    ],
 )
 
 oci_push(
