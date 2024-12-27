@@ -20,7 +20,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Install Bazelisk
-        uses: bazelbuild/setup-bazelisk@v2
+        uses: bazel-contrib/setup-bazel@0.10.0
       - name: Clippy
         run: |
           bazel build clippy
@@ -41,7 +41,7 @@ jobs:
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Install Bazelisk
-        uses: bazelbuild/setup-bazelisk@v2
+        uses: bazel-contrib/setup-bazel@0.10.0
       - name: Bazel Build
         run: |
           bazel build jaydanhoward_image
@@ -66,7 +66,7 @@ jobs:
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Install Bazelisk
-        uses: bazelbuild/setup-bazelisk@v2
+        uses: bazel-contrib/setup-bazel@0.10.0
       - name: Bazel Build
         run: |
           bazel run jaydanhoward_image
