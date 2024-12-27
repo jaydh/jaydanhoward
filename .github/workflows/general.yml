@@ -129,7 +129,12 @@ jobs:
             harbor.home.local/library/jaydanhoward:latest-arm64 \
             harbor.home.local/library/jaydanhoward:latest-amd64
       - name: Push Index List
-        run: docker manifest push harbor.home.local/library/jaydanhoward:latest
+        # Domain lookup is flakey
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 1
+          max_attempts: 5
+          command: docker manifest push harbor.home.local/library/jaydanhoward:latest
   harbor-ligthouse-image:
     name: Build lighthouse image
     runs-on: arc-runner-set
