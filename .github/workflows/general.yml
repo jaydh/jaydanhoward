@@ -156,7 +156,7 @@ jobs:
     name: Push lighthouse image
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [clippy, harbor-ligthouse-image]
+    needs: [harbor-ligthouse-image]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
