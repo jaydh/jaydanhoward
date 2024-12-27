@@ -1,7 +1,7 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push", "oci_image_index")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push", "oci_image_index",)
 load("@rules_rust//rust:defs.bzl", "rust_clippy")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 
@@ -117,44 +117,46 @@ pkg_tar(
 
 oci_image(
     name = "jaydanhoward_image_amd64",
-    base = "@distroless_cc",
+    base = "@distroless_cc_linux_amd64",
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
 )
 
 oci_image(
     name = "jaydanhoward_image_arm64",
-    base = "@distroless_cc",
+    base = "@distroless_cc_linux_arm64_v8",
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
-)
-
-oci_image_index(
-    name = "jaydanhoward_image",
-    images = [
-        ":jaydanhoward_image_amd64",
-        ":jaydanhoward_image_arm64",
-    ]
-)
-
-oci_load(
-    name = "jaydanhoward_image_load",
-    image = ":jaydanhoward_image",
-    repo_tags = ["harbor.home.local/library/jaydanhoward:latest"]
+    target_compatible_with = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm64",
+    ],
 )
 
 oci_push(
-    name = "jaydanhoward_image_push",
-    image = ":jaydanhoward_image",
+    name = "jaydanhoward_image_amd64_push",
+    image = ":jaydanhoward_image_amd64",
     repository = "harbor.home.local/library/jaydanhoward",
-    remote_tags = ["latest"]
+    remote_tags = ["latest-amd64"]
 )
+
+oci_push(
+    name = "jaydanhoward_image_arm64_push",
+    image = ":jaydanhoward_image_arm64",
+    repository = "harbor.home.local/library/jaydanhoward",
+    remote_tags = ["latest-arm64"]
+)
+
 
 rust_clippy(
     name = "clippy",
