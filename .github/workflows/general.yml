@@ -128,9 +128,9 @@ jobs:
           max_attempts: 5
           retry_on: error
           command: |
-            docker manifest create harbor.home.local/library/jaydanhoward:latest \
-              harbor.home.local/library/jaydanhoward:latest-arm64 \
-              harbor.home.local/library/jaydanhoward:latest-amd64
+            docker manifest create library/jaydanhoward:latest \
+              library/jaydanhoward:latest-arm64 \
+              library/jaydanhoward:latest-amd64
       - name: Push Index List
         # Domain lookup is flakey
         uses: nick-fields/retry@v3
