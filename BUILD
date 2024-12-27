@@ -1,7 +1,7 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
 load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
-load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push")
+load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push", "oci_image_index")
 load("@rules_rust//rust:defs.bzl", "rust_clippy")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 
