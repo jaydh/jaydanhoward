@@ -117,7 +117,7 @@ pkg_tar(
 
 oci_image(
     name = "jaydanhoward_image_amd64",
-    base = "@distroless_cc",
+    base = "@distroless_cc_linux_amd64",
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
@@ -127,7 +127,7 @@ oci_image(
 
 oci_image(
     name = "jaydanhoward_image_arm64",
-    base = "@distroless_cc",
+    base = "@distroless_cc_linux_arm64_v8",
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
