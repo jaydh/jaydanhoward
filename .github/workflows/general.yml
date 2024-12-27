@@ -61,11 +61,11 @@ jobs:
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image
   harbor-image-index:
+    if: github.event_name == 'push'
+    needs: [harbor-image-arm64, harbor-image-x86_64]
     name: Push JDH Multi-arch Image 
     runs-on: arc-runner-set-k8s
-    if: github.event_name == 'push'
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [harbor-image-arm64, harbor-image-x86_64]
      - name: Checkout repository
         uses: actions/checkout@v4
         with:
