@@ -82,7 +82,7 @@ jobs:
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
   harbor-image-arm64-push:
     if: github.event_name == 'push'
-    needs: [harbor-image-arm64, harbor-image-x86_64]
+    needs: [harbor-image-arm64]
     name: Push JDH - arm64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
