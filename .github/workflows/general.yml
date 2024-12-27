@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
       - name: Clippy
         run: |
-          bazel build clippy
+          bazel --bazelrc=.bazelrc.ci build clippy
   harbor-image:
     name: Build JDH Image - x86_64
     runs-on: arc-runner-set-k8s
@@ -40,11 +40,11 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Build
         run: |
-          bazel build jaydanhoward_image
+          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image
       - name: Bazel Push
         if: github.event_name == 'push'
         run: |
-          bazel run jaydanhoward_image_push
+          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_push
   harbor-image-arm:
     name: Build JDH Image - Arm
     runs-on: arc-runner-set-arm-k8s
@@ -63,11 +63,11 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Build
         run: |
-          bazel run jaydanhoward_image
+          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image
       - name: Bazel Push
         if: github.event_name == 'push'
         run: |
-          bazel run jaydanhoward_image_push
+          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_push
   harbor-ligthouse-image:
     if: github.event_name == 'push'
     name: Build lighthouse image
