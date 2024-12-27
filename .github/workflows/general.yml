@@ -19,8 +19,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Install Bazelisk
-        uses: bazel-contrib/setup-bazel@0.10.0
       - name: Clippy
         run: |
           bazel build clippy
@@ -40,8 +38,6 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Install Bazelisk
-        uses: bazel-contrib/setup-bazel@0.10.0
       - name: Bazel Build
         run: |
           bazel build jaydanhoward_image
@@ -65,8 +61,6 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Install Bazelisk
-        uses: bazel-contrib/setup-bazel@0.10.0
       - name: Bazel Build
         run: |
           bazel run jaydanhoward_image
