@@ -67,15 +67,21 @@ oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_base",
     image = "gcr.io/distroless/base",
-    platforms = ["linux/amd64"],
+    platforms = [
+        "linux/amd64"
+        "linux/arm64/v8"
+    ],
     tag = "latest",
 )
 
 oci.pull(
     name = "distroless_cc",
     image = "gcr.io/distroless/cc",
-    platforms = ["linux/amd64"],
+    platforms = [
+        "linux/amd64"
+        "linux/arm64/v8"
+    ],
     tag = "latest",
 )
 
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_cc")
+use_repo(oci, "distroless_base", "distroless_cc")
