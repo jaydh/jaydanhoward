@@ -123,6 +123,14 @@ oci_image(
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
+    architecture = select({
+        "//:linux_arm64": "arm64",
+        "//:linux_x86_64": "amd64",
+    }),
+    os = select({
+        "//:linux_arm64": "linux",
+        "//:linux_x86_64": "linux",
+    })
 )
 
 oci_load(
