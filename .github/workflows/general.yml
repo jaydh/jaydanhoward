@@ -80,7 +80,7 @@ jobs:
       - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
-  harbor-image-list-push:
+  harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [harbor-image-arm64]
     name: Push JDH Image - arm64
@@ -100,7 +100,7 @@ jobs:
       - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64_push
-  harbor-ligthouse-image:
+  harbor-image-list-push:
     if: github.event_name == 'push'
     name: Push JDH Multi-arch Image
     runs-on: arc-runner-set
