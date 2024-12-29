@@ -11,12 +11,14 @@ pub fn PictureSection() -> impl IntoView {
                 src="/assets/cluster.webp"
                 class="h-auto max-w-full filter grayscale dark:opacity-50 rounded-lg"
                 alt="Picture of cluster"
+                srcset="/assets/cluster-small.webp 320w, /assets/cluster-medium.webp 480w, /assets/cluster.webp 720w"
+                sizes="(max-width:640px) 90vw, (max-width:768px) 70vw, 50vw"
             />
             <img
                 src="/assets/profile.webp"
                 class="h-auto max-w-full filter grayscale dark:opacity-50 rounded-lg"
                 srcset="/assets/profile-small.webp 320w, /assets/profile-medium.webp 480w, /assets/profile.webp 720w"
-                sizes="(max-width:640px) 320px, (max-width:768px) 480px, 720px"
+                sizes="(max-width:640px) 90vw, (max-width:768px) 70vw, 50vw"
                 alt="Picture of me"
                 height=672
                 width=504
