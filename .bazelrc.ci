@@ -1,1 +1,2 @@
 build --remote_cache=grpc://remote-cache.arc-controller.svc.cluster.local:9099
+build --compilation_mode opt
