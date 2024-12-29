@@ -12,7 +12,7 @@ env:
 jobs:
   clippy:
     name: Clippy
-    runs-on: arc-runner-set-k8s
+    runs-on: [arc-runner-set-k8s, arc-runner-set-arm-k8s]
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - name: Checkout repository
@@ -64,7 +64,7 @@ jobs:
   harbor-image-arm64:
     needs: [clippy]
     name: Build JDH Image - arm64
-    runs-on: arc-runner-set-k8s
+    runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - name: Checkout repository
@@ -84,7 +84,7 @@ jobs:
     if: github.event_name == 'push'
     needs: [harbor-image-arm64]
     name: Push JDH Image - arm64
-    runs-on: arc-runner-set-k8s
+    runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - name: Checkout repository
