@@ -106,6 +106,10 @@ rust_binary(
         "SERVER_FN_OVERRIDE_KEY": "bazel",
     },
     deps = server_deps,
+    rustc_flags = [
+        "-C", "opt-level=3",
+        "-C", "codegen-units=1"
+    ],
 )
 
 pkg_tar(
