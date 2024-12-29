@@ -15,11 +15,12 @@ fn FontAwesomeCss() -> impl IntoView {
     #[cfg(not(debug_assertions))] // release mode
     {
         view! {
+            <Link rel="preload" href="https://kit.fontawesome.com/6ae5d22557.js" as_="script" />
             <script
                 src="https://kit.fontawesome.com/6ae5d22557.js"
                 crossorigin="anonymous"
                 async="true"
-            ></script>
+            />
         }
     }
 
