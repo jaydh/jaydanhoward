@@ -58,7 +58,7 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Bazel Build
+      - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
   harbor-image-arm64:
@@ -77,7 +77,7 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Bazel Push
+      - name: Bazel Build
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
   harbor-image-arm64-push:
