@@ -12,19 +12,6 @@ use leptos_router::path;
 
 #[component]
 fn FontAwesomeCss() -> impl IntoView {
-    #[cfg(not(debug_assertions))] // release mode
-    {
-        view! {
-            <Link rel="preload" href="https://kit.fontawesome.com/6ae5d22557.js" as_="script" />
-            <script
-                src="https://kit.fontawesome.com/6ae5d22557.js"
-                crossorigin="anonymous"
-                async="true"
-            />
-        }
-    }
-
-    #[cfg(debug_assertions)] // dev mode
     {
         view! {
             <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style" />
