@@ -99,7 +99,7 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Push
         run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64_push
+          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push
   harbor-ligthouse-image:
     name: Build lighthouse image
     runs-on: arc-runner-set
