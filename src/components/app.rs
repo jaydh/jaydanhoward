@@ -11,22 +11,17 @@ use leptos_router::components::*;
 use leptos_router::path;
 
 #[component]
-fn FontAwesomeCss() -> impl IntoView {
-    {
-        view! {
-            <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style" />
-            <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style" />
-            <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style" />
-            <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css" />
-            <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css" />
-            <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css" />
-        }
+fn Stylesheets() -> impl IntoView {
+    view! {
+        <Link rel="preload" href="/assets/style.css" as_="style" />
+        <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style" />
+        <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style" />
+        <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style" />
+        <Stylesheet id="app-styles" href="/assets/style.css" />
+        <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css" />
+        <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css" />
+        <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css" />
     }
-}
-
-#[component]
-fn FontAwesome() -> impl IntoView {
-    view! { <FontAwesomeCss /> }
 }
 
 #[component]
@@ -35,8 +30,7 @@ pub fn App() -> impl IntoView {
     let (dark_mode_enabled, set_dark_mode_enabled) = signal(true);
 
     view! {
-        <Stylesheet href="/assets/style.css" />
-        <FontAwesome />
+        <Stylesheets />
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
         <Title text="Jay Dan Howard" />
         <main>
