@@ -1,5 +1,5 @@
 {
-  "checksum": "79431618e05ac45c1988a7ad76bcdb8a9d7d014e3abd058e17eb7af874c1576a",
+  "checksum": "4f44e2f9f5332a7a86c13a068a26793a7e240ce255248a87bc05471fb78be9af",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -1972,15 +1972,15 @@
               "target": "getrandom"
             },
             {
-              "id": "leptos 0.7.2",
+              "id": "leptos 0.7.3",
               "target": "leptos"
             },
             {
-              "id": "leptos_meta 0.7.2",
+              "id": "leptos_meta 0.7.3",
               "target": "leptos_meta"
             },
             {
-              "id": "leptos_router 0.7.2",
+              "id": "leptos_router 0.7.3",
               "target": "leptos_router"
             },
             {
@@ -5037,14 +5037,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "leptos 0.7.2": {
+    "leptos 0.7.3": {
       "name": "leptos",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos/0.7.2/download",
-          "sha256": "5c4e32cac886183e0faf8dd30944072302359a8508380827f649ef9bbdd179ad"
+          "url": "https://static.crates.io/crates/leptos/0.7.3/download",
+          "sha256": "a8a90c679094979aa12927e8e925fe8eead1420d69420b2d8c6540863937ca75"
         }
       },
       "targets": [
@@ -5093,23 +5093,27 @@
               "target": "futures"
             },
             {
+              "id": "getrandom 0.2.15",
+              "target": "getrandom"
+            },
+            {
               "id": "hydration_context 0.2.1",
               "target": "hydration_context"
             },
             {
-              "id": "leptos_config 0.7.2",
+              "id": "leptos_config 0.7.3",
               "target": "leptos_config"
             },
             {
-              "id": "leptos_dom 0.7.2",
+              "id": "leptos_dom 0.7.3",
               "target": "leptos_dom"
             },
             {
-              "id": "leptos_hot_reload 0.7.2",
+              "id": "leptos_hot_reload 0.7.3",
               "target": "leptos_hot_reload"
             },
             {
-              "id": "leptos_server 0.7.2",
+              "id": "leptos_server 0.7.3",
               "target": "leptos_server"
             },
             {
@@ -5141,7 +5145,7 @@
               "target": "serde_qs"
             },
             {
-              "id": "server_fn 0.7.2",
+              "id": "server_fn 0.7.3",
               "target": "server_fn"
             },
             {
@@ -5179,7 +5183,7 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "leptos_macro 0.7.2",
+              "id": "leptos_macro 0.7.3",
               "target": "leptos_macro"
             },
             {
@@ -5193,7 +5197,7 @@
           ],
           "selects": {}
         },
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5201,14 +5205,14 @@
       ],
       "license_file": null
     },
-    "leptos_config 0.7.2": {
+    "leptos_config 0.7.3": {
       "name": "leptos_config",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_config/0.7.2/download",
-          "sha256": "1961b08a7dc3f4a559223be87c44b56bb565bf0b438909a0c3c31d88bfad0982"
+          "url": "https://static.crates.io/crates/leptos_config/0.7.3/download",
+          "sha256": "c712e1ed3283d1acb842cef4cbcce7b2987a347cc1bf7141195e01f92bb8590d"
         }
       },
       "targets": [
@@ -5256,7 +5260,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5264,14 +5268,14 @@
       ],
       "license_file": null
     },
-    "leptos_dom 0.7.2": {
+    "leptos_dom 0.7.3": {
       "name": "leptos_dom",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_dom/0.7.2/download",
-          "sha256": "652ba5e3a5c4e703e5bd4b24b62de9dbeedca84e5f31aff045bf329014418496"
+          "url": "https://static.crates.io/crates/leptos_dom/0.7.3/download",
+          "sha256": "99803be421344a2184fd5796e1a7645c2090738b2ab5d1a856084816853ec322"
         }
       },
       "targets": [
@@ -5334,7 +5338,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5342,14 +5346,14 @@
       ],
       "license_file": null
     },
-    "leptos_hot_reload 0.7.2": {
+    "leptos_hot_reload 0.7.3": {
       "name": "leptos_hot_reload",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_hot_reload/0.7.2/download",
-          "sha256": "77bc67823a8eb1c961ee08dd7b3a814964c63928a64954e3521733b56dd7e66f"
+          "url": "https://static.crates.io/crates/leptos_hot_reload/0.7.3/download",
+          "sha256": "92413c6d93a22d8c4e75b2e7da3867af173e8d9ca49ce170b631e7c2766eef48"
         }
       },
       "targets": [
@@ -5417,7 +5421,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5425,14 +5429,14 @@
       ],
       "license_file": null
     },
-    "leptos_macro 0.7.2": {
+    "leptos_macro 0.7.3": {
       "name": "leptos_macro",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_macro/0.7.2/download",
-          "sha256": "0d4b2418deac01fe9a3862d410a6a6beff235e4b124d9e874986bb22617aeea6"
+          "url": "https://static.crates.io/crates/leptos_macro/0.7.3/download",
+          "sha256": "20bcb2afa03e0614c64eec4a95ec2986fd3c59358daa0f50006e081bc1bd1067"
         }
       },
       "targets": [
@@ -5484,7 +5488,7 @@
               "target": "itertools"
             },
             {
-              "id": "leptos_hot_reload 0.7.2",
+              "id": "leptos_hot_reload 0.7.3",
               "target": "leptos_hot_reload"
             },
             {
@@ -5508,7 +5512,7 @@
               "target": "rstml"
             },
             {
-              "id": "server_fn_macro 0.7.2",
+              "id": "server_fn_macro 0.7.3",
               "target": "server_fn_macro"
             },
             {
@@ -5523,7 +5527,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5531,14 +5535,14 @@
       ],
       "license_file": null
     },
-    "leptos_meta 0.7.2": {
+    "leptos_meta 0.7.3": {
       "name": "leptos_meta",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_meta/0.7.2/download",
-          "sha256": "446afa35482822d4a50a4af2cae11ac447193d769140e780701807ee5a9e2596"
+          "url": "https://static.crates.io/crates/leptos_meta/0.7.3/download",
+          "sha256": "a54d4b942a474e38b606ff0bfe8712f093300bd053adb9dd7a028a14ca3fbfac"
         }
       },
       "targets": [
@@ -5577,7 +5581,7 @@
               "target": "indexmap"
             },
             {
-              "id": "leptos 0.7.2",
+              "id": "leptos 0.7.3",
               "target": "leptos"
             },
             {
@@ -5604,7 +5608,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5612,14 +5616,14 @@
       ],
       "license_file": null
     },
-    "leptos_router 0.7.2": {
+    "leptos_router 0.7.3": {
       "name": "leptos_router",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_router/0.7.2/download",
-          "sha256": "c93e40eef0b39384dc8a9aceb0f598d36de8f40d9ad14ef431023fae9b40bc88"
+          "url": "https://static.crates.io/crates/leptos_router/0.7.3/download",
+          "sha256": "69ff7d8c058b4bd7512fa58224b684d5da10d5f056171b8e27d516e0d36e1a5d"
         }
       },
       "targets": [
@@ -5670,7 +5674,7 @@
               "target": "js_sys"
             },
             {
-              "id": "leptos 0.7.2",
+              "id": "leptos 0.7.3",
               "target": "leptos"
             },
             {
@@ -5716,13 +5720,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "leptos_router_macro 0.7.2",
+              "id": "leptos_router_macro 0.7.3",
               "target": "leptos_router_macro"
             }
           ],
           "selects": {}
         },
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5730,14 +5734,14 @@
       ],
       "license_file": null
     },
-    "leptos_router_macro 0.7.2": {
+    "leptos_router_macro 0.7.3": {
       "name": "leptos_router_macro",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_router_macro/0.7.2/download",
-          "sha256": "757692288bd1aeb03d597481ec350c4eba26ffd98f06c5491e30a9c21ae9fbfb"
+          "url": "https://static.crates.io/crates/leptos_router_macro/0.7.3/download",
+          "sha256": "15a48035e8d796233a5b43322aeab9387f946f914dacdf17a1981c3910879b19"
         }
       },
       "targets": [
@@ -5777,7 +5781,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -5785,14 +5789,14 @@
       ],
       "license_file": null
     },
-    "leptos_server 0.7.2": {
+    "leptos_server 0.7.3": {
       "name": "leptos_server",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/leptos_server/0.7.2/download",
-          "sha256": "5cc1e6a182eebf8b1739dff377e63688eb7ab08c133f657e939969daa356a275"
+          "url": "https://static.crates.io/crates/leptos_server/0.7.3/download",
+          "sha256": "0fb23bd110ac04c7276aae3d8ba523f94cf06989d00b4e76eaee89451b06b494"
         }
       },
       "targets": [
@@ -5864,7 +5868,7 @@
               "target": "serde_json"
             },
             {
-              "id": "server_fn 0.7.2",
+              "id": "server_fn 0.7.3",
               "target": "server_fn"
             },
             {
@@ -5875,7 +5879,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -9705,14 +9709,14 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
-    "server_fn 0.7.2": {
+    "server_fn 0.7.3": {
       "name": "server_fn",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/server_fn/0.7.2/download",
-          "sha256": "1abb4001047ecff14681ec411bbd9a8a95a7b405e543ed043fece8f0c5a2f4fe"
+          "url": "https://static.crates.io/crates/server_fn/0.7.3/download",
+          "sha256": "d0b9f0d2eecb2bf4f909661acc731009e3657574dec93a0ec9f114e250f74bc4"
         }
       },
       "targets": [
@@ -9837,13 +9841,13 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "server_fn_macro_default 0.7.2",
+              "id": "server_fn_macro_default 0.7.3",
               "target": "server_fn_macro_default"
             }
           ],
           "selects": {}
         },
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -9851,14 +9855,14 @@
       ],
       "license_file": null
     },
-    "server_fn_macro 0.7.2": {
+    "server_fn_macro 0.7.3": {
       "name": "server_fn_macro",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/server_fn_macro/0.7.2/download",
-          "sha256": "7883cf3cb2522ce663df033e2fd3093a4497e9b8ed30f354200ef7058c9c792c"
+          "url": "https://static.crates.io/crates/server_fn_macro/0.7.3/download",
+          "sha256": "ee7723bef57b4353cd9939e280d3b5b2ebe45b4a4630c9e9e97a6fa4b84e8b1c"
         }
       },
       "targets": [
@@ -9916,7 +9920,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -9924,14 +9928,14 @@
       ],
       "license_file": null
     },
-    "server_fn_macro_default 0.7.2": {
+    "server_fn_macro_default 0.7.3": {
       "name": "server_fn_macro_default",
-      "version": "0.7.2",
+      "version": "0.7.3",
       "package_url": "https://github.com/leptos-rs/leptos",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/server_fn_macro_default/0.7.2/download",
-          "sha256": "a734ef90a83ee9517468b38a017f602a869b382c18e8e8b4118f3f1b88f2856c"
+          "url": "https://static.crates.io/crates/server_fn_macro_default/0.7.3/download",
+          "sha256": "87663ec10f17fbe8f6c53adc2d038df3304bfd17aaaab22f777810a9e6e05fff"
         }
       },
       "targets": [
@@ -9956,7 +9960,7 @@
         "deps": {
           "common": [
             {
-              "id": "server_fn_macro 0.7.2",
+              "id": "server_fn_macro 0.7.3",
               "target": "server_fn_macro"
             },
             {
@@ -9967,7 +9971,7 @@
           "selects": {}
         },
         "edition": "2021",
-        "version": "0.7.2"
+        "version": "0.7.3"
       },
       "license": "MIT",
       "license_ids": [
@@ -14305,9 +14309,9 @@
     "console_error_panic_hook 0.1.7",
     "console_log 1.0.0",
     "getrandom 0.2.15",
-    "leptos 0.7.2",
-    "leptos_meta 0.7.2",
-    "leptos_router 0.7.2",
+    "leptos 0.7.3",
+    "leptos_meta 0.7.3",
+    "leptos_router 0.7.3",
     "log 0.4.22",
     "rand 0.8.5",
     "serde 1.0.216",
