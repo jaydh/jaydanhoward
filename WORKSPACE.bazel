@@ -81,17 +81,17 @@ crates_repository(
             version = "0.2",
         ),
         "leptos": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
             features = ["ssr", "nightly"]
         ),
         "leptos_actix": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
         ),
         "leptos_meta": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
         ),
         "leptos_router": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
             features = ["nightly"]
         ),
         "rand": crate.spec(
@@ -169,14 +169,14 @@ crates_repository(
             features = ["js"]
         ),
         "leptos": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
             features = ["hydrate", "nightly"]
         ),
         "leptos_meta": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
         ),
         "leptos_router": crate.spec(
-            version = "0.7.2",
+            version = "0.7.3",
             features = ["nightly"]
         ),
         "log": crate.spec(
