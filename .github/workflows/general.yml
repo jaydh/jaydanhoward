@@ -150,7 +150,7 @@ jobs:
     name: Push JDH Manifest
     runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [jaydanhoward_image_amd64_push, jaydanhoward_image_arm64_push]
+    needs: [harbor-image-arm64-push, harbor-image-x86_64-push]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
