@@ -128,8 +128,7 @@ oci_image(
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
     target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:x86_64",
+        ":linux_x86_64",
     ],
 )
 
@@ -142,8 +141,7 @@ oci_image(
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
     target_compatible_with = [
-        "@platforms//os:linux",
-        "@platforms//cpu:arm64",
+        ":linux_arm64"
     ],
 )
 
