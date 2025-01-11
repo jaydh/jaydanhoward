@@ -127,9 +127,6 @@ oci_image(
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
-    target_compatible_with = [
-        ":linux_x86_64",
-    ],
 )
 
 oci_image(
@@ -140,9 +137,6 @@ oci_image(
         ":jaydanhoward_tar",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
-    target_compatible_with = [
-        ":linux_arm64"
-    ],
 )
 
 oci_push(
