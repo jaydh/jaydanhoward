@@ -148,7 +148,7 @@ jobs:
         working-directory: lighthouse
   harbor-jdh-manifest:
     name: Push JDH Manifest
-    runs-on: arc-runner-set-arm-k8s
+    runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-arm64-push, harbor-image-x86_64-push]
     steps:
