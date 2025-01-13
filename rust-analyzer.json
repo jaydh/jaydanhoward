@@ -1,0 +1,8 @@
+{
+  "rust-analyzer.rustfmt.overrideCommand": [
+    "leptosfmt",
+    "--stdin",
+    "--rustfmt"
+  ],
+  "rust-analyzer.checkOnSave": true
+}
