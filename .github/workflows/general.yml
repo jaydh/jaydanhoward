@@ -12,7 +12,7 @@ env:
 jobs:
   clippy:
     name: Clippy
-    runs-on: arc-runner-set-k8s
+    runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     steps:
       - name: Checkout repository
