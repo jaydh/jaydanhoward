@@ -50,12 +50,6 @@ pub fn MeSection() -> impl IntoView {
                     " enable you to securely connect to services on my cluster without me risking my apartment network."
                 </p>
                 <p>
-                    "As my girlfriend puts it: \"You setting up your cluster to use a distributed filesystem for self-hosting your personal Dropbox, container registry, and so on is like putting a rock in a diamond vault. You're never going to watch those motorcycle recordings.\" She's not wrong... but I "
-                    <em>"could"</em>
-                    ", from anywhere. And that's pretty neat (I guess WireGuard just wasn't interesting enough)."
-
-                </p>
-                <p>
                     "I'm currently a software engineer at "
                     <a href="https://www.astranis.com/" target="_blank" class="underline">
                         "Astranis"
