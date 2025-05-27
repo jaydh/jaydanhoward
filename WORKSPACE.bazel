@@ -195,7 +195,7 @@ crates_repository(
             version = "1",
         ),
         "wasm-bindgen": crate.spec(
-            version = "0.2.99",
+            version = "0.2.100",
         ),
         "web-sys": crate.spec(
             version = "0.3.70",
