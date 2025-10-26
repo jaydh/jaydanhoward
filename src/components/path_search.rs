@@ -88,7 +88,7 @@ impl fmt::Display for VecCoordinate {
 #[derive(Debug, Clone)]
 struct Grid(HashMap<CoordinatePair, Cell>);
 
-fn randomize_cells(passable_probability: f64, grid_size: u64, set_grid: WriteSignal<Grid>) {
+fn randomize_cells(obstacle_probability: f64, grid_size: u64, set_grid: WriteSignal<Grid>) {
     let mut rng = rand::thread_rng();
     let mut grid = Grid(HashMap::new());
     for x in 0..grid_size {
@@ -103,7 +103,7 @@ fn randomize_cells(passable_probability: f64, grid_size: u64, set_grid: WriteSig
                         x_pos: x as i64,
                         y_pos: y as i64,
                     },
-                    is_passable: rng.gen::<f64>() > passable_probability,
+                    is_passable: rng.gen::<f64>() > obstacle_probability,
                     visited: false,
                 },
             );
@@ -329,7 +329,9 @@ fn Controls(
     obstacle_probability: ReadSignal<f64>,
     set_obstacle_probability: WriteSignal<f64>,
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    set_start_cell_coord: WriteSignal<Option<CoordinatePair>>,
     end_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    set_end_cell_coord: WriteSignal<Option<CoordinatePair>>,
     current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
@@ -448,12 +450,17 @@ fn Controls(
                 </span>
                 <div class="flex-1"></div>
                 <button
+                    type="button"
                     class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
                         if let Some(handle) = interval_handle() {
                             handle.clear();
                         }
-                        randomize_cells(obstacle_probability(), grid_size(), set_grid)
+                        randomize_cells(obstacle_probability(), grid_size(), set_grid);
+                        set_start_cell_coord(None);
+                        set_end_cell_coord(None);
+                        set_current_cell(None);
+                        set_current_path_candidates(VecCoordinate(Vec::new()));
                     }
                 >
                     Randomize
@@ -587,6 +594,14 @@ fn SearchGrid(
                                                         },
                                                     )
 
+                                                    class=(
+                                                        "bg-charcoal dark:bg-gray",
+                                                        move || {
+                                                            !is_start_cell() && !is_end_cell() && !is_current_cell()
+                                                                && !is_passable()
+                                                        },
+                                                    )
+
                                                     on:click=on_click
                                                 ></div>
                                             }
@@ -606,9 +621,32 @@ fn SearchGrid(
 
 #[component]
 pub fn PathSearch() -> impl IntoView {
-    let (grid_size, set_grid_size) = signal(25);
-    let (grid, set_grid) = signal(Grid(HashMap::new()));
+    let (grid_size, set_grid_size) = signal(25_u64);
     let (obstacle_probability, set_obstacle_probability) = signal(0.2);
+
+    // Initialize grid with cells
+    let mut initial_grid = Grid(HashMap::new());
+    let mut rng = rand::thread_rng();
+    for x in 0..25 {
+        for y in 0..25 {
+            initial_grid.0.insert(
+                CoordinatePair {
+                    x_pos: x as i64,
+                    y_pos: y as i64,
+                },
+                Cell {
+                    coordiantes: CoordinatePair {
+                        x_pos: x as i64,
+                        y_pos: y as i64,
+                    },
+                    is_passable: rng.gen::<f64>() > 0.2,
+                    visited: false,
+                },
+            );
+        }
+    }
+
+    let (grid, set_grid) = signal(initial_grid);
     let (current_cell, set_current_cell) = signal(None::<CoordinatePair>);
     let (algorithm, set_algorithm) = signal(Algorithm::Wall);
 
@@ -620,6 +658,9 @@ pub fn PathSearch() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
+            <h1 class="text-3xl font-bold text-charcoal dark:text-gray">
+                "Path Search Visualizations"
+            </h1>
             <Controls
                 grid_size=grid_size
                 set_grid_size=set_grid_size
@@ -628,7 +669,9 @@ pub fn PathSearch() -> impl IntoView {
                 obstacle_probability=obstacle_probability
                 set_obstacle_probability=set_obstacle_probability
                 start_cell_coord=start_cell_coord
+                set_start_cell_coord=set_start_cell_coord
                 end_cell_coord=end_cell_coord
+                set_end_cell_coord=set_end_cell_coord
                 current_path_candidates=current_path_candidates
                 set_current_path_candidates=set_current_path_candidates
                 current_cell=current_cell
