@@ -11,7 +11,7 @@ pub fn Nav(
     let pathname = move || location.pathname.get();
     let navigate = use_navigate();
 
-    let routes = vec![("/about", "About"), ("/work", "Work"), ("/photography", "Photography")];
+    let routes = vec![("/about", "About"), ("/work", "Projects"), ("/photography", "Photography")];
     let contact_links = vec![
         (
             "https://github.com/jaydh",
