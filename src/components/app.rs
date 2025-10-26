@@ -1,9 +1,8 @@
 use crate::components::about::About;
-use crate::components::dev::Dev;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
-use crate::components::projects::Projects;
+use crate::components::photography::Photography;
 use crate::components::work::Work;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Html, Link, Stylesheet, Title};
@@ -45,41 +44,27 @@ pub fn App() -> impl IntoView {
             />
             <div
                 id="root"
-                class="flex flex-col min-w-screen min-h-screen bg-gray text-charcoal dark:bg-charcoal dark:text-gray"
+                class="flex flex-col min-w-screen min-h-screen bg-surface text-charcoal dark:bg-surface-dark dark:text-gray"
             >
-                <Nav
-                    dark_mode_enabled=dark_mode_enabled
-                    set_dark_mode_enabled=set_dark_mode_enabled
-                />
-                <div class="overflow-y-auto grow flex flex-col w-full gap-10 items-center">
-                    <Router>
-
+                <Router>
+                    <Nav
+                        dark_mode_enabled=dark_mode_enabled
+                        set_dark_mode_enabled=set_dark_mode_enabled
+                    />
+                    <div class="overflow-y-auto grow flex flex-col w-full">
                         <Routes fallback=|| "Not found">
                             <Route
                                 path=path!("/")
                                 view=move || view! { <Redirect path="/about" /> }
                             />
                             <Route path=path!("about") view=About />
-                            <ParentRoute path=path!("work") view=Work>
-                                <Route
-                                    path=path!("")
-                                    view=move || view! { <Redirect path="/work/dev" /> }
-                                />
-                                <Route path=path!("dev") view=Dev />
-                                <ParentRoute path=path!("projects") view=Projects>
-                                    <Route path=path!("life") view=Life />
-                                    <Route path=path!("path") view=PathSearch />
-                                    <Route
-                                        path=path!("")
-                                        view=move || {
-                                            view! { <Redirect path="/work/projects/life" /> }
-                                        }
-                                    />
-                                </ParentRoute>
-                            </ParentRoute>
+                            <Route path=path!("work") view=Work />
+                            <Route path=path!("work/life") view=Life />
+                            <Route path=path!("work/path") view=PathSearch />
+                            <Route path=path!("photography") view=Photography />
                         </Routes>
-                    </Router>
-                </div>
+                    </div>
+                </Router>
             </div>
         </main>
     }

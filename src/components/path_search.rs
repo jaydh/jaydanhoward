@@ -372,66 +372,100 @@ fn Controls(
     };
 
     view! {
-        <div class="flex flex-row space-x-10 mb-10">
-            <div class="flex flex-col text-charcoal dark:text-gray">
-                <label for="grid_size">Grid Size</label>
-                <input
-                    type="text"
-                    id="grid_size"
-                    on:input=move |ev| {
-                        set_grid_size(event_target_value(&ev).parse::<u64>().unwrap());
-                    }
-
-                    prop:value=grid_size
-                />
-                <label for="obstacle_probability">Obstacle probability</label>
-                <input
-                    type="text"
-                    id="obstacle_probability"
-                    on:input=move |ev| {
-                        set_obstacle_probability(event_target_value(&ev).parse::<f64>().unwrap());
-                    }
-
-                    prop:value=obstacle_probability
-                />
-                <label for="interval_time">Simulation speed in ms</label>
-                <input
-                    type="text"
-                    id="interval_time"
-                    on:input=move |ev| {
-                        set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
-                        if interval_handle().is_some() {
-                            create_simulation_interval();
+        <div class="flex flex-col gap-6 w-full max-w-3xl">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="grid_size" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Grid Size
+                    </label>
+                    <input
+                        type="text"
+                        id="grid_size"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:input=move |ev| {
+                            set_grid_size(event_target_value(&ev).parse::<u64>().unwrap());
                         }
-                    }
 
-                    prop:value=interval_ms
-                />
+                        prop:value=grid_size
+                    />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="obstacle_probability" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Obstacle Probability
+                    </label>
+                    <input
+                        type="text"
+                        id="obstacle_probability"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:input=move |ev| {
+                            set_obstacle_probability(event_target_value(&ev).parse::<f64>().unwrap());
+                        }
+
+                        prop:value=obstacle_probability
+                    />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="interval_time" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Speed (ms)
+                    </label>
+                    <input
+                        type="text"
+                        id="interval_time"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:input=move |ev| {
+                            set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
+                            if interval_handle().is_some() {
+                                create_simulation_interval();
+                            }
+                        }
+
+                        prop:value=interval_ms
+                    />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="algorithm" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Algorithm
+                    </label>
+                    <select
+                        name="algorithm"
+                        id="algorithm"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:change=move |ev| {
+                            set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap());
+                        }
+                    >
+
+                        <option value="">Choose...</option>
+                        <option value=Algorithm::Corner
+                            .to_string()>{Algorithm::Corner.to_string()}</option>
+                        <option value=Algorithm::Wall.to_string()>{Algorithm::Wall.to_string()}</option>
+                    </select>
+                </div>
             </div>
-            <div class="flex flex-col">
-                <div>Visited: {visited_count}</div>
-                <select
-                    name="algorithm"
-                    on:change=move |ev| {
-                        set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap());
+            <div class="flex flex-row gap-3 items-center">
+                <span class="text-sm text-charcoal dark:text-gray opacity-90 dark:opacity-85">
+                    "Visited: " {visited_count}
+                </span>
+                <div class="flex-1"></div>
+                <button
+                    class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
+                    on:click=move |_| {
+                        if let Some(handle) = interval_handle() {
+                            handle.clear();
+                        }
+                        randomize_cells(obstacle_probability(), grid_size(), set_grid)
                     }
                 >
-
-                    <option value="">--Please choose an algorithm--</option>
-                    <option value=Algorithm::Corner
-                        .to_string()>{Algorithm::Corner.to_string()}</option>
-                    <option value=Algorithm::Wall.to_string()>{Algorithm::Wall.to_string()}</option>
-                </select>
-                <button on:click=move |_| {
-                    if let Some(handle) = interval_handle() {
-                        handle.clear();
+                    Randomize
+                </button>
+                <button
+                    class="px-6 py-2 rounded-lg bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 font-medium shadow-minimal"
+                    on:click=move |_| {
+                        create_simulation_interval();
                     }
-                    randomize_cells(obstacle_probability(), grid_size(), set_grid)
-                }>Randomize</button>
-                <button on:click=move |_| {
-                    create_simulation_interval();
-                }>Simulate</button>
-
+                >
+                    Simulate
+                </button>
             </div>
         </div>
     }
@@ -532,13 +566,13 @@ fn SearchGrid(
                                             };
                                             view! {
                                                 <div
-                                                    class="w-10 h-10 border-2 border-charcoal dark:border-gray"
+                                                    class="w-10 h-10 border border-border dark:border-border-dark cursor-pointer transition-colors"
                                                     class=("bg-green-500", move || is_start_cell())
-                                                    class=("bg-yellow-500", move || is_end_cell())
+                                                    class=("bg-amber-500", move || is_end_cell())
                                                     class=("bg-red-500", move || { is_current_cell() })
 
                                                     class=(
-                                                        "bg-blue-500",
+                                                        "bg-accent bg-opacity-40 dark:bg-accent-light dark:bg-opacity-40",
                                                         move || {
                                                             !is_start_cell() && !is_end_cell() && !is_current_cell()
                                                                 && is_visited()
@@ -546,15 +580,7 @@ fn SearchGrid(
                                                     )
 
                                                     class=(
-                                                        "bg-charcoal",
-                                                        move || {
-                                                            !is_start_cell() && !is_end_cell() && !is_visited()
-                                                                && is_passable()
-                                                        },
-                                                    )
-
-                                                    class=(
-                                                        "dark:bg-gray",
+                                                        "bg-surface dark:bg-surface-dark hover:bg-border hover:bg-opacity-30 dark:hover:bg-border-dark dark:hover:bg-opacity-30",
                                                         move || {
                                                             !is_start_cell() && !is_end_cell() && !is_visited()
                                                                 && is_passable()
@@ -593,7 +619,7 @@ pub fn PathSearch() -> impl IntoView {
 
     view! {
         <SourceAnchor href="#[git]" />
-        <div class="flex flex-col items-center">
+        <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
             <Controls
                 grid_size=grid_size
                 set_grid_size=set_grid_size
@@ -610,15 +636,20 @@ pub fn PathSearch() -> impl IntoView {
                 algorithm=algorithm
                 set_algorithm=set_algorithm
             />
-            <SearchGrid
-                grid_size=grid_size
-                grid=grid
-                start_cell_coord=start_cell_coord
-                set_start_cell_coord
-                end_cell_coord=end_cell_coord
-                set_end_cell_coord=set_end_cell_coord
-                current_cell=current_cell
-            />
+            <p class="text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+                "Click to set start (green) and end (yellow) points, then simulate"
+            </p>
+            <div class="mt-4">
+                <SearchGrid
+                    grid_size=grid_size
+                    grid=grid
+                    start_cell_coord=start_cell_coord
+                    set_start_cell_coord
+                    end_cell_coord=end_cell_coord
+                    set_end_cell_coord=set_end_cell_coord
+                    current_cell=current_cell
+                />
+            </div>
         </div>
     }
 }

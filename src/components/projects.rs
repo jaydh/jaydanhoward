@@ -10,8 +10,8 @@ pub fn Projects() -> impl IntoView {
     ];
 
     view! {
-        <div>
-            <div class="flex flex-row gap-10 mb-20">
+        <div class="flex flex-col">
+            <div class="flex flex-row gap-4 mb-12">
                 {routes
                     .into_iter()
                     .map(|(path, display_text)| {

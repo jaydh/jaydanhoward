@@ -1,12 +1,17 @@
 use crate::components::dark_mode_toggle::DarkModeToggle;
 use leptos::prelude::*;
+use leptos_router::hooks::{use_location, use_navigate};
 
 #[component]
 pub fn Nav(
     dark_mode_enabled: ReadSignal<bool>,
     set_dark_mode_enabled: WriteSignal<bool>,
 ) -> impl IntoView {
-    let routes = vec![("/about", "About"), ("/work", "Work")];
+    let location = use_location();
+    let pathname = move || location.pathname.get();
+    let navigate = use_navigate();
+
+    let routes = vec![("/about", "About"), ("/work", "Work"), ("/photography", "Photography")];
     let contact_links = vec![
         (
             "https://github.com/jaydh",
@@ -28,11 +33,11 @@ pub fn Nav(
     let (show_contact_links, set_show_contact_links) = signal(false);
 
     view! {
-        <nav class="sticky flex flex-row pointer-events-auto m-20 text-xl">
-            <div class="flex items-center">
+        <nav class="sticky top-0 flex flex-row pointer-events-auto px-8 py-6 text-base border-b border-border dark:border-border-dark bg-surface dark:bg-surface-dark bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md z-40">
+            <div class="flex items-center gap-8 max-w-7xl mx-auto w-full">
                 <a
                     href="/"
-                    class="hover:underline px-3 py-2 transition"
+                    class="font-bold text-lg tracking-tight hover:text-accent dark:hover:text-accent-light transition-colors duration-200"
                     on:click=move |_| {
                         set_show_contact_links.set(false);
                     }
@@ -40,64 +45,100 @@ pub fn Nav(
 
                     Jay Dan Howard
                 </a>
-                <DarkModeToggle
-                    dark_mode_enabled=dark_mode_enabled
-                    set_dark_mode_enabled=set_dark_mode_enabled
-                />
-            </div>
-            <div class="flex ml-auto items-center">
-                {routes
-                    .into_iter()
-                    .map(|(route, display_text)| {
-                        view! {
-                            <a
-                                href=route
-                                class="hover:underline px-3 py-2 transition"
-                                on:click=move |_| {
-                                    set_show_contact_links.set(false);
-                                }
-                            >
+                <div class="flex ml-auto items-center gap-1">
+                    {routes
+                        .into_iter()
+                        .map(|(route, display_text)| {
+                            let nav = navigate.clone();
+                            view! {
+                                <button
+                                    type="button"
+                                    class="px-4 py-2 relative transition-all duration-200"
+                                    class=(
+                                        "text-accent dark:text-accent-light",
+                                        move || {
+                                            let path = pathname();
+                                            path == route || path.starts_with(&format!("{}/", route))
+                                        },
+                                    )
 
-                                {display_text}
-                            </a>
-                        }
-                    })
-                    .collect_view()} <div class="flex flex-col">
-                    <button
-                        type="button"
-                        class="hover:underline px-3 py-2 transition"
-                        on:click=move |_| {
-                            set_show_contact_links.set(!show_contact_links());
-                        }
-                    >
+                                    class=(
+                                        "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent dark:after:bg-accent-light after:scale-x-100",
+                                        move || {
+                                            let path = pathname();
+                                            path == route || path.starts_with(&format!("{}/", route))
+                                        },
+                                    )
 
-                        Contact
-                        <i class="fas fa-caret-down"></i>
-                    </button>
-                    <div class="absolute mt-10">
-                        <Show when=move || {
-                            show_contact_links()
-                        }>
-                            {contact_links
-                                .clone()
-                                .into_iter()
-                                .map(|(route, iconClass, external)| {
-                                    let target = if external { "_blank" } else { "_self" };
-                                    view! {
-                                        <a
-                                            href=route
-                                            class="hover:underline relative block px-3 py-2 transition"
-                                            target=target
-                                            rel="noreferrer"
-                                        >
+                                    class=(
+                                        "text-charcoal dark:text-gray hover:text-accent dark:hover:text-accent-light",
+                                        move || {
+                                            let path = pathname();
+                                            !(path == route || path.starts_with(&format!("{}/", route)))
+                                        },
+                                    )
 
-                                            <i class=iconClass></i>
-                                        </a>
+                                    class=(
+                                        "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent dark:after:bg-accent-light after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200",
+                                        move || {
+                                            let path = pathname();
+                                            !(path == route || path.starts_with(&format!("{}/", route)))
+                                        },
+                                    )
+
+                                    on:click=move |_| {
+                                        set_show_contact_links.set(false);
+                                        nav(route, Default::default());
                                     }
-                                })
-                                .collect_view()}
-                        </Show>
+                                >
+
+                                    {display_text}
+                                </button>
+                            }
+                        })
+                        .collect_view()} <div class="flex flex-col relative">
+                        <button
+                            type="button"
+                            class="px-4 py-2 text-charcoal dark:text-gray hover:text-accent dark:hover:text-accent-light transition-colors duration-200"
+                            on:click=move |_| {
+                                set_show_contact_links.set(!show_contact_links());
+                            }
+                        >
+
+                            Contact
+                            <i class="fas fa-caret-down ml-1 text-xs"></i>
+                        </button>
+                        <div class="absolute top-full mt-2 right-0 z-10">
+                            <Show when=move || {
+                                show_contact_links()
+                            }>
+                                <div class="bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg shadow-minimal-lg overflow-hidden min-w-[160px]">
+                                    {contact_links
+                                        .clone()
+                                        .into_iter()
+                                        .map(|(route, iconClass, external)| {
+                                            let target = if external { "_blank" } else { "_self" };
+                                            view! {
+                                                <a
+                                                    href=route
+                                                    class="hover:bg-border hover:bg-opacity-50 dark:hover:bg-border-dark dark:hover:bg-opacity-30 hover:text-accent dark:hover:text-accent-light flex items-center gap-3 px-4 py-3 transition-colors duration-200"
+                                                    target=target
+                                                    rel="noreferrer"
+                                                >
+
+                                                    <i class=iconClass></i>
+                                                </a>
+                                            }
+                                        })
+                                        .collect_view()}
+                                </div>
+                            </Show>
+                        </div>
                     </div>
+                    <DarkModeToggle
+                        dark_mode_enabled=dark_mode_enabled
+                        set_dark_mode_enabled=set_dark_mode_enabled
+                    />
                 </div>
             </div>
         </nav>

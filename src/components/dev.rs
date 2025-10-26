@@ -4,22 +4,24 @@ use leptos::prelude::*;
 #[component]
 pub fn Lighthouse() -> impl IntoView {
     view! {
-        <div>
-            "Here is a programmatically generated lighthouse report "
-            <a
-                class="font-semibold underline"
-                href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh"
-                target="_blank"
-                rel="noreferrer"
-            >
-                for every deploy
-            </a> "that gets kicked off as part of a k8s job for every new deploy of this site."
+        <div class="flex flex-col gap-6 h-full">
+            <div class="text-base leading-loose text-charcoal dark:text-gray opacity-90 dark:opacity-85">
+                "Here is a programmatically generated lighthouse report "
+                <a
+                    class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
+                    href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    for every deploy
+                </a> "that gets kicked off as part of a k8s job for every new deploy of this site."
+            </div>
+            <iframe
+                src="/assets/lighthouse.html"
+                title="Lighthouse Report"
+                class="grow w-full rounded-xl border border-border dark:border-border-dark shadow-minimal-lg"
+            ></iframe>
         </div>
-        <iframe
-            src="/assets/lighthouse.html"
-            title="Lighthouse Report"
-            class="grow w-full"
-        ></iframe>
     }
 }
 

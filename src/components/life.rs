@@ -131,59 +131,89 @@ fn Controls(
     };
 
     view! {
-        <div class="flex flex-row space-x-10">
-            <div class="flex flex-col text-charcoal dark:text-gray">
-                <label for="grid_size">Grid Size</label>
-                <input
-                    type="text"
-                    id="grid_size"
-                    on:input=move |ev| {
-                        set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
-                    }
-
-                    prop:value=grid_size
-                />
-                <label for="alive_probability">Alive probability</label>
-                <input
-                    type="text"
-                    id="alive_probability"
-                    on:input=move |ev| {
-                        set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
-                    }
-
-                    prop:value=alive_probability
-                />
-                <label for="interval_time">Simulation speed in ms</label>
-                <input
-                    type="text"
-                    id="interval_time"
-                    on:input=move |ev| {
-                        set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
-                        if interval_handle().is_some() {
-                            create_simulation_interval();
+        <div class="flex flex-col gap-6 w-full max-w-2xl">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="flex flex-col gap-2">
+                    <label for="grid_size" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Grid Size
+                    </label>
+                    <input
+                        type="text"
+                        id="grid_size"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:input=move |ev| {
+                            set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
                         }
-                    }
 
-                    prop:value=interval_ms
-                />
+                        prop:value=grid_size
+                    />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="alive_probability" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Alive Probability
+                    </label>
+                    <input
+                        type="text"
+                        id="alive_probability"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:input=move |ev| {
+                            set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
+                        }
+
+                        prop:value=alive_probability
+                    />
+                </div>
+                <div class="flex flex-col gap-2">
+                    <label for="interval_time" class="text-sm font-medium text-charcoal dark:text-gray">
+                        Speed (ms)
+                    </label>
+                    <input
+                        type="text"
+                        id="interval_time"
+                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        on:input=move |ev| {
+                            set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
+                            if interval_handle().is_some() {
+                                create_simulation_interval();
+                            }
+                        }
+
+                        prop:value=interval_ms
+                    />
+                </div>
             </div>
-            <div class="flex flex-col">
-                <button on:click=move |_| {
-                    if let Some(handle) = interval_handle() {
-                        handle.clear();
+            <div class="flex flex-row gap-3">
+                <button
+                    class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
+                    on:click=move |_| {
+                        if let Some(handle) = interval_handle() {
+                            handle.clear();
+                        }
+                        set_cells(CellVec(Vec::new()))
                     }
-                    set_cells(CellVec(Vec::new()))
-                }>Reset</button>
-                <button on:click=move |_| {
-                    if let Some(handle) = interval_handle() {
-                        handle.clear();
+                >
+                    Reset
+                </button>
+                <button
+                    class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
+                    on:click=move |_| {
+                        if let Some(handle) = interval_handle() {
+                            handle.clear();
+                        }
+                        randomize_cells(alive_probability(), grid_size(), set_cells)
                     }
-                    randomize_cells(alive_probability(), grid_size(), set_cells)
-                }>Randomize</button>
-                <button on:click=move |_| {
-                    prepare_neighbors(cells, set_cells);
-                    create_simulation_interval();
-                }>Simulate</button>
+                >
+                    Randomize
+                </button>
+                <button
+                    class="px-6 py-2 rounded-lg bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 font-medium shadow-minimal"
+                    on:click=move |_| {
+                        prepare_neighbors(cells, set_cells);
+                        create_simulation_interval();
+                    }
+                >
+                    Simulate
+                </button>
             </div>
         </div>
     }
@@ -219,9 +249,9 @@ fn Grid(
                                             };
                                             view! {
                                                 <div
-                                                    class="w-10 h-10 border-2 border-charcoal dark:border-gray"
-                                                    class=("bg-charcoal", move || is_alive())
-                                                    class=("dark:bg-gray", move || is_alive())
+                                                    class="w-10 h-10 border border-border dark:border-border-dark cursor-pointer hover:bg-border hover:bg-opacity-30 dark:hover:bg-border-dark dark:hover:bg-opacity-30 transition-colors"
+                                                    class=("bg-accent", move || is_alive())
+                                                    class=("dark:bg-accent-light", move || is_alive())
                                                     on:click=move |_| {
                                                         match cells()
                                                             .0
@@ -275,16 +305,7 @@ pub fn Life() -> impl IntoView {
 
     view! {
         <SourceAnchor href="#[git]" />
-        <div class="flex flex-col items-center">
-            <a
-                class="hover:underline relative block px-3 py-2 transition"
-                href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
-                target="_blank"
-                rel="noreferrer"
-            >
-                "Wiki"
-            </a>
-            <h2>Alive Cells: {alive_cells}</h2>
+        <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
             <Controls
                 grid_size
                 set_grid_size
@@ -293,7 +314,19 @@ pub fn Life() -> impl IntoView {
                 cells
                 set_cells
             />
-            <div class="mt-20">
+            <div class="flex items-center gap-4 text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+                <span>"Alive Cells: " {alive_cells}</span>
+                <span class="text-border dark:text-border-dark">"|"</span>
+                <a
+                    class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
+                    href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+                    target="_blank"
+                    rel="noreferrer"
+                >
+                    "Learn More"
+                </a>
+            </div>
+            <div class="mt-4">
                 <Grid grid_size cells set_cells />
             </div>
         </div>

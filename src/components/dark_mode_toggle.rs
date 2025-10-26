@@ -83,8 +83,8 @@ pub fn DarkModeToggle(
         <Meta name="color-scheme" content=color_scheme />
         <input type="hidden" name="prefers_dark" value=move || (!dark_mode_enabled()).to_string() />
         <button
-            type="submit"
-            class="fixed bottom-12 right-20"
+            type="button"
+            class="p-2 rounded-lg hover:bg-border hover:bg-opacity-50 dark:hover:bg-border-dark dark:hover:bg-opacity-30 transition-all duration-200 text-charcoal dark:text-gray"
             aria-label="light-dark-mode-toggle"
             on:click=move |_| {
                 let dark_mode = dark_mode_enabled();
