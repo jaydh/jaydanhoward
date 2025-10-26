@@ -3,16 +3,18 @@ use leptos::prelude::*;
 #[component]
 pub fn SourceAnchor(href: &'static str) -> impl IntoView {
     view! {
-        <div class="group fixed bottom-12 right-12 aria-hidden='true' ">
+        <div class="group fixed bottom-8 right-8 aria-hidden='true' z-50">
             <a
-                class="fas fa-code"
+                class="flex items-center justify-center w-12 h-12 rounded-full bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 shadow-minimal-lg hover:shadow-minimal-xl"
                 href=href
                 target="_blank"
                 rel="noreferrer"
                 aria-label="source_anchor"
-            ></a>
-            <span class="absolute -top-20 -left-20 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100">
-                Self-Referencing Source Code
+            >
+                <i class="fas fa-code"></i>
+            </a>
+            <span class="absolute bottom-full mb-2 right-0 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark text-charcoal dark:text-gray px-3 py-2 rounded-lg shadow-minimal-lg whitespace-nowrap text-sm">
+                View Source Code
             </span>
         </div>
     }
