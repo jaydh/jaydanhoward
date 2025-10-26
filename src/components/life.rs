@@ -306,6 +306,9 @@ pub fn Life() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
+            <h1 class="text-3xl font-bold text-charcoal dark:text-gray">
+                "Conway's Game of Life"
+            </h1>
             <Controls
                 grid_size
                 set_grid_size
