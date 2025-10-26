@@ -159,7 +159,7 @@ fn Controls(
 
 #[component]
 fn Grid(
-    grid_size: ReadSignal<u32>,
+    #[allow(unused_variables)] grid_size: ReadSignal<u32>,
     #[allow(unused_variables)] cells: ReadSignal<AliveCells>,
     #[allow(unused_variables)] set_cells: WriteSignal<AliveCells>,
 ) -> impl IntoView {
@@ -171,64 +171,95 @@ fn Grid(
     #[cfg(not(feature = "ssr"))]
     let canvas_ref = NodeRef::<Canvas>::new();
 
-    // Determine cell size based on grid size
-    #[allow(unused_variables)]
-    let cell_size = move || {
-        let size = grid_size();
-        if size > 100 {
-            3
-        } else if size > 50 {
-            5
-        } else {
-            10
-        }
-    };
+    #[cfg(not(feature = "ssr"))]
+    let (resize_trigger, set_resize_trigger) = signal(0);
+
+    // Set up window resize listener
+    #[cfg(not(feature = "ssr"))]
+    {
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+
+        Effect::new(move |_| {
+            let window = web_sys::window().unwrap();
+            let closure = Closure::wrap(Box::new(move || {
+                set_resize_trigger.update(|n| *n += 1);
+            }) as Box<dyn Fn()>);
+
+            window
+                .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
+                .unwrap();
+
+            closure.forget(); // Keep the closure alive
+        });
+    }
 
     #[cfg(not(feature = "ssr"))]
     Effect::new(move |_| {
+        // Depend on resize_trigger to re-run on window resize
+        let _ = resize_trigger();
+
         let Some(canvas) = canvas_ref.get() else {
             return;
         };
+
+        let canvas_element: &web_sys::HtmlCanvasElement = canvas.as_ref();
+        let parent = canvas_element.parent_element().unwrap();
+        let container_width = parent.client_width() as f64;
+
+        // Get window inner height for better sizing
+        let window = web_sys::window().unwrap();
+        let window_height = window.inner_height().unwrap().as_f64().unwrap();
+
+        // Use 90% of container width, but cap at reasonable sizes
+        let max_width = container_width * 0.95;
+        let max_height = window_height * 0.6; // Use 60% of viewport height
+
+        // Use the smaller dimension to keep it square
+        let max_size = max_width.min(max_height).min(800.0).max(300.0); // Between 300-800px
+
+        let grid = grid_size();
+        let cell_px = (max_size / grid as f64).floor().max(1.0);
+        let canvas_size = (cell_px * grid as f64) as u32;
+
+        canvas.set_width(canvas_size);
+        canvas.set_height(canvas_size);
+
         let context = canvas
             .get_context("2d")
             .unwrap()
             .unwrap()
             .unchecked_into::<web_sys::CanvasRenderingContext2d>();
 
-        let grid = grid_size();
-        let cell_px = cell_size();
-        let canvas_size = grid * cell_px;
-
-        canvas.set_width(canvas_size);
-        canvas.set_height(canvas_size);
-
         // Clear canvas
         context.set_fill_style_str("#FFFFFF");
         context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
 
-        // Draw grid lines
-        context.set_stroke_style_str("#E5E7EB");
-        context.set_line_width(1.0);
-        for i in 0..=grid {
-            let pos = (i * cell_px) as f64;
-            context.begin_path();
-            context.move_to(pos, 0.0);
-            context.line_to(pos, canvas_size as f64);
-            context.stroke();
-            context.begin_path();
-            context.move_to(0.0, pos);
-            context.line_to(canvas_size as f64, pos);
-            context.stroke();
+        // Draw grid lines (only if cells are large enough)
+        if cell_px >= 5.0 {
+            context.set_stroke_style_str("#E5E7EB");
+            context.set_line_width(1.0);
+            for i in 0..=grid {
+                let pos = i as f64 * cell_px;
+                context.begin_path();
+                context.move_to(pos, 0.0);
+                context.line_to(pos, canvas_size as f64);
+                context.stroke();
+                context.begin_path();
+                context.move_to(0.0, pos);
+                context.line_to(canvas_size as f64, pos);
+                context.stroke();
+            }
         }
 
         // Draw alive cells
         context.set_fill_style_str("#3B82F6");
         for &(x, y) in cells().0.iter() {
             context.fill_rect(
-                (x * cell_px as i32) as f64,
-                (y * cell_px as i32) as f64,
-                cell_px as f64,
-                cell_px as f64,
+                x as f64 * cell_px,
+                y as f64 * cell_px,
+                cell_px,
+                cell_px,
             );
         }
     });
@@ -238,11 +269,14 @@ fn Grid(
         let Some(canvas) = canvas_ref.get() else {
             return;
         };
-        let canvas_element: &web_sys::Element = canvas.as_ref();
+        let canvas_element: &web_sys::HtmlCanvasElement = canvas.as_ref();
         let rect = canvas_element.get_bounding_client_rect();
-        let cell_px = cell_size();
-        let x = ((event.client_x() as f64 - rect.left()) / cell_px as f64) as i32;
-        let y = ((event.client_y() as f64 - rect.top()) / cell_px as f64) as i32;
+        let canvas_width = canvas_element.width() as f64;
+        let grid = grid_size();
+        let cell_px = canvas_width / grid as f64;
+
+        let x = ((event.client_x() as f64 - rect.left()) / cell_px) as i32;
+        let y = ((event.client_y() as f64 - rect.top()) / cell_px) as i32;
 
         let pos = (x, y);
         set_cells.update(|alive_cells| {
@@ -380,49 +414,54 @@ pub fn LifeGame(
 
     view! {
         <div class="w-full flex flex-col gap-4 items-center">
-            <div class="flex gap-2">
-                {
-                    #[cfg(not(feature = "ssr"))]
+            <div class="flex gap-3 items-center">
+                <div class="flex gap-2">
                     {
-                        view! {
-                            <button
-                                class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
-                                style:border-color="#3B82F6"
-                                style:color="#3B82F6"
-                                class:hover:bg-opacity-20=true
-                                on:click=move |_| toggle_simulation()
-                            >
-                                {move || if is_running() { "▌▌" } else { "▶" }}
-                            </button>
-                            <button
-                                class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
-                                style:border-color="#3B82F6"
-                                style:color="#3B82F6"
-                                class:hover:bg-opacity-20=true
-                                on:click=move |_| reset()
-                            >
-                                "↻"
-                            </button>
+                        #[cfg(not(feature = "ssr"))]
+                        {
+                            view! {
+                                <button
+                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                    style:border-color="#3B82F6"
+                                    style:color="#3B82F6"
+                                    class:hover:bg-opacity-20=true
+                                    on:click=move |_| toggle_simulation()
+                                >
+                                    {move || if is_running() { "▌▌" } else { "▶" }}
+                                </button>
+                                <button
+                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                    style:border-color="#3B82F6"
+                                    style:color="#3B82F6"
+                                    class:hover:bg-opacity-20=true
+                                    on:click=move |_| reset()
+                                >
+                                    "↻"
+                                </button>
+                            }
+                        }
+                        #[cfg(feature = "ssr")]
+                        {
+                            view! {
+                                <button
+                                    class="px-4 py-1.5 text-sm rounded border border-border dark:border-border-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-20 dark:hover:bg-opacity-20 transition-all duration-200"
+                                >
+                                    "▶"
+                                </button>
+                                <button
+                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                    style:border-color="#3B82F6"
+                                    style:color="#3B82F6"
+                                >
+                                    "↻"
+                                </button>
+                            }
                         }
                     }
-                    #[cfg(feature = "ssr")]
-                    {
-                        view! {
-                            <button
-                                class="px-4 py-1.5 text-sm rounded border border-border dark:border-border-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-20 dark:hover:bg-opacity-20 transition-all duration-200"
-                            >
-                                "▶"
-                            </button>
-                            <button
-                                class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
-                                style:border-color="#3B82F6"
-                                style:color="#3B82F6"
-                            >
-                                "↻"
-                            </button>
-                        }
-                    }
-                }
+                </div>
+                <span class="text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+                    {alive_cells} " cells"
+                </span>
             </div>
             {show_controls.then(|| view! {
                 <Controls
@@ -450,7 +489,7 @@ pub fn LifeGame(
                     </a>
                 </div>
             })}
-            <div>
+            <div class="w-full flex justify-center">
                 <Grid grid_size cells set_cells />
             </div>
         </div>
