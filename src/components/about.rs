@@ -9,25 +9,27 @@ pub fn MeSection() -> impl IntoView {
     view! {
         <div class="max-w-3xl flex flex-col gap-6 text-base leading-loose text-charcoal dark:text-gray opacity-90 dark:opacity-85">
             <p>
-                "Thanks for checking out my k8s cluster! Unbeknownst to you, your browser is talking to some old computers and raspberry pis in my closet, thanks for asking. This website and cluster are my pet projects for exploring using "
-                <a href="https://leptos.dev/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
-                    Rust on the web
-                </a> " and self-hosting "
+                "You're currently talking to some old computers and raspberry pis in my closet. This site runs on a self-hosted "
                 <a href="https://kubernetes.io/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
                     Kubernetes
-                </a> ". The cluster also runs self-hosted autoscaling "
+                </a>
+                " cluster with a full CI/CD pipeline: autoscaling "
                 <a href="https://github.com/actions/actions-runner-controller" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
                     GitHub Actions runners
                 </a>
-                " across both x86 and arm nodes, along with an in-cluster "
+                " (x86 + arm), in-cluster "
                 <a href="https://goharbor.io/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
                     Harbor
                 </a>
-                " deployment for a self-hosted Docker registry (which the runners use to build the images for this site). Storage is provided by "
+                " registry, and "
                 <a href="https://rook.io/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
                     Rook-Ceph
                 </a>
-                ", a distributed file system that backs everything from the registry to backups. "
+                " distributed storage backing everything. Built with "
+                <a href="https://leptos.dev/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
+                    Rust/Leptos
+                </a>
+                ", exposed via "
                 <a
                     href="https://developers.cloudflare.com/cloudflare-one/"
                     target="_blank"
@@ -35,14 +37,14 @@ pub fn MeSection() -> impl IntoView {
                 >
                     Cloudflare Tunnels
                 </a>
-                " enable you to securely connect to services on my cluster without me risking my apartment network."
+                " so you can reach my apartment network without me risking it."
             </p>
             <p>
-                "I'm currently a software engineer at "
+                "I'm a software engineer at "
                 <a href="https://www.astranis.com/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
                     "Astranis"
                 </a>
-                ", where we make dedicated microgeo satellites. I do everything from building UI and services for monitoring and commanding Satcom payloads, to administering and planning disaster-recovery for our coporate cluster and production databases. I care a lot about writing reliable software, end to end. That involves making sure software runs fast (whereever it runs) and it screams loud when it isn't (in a way that coaches people to pay attention)."
+                ", building satellites. I work on everything from UI and monitoring services for Satcom payloads to administering production clusters and planning disaster recovery. I care about reliable software end-to-end: making it run fast and scream loud when it breaks (in ways that make people pay attention)."
             </p>
         </div>
     }
