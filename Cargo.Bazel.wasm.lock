@@ -1,5 +1,5 @@
 {
-  "checksum": "e88825a8a3464784493ed7176ffb951d0c54c89c0dcbf6fc1c9b97094f7a5db3",
+  "checksum": "8f293a52a672be9c259119137a00631a488c0309c5912731552bbbe5c69be051",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -12928,6 +12928,7 @@
             "BeforeUnloadEvent",
             "BinaryType",
             "Blob",
+            "CanvasRenderingContext2d",
             "CharacterData",
             "ClipboardEvent",
             "CloseEvent",
@@ -12940,6 +12941,8 @@
             "DeviceOrientationEvent",
             "Document",
             "DocumentFragment",
+            "DomRect",
+            "DomRectReadOnly",
             "DomStringMap",
             "DomTokenList",
             "DragEvent",
