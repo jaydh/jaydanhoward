@@ -34,26 +34,26 @@ impl fmt::Display for CellVec {
     }
 }
 
-fn prepare_neighbors(cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>) {
+fn prepare_neighbors(cells: ReadSignal<CellVec>, set_cells: WriteSignal<CellVec>, grid_size: u32) {
     let current_cells = &cells().0;
     let mut next_cells = current_cells.clone();
 
     for cell in &mut next_cells {
+        cell.neighbors.clear();
         for dy in -1..=1 {
             for dx in -1..=1 {
                 if dx == 0 && dy == 0 {
                     continue;
                 }
 
-                let neighbor_x = cell.x_pos as isize + dx;
-                let neighbor_y = cell.y_pos as isize + dy;
+                let neighbor_x = cell.x_pos + dx;
+                let neighbor_y = cell.y_pos + dy;
 
-                if neighbor_x >= 0 && neighbor_y >= 0 {
-                    if let Some(neighbor_index) = current_cells.iter().position(|c| {
-                        c.x_pos as isize == neighbor_x && c.y_pos as isize == neighbor_y
-                    }) {
-                        cell.neighbors.push(neighbor_index);
-                    }
+                if neighbor_x >= 0 && neighbor_y >= 0
+                    && neighbor_x < grid_size as i32 && neighbor_y < grid_size as i32 {
+                    // Calculate index directly: cells are stored as x * grid_size + y
+                    let neighbor_index = (neighbor_x as u32 * grid_size + neighbor_y as u32) as usize;
+                    cell.neighbors.push(neighbor_index);
                 }
             }
         }
@@ -208,7 +208,7 @@ fn Controls(
                 <button
                     class="px-6 py-2 rounded-lg bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 font-medium shadow-minimal"
                     on:click=move |_| {
-                        prepare_neighbors(cells, set_cells);
+                        prepare_neighbors(cells, set_cells, grid_size());
                         create_simulation_interval();
                     }
                 >
@@ -226,64 +226,70 @@ fn Grid(
     set_cells: WriteSignal<CellVec>,
 ) -> impl IntoView {
     let range = move || 0..grid_size();
+
+    // Determine cell size based on grid size
+    let cell_size = move || {
+        let size = grid_size();
+        if size > 100 {
+            "w-3 h-3"
+        } else if size > 50 {
+            "w-5 h-5"
+        } else {
+            "w-10 h-10"
+        }
+    };
+
     view! {
         <div class="flex flex-col">
             {move || {
+                let current_cells = cells();
+                let size = cell_size();
+                let grid = grid_size();
                 range()
                     .clone()
                     .map(|y| {
                         view! {
                             <div class="flex flex-row">
-                                {move || {
-                                    range()
-                                        .clone()
-                                        .map(|x| {
-                                            let is_alive = move || {
-                                                cells
-                                                    .get()
-                                                    .0
-                                                    .iter()
-                                                    .any(|c| {
-                                                        c.x_pos == x as i32 && c.y_pos == y as i32 && c.alive
-                                                    })
-                                            };
-                                            view! {
-                                                <div
-                                                    class="w-10 h-10 border border-border dark:border-border-dark cursor-pointer hover:bg-border hover:bg-opacity-30 dark:hover:bg-border-dark dark:hover:bg-opacity-30 transition-colors"
-                                                    class=("bg-accent", move || is_alive())
-                                                    class=("dark:bg-accent-light", move || is_alive())
-                                                    on:click=move |_| {
-                                                        match cells()
-                                                            .0
-                                                            .iter()
-                                                            .position(|item| {
-                                                                item.x_pos == x as i32 && item.y_pos == y as i32
-                                                            })
-                                                        {
-                                                            Some(pos) => {
-                                                                let mut next_cells = cells().0.clone();
-                                                                next_cells[pos].alive = !cells().0[pos].alive;
-                                                                set_cells(CellVec(next_cells));
-                                                            }
-                                                            None => {
-                                                                set_cells
-                                                                    .update(|v| {
-                                                                        v.0
-                                                                            .push(Cell {
-                                                                                alive: true,
-                                                                                x_pos: x as i32,
-                                                                                y_pos: y as i32,
-                                                                                neighbors: Vec::new(),
-                                                                            });
+                                {range()
+                                    .clone()
+                                    .map(|x| {
+                                        // Direct index calculation: cells are stored as x * grid_size + y
+                                        let cell_index = (x * grid) + y;
+                                        let is_alive = current_cells.0.get(cell_index as usize)
+                                            .map(|c| c.alive)
+                                            .unwrap_or(false);
+                                        let bg_class = if is_alive {
+                                            "bg-accent dark:bg-accent-light"
+                                        } else {
+                                            "bg-surface dark:bg-surface-dark"
+                                        };
+                                        view! {
+                                            <div
+                                                class=move || format!("{} border border-border dark:border-border-dark cursor-pointer {}", size, bg_class)
+                                                on:click=move |_| {
+                                                    let idx = (x * grid_size()) + y;
+                                                    let idx_usize = idx as usize;
+                                                    if idx_usize < cells().0.len() {
+                                                        let mut next_cells = cells().0.clone();
+                                                        next_cells[idx_usize].alive = !next_cells[idx_usize].alive;
+                                                        set_cells(CellVec(next_cells));
+                                                    } else {
+                                                        set_cells
+                                                            .update(|v| {
+                                                                v.0
+                                                                    .push(Cell {
+                                                                        alive: true,
+                                                                        x_pos: x as i32,
+                                                                        y_pos: y as i32,
+                                                                        neighbors: Vec::new(),
                                                                     });
-                                                            }
-                                                        }
+                                                            });
                                                     }
-                                                ></div>
-                                            }
-                                        })
-                                        .collect_view()
-                                }}
+                                                }
+                                            ></div>
+                                        }
+                                    })
+                                    .collect_view()}
 
                             </div>
                         }
