@@ -1,13 +1,12 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
-use leptos::*;
-use leptos_dom::helpers::IntervalHandle;
 use rand::Rng;
 use std::collections::HashSet;
 
 #[derive(Clone, Default)]
 struct AliveCells(HashSet<(i32, i32)>);
 
+#[cfg(not(feature = "ssr"))]
 fn calculate_next(
     cells: ReadSignal<AliveCells>,
     set_cells: WriteSignal<AliveCells>,
@@ -69,24 +68,13 @@ fn Controls(
     set_grid_size: WriteSignal<u32>,
     alive_probability: ReadSignal<f64>,
     set_alive_probability: WriteSignal<f64>,
-    cells: ReadSignal<AliveCells>,
+    #[allow(unused_variables)] cells: ReadSignal<AliveCells>,
     set_cells: WriteSignal<AliveCells>,
+    interval_ms: ReadSignal<u64>,
+    set_interval_ms: WriteSignal<u64>,
+    start_simulation: impl Fn() + 'static + Copy,
+    stop_simulation: impl Fn() + 'static + Copy,
 ) -> impl IntoView {
-    let (interval_handle, set_interval_handle) = signal(None::<IntervalHandle>);
-    let (interval_ms, set_interval_ms) = signal(200);
-
-    let create_simulation_interval = move || {
-        if let Some(handle) = interval_handle() {
-            handle.clear();
-        }
-        let interval_handle = set_interval_with_handle(
-            move || {
-                calculate_next(cells, set_cells, grid_size());
-            },
-            std::time::Duration::from_millis(interval_ms()),
-        );
-        set_interval_handle(interval_handle.ok());
-    };
 
     view! {
         <div class="flex flex-col gap-6 w-full max-w-2xl">
@@ -131,9 +119,6 @@ fn Controls(
                         class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
                         on:input=move |ev| {
                             set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
-                            if interval_handle().is_some() {
-                                create_simulation_interval();
-                            }
                         }
 
                         prop:value=interval_ms
@@ -144,9 +129,7 @@ fn Controls(
                 <button
                     class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
-                        if let Some(handle) = interval_handle() {
-                            handle.clear();
-                        }
+                        stop_simulation();
                         set_cells(AliveCells::default())
                     }
                 >
@@ -155,9 +138,7 @@ fn Controls(
                 <button
                     class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
-                        if let Some(handle) = interval_handle() {
-                            handle.clear();
-                        }
+                        stop_simulation();
                         randomize_cells(alive_probability(), grid_size(), set_cells)
                     }
                 >
@@ -166,7 +147,7 @@ fn Controls(
                 <button
                     class="px-6 py-2 rounded-lg bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 font-medium shadow-minimal"
                     on:click=move |_| {
-                        create_simulation_interval();
+                        start_simulation();
                     }
                 >
                     Simulate
@@ -295,42 +276,196 @@ fn Grid(
 }
 
 #[component]
-pub fn Life() -> impl IntoView {
+pub fn LifeGame(
+    #[prop(optional)] initial_grid_size: Option<u32>,
+    #[prop(optional)] initial_alive_probability: Option<f64>,
+    #[prop(optional)] initial_interval_ms: Option<u64>,
+    #[prop(default = true)] show_controls: bool,
+    #[prop(default = false)] #[allow(unused_variables)] auto_start: bool,
+) -> impl IntoView {
     let (cells, set_cells) = signal::<AliveCells>(AliveCells::default());
     let alive_cells = move || cells().0.len();
 
-    let (grid_size, set_grid_size) = signal(25);
-    let (alive_probability, set_alive_probability) = signal(0.6);
+    let (grid_size, set_grid_size) = signal(initial_grid_size.unwrap_or(25));
+    let (alive_probability, set_alive_probability) = signal(initial_alive_probability.unwrap_or(0.6));
+    let (interval_ms, set_interval_ms) = signal(initial_interval_ms.unwrap_or(200));
 
+    #[cfg(not(feature = "ssr"))]
+    let (interval_handle, set_interval_handle) = signal(None::<leptos::prelude::IntervalHandle>);
+    #[cfg(not(feature = "ssr"))]
+    let (is_running, set_is_running) = signal(false);
+
+    #[cfg(not(feature = "ssr"))]
+    let start_simulation = {
+        let interval_handle = interval_handle;
+        let set_interval_handle = set_interval_handle;
+        let set_is_running = set_is_running;
+        let interval_ms = interval_ms;
+        let cells = cells;
+        let set_cells = set_cells;
+        let grid_size = grid_size;
+        move || {
+            if let Some(handle) = interval_handle() {
+                handle.clear();
+            }
+            let handle = set_interval_with_handle(
+                move || {
+                    calculate_next(cells, set_cells, grid_size());
+                },
+                std::time::Duration::from_millis(interval_ms()),
+            );
+            set_interval_handle(handle.ok());
+            set_is_running(true);
+        }
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let stop_simulation = {
+        let interval_handle = interval_handle;
+        let set_interval_handle = set_interval_handle;
+        let set_is_running = set_is_running;
+        move || {
+            if let Some(handle) = interval_handle() {
+                handle.clear();
+            }
+            set_interval_handle(None);
+            set_is_running(false);
+        }
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let toggle_simulation = {
+        let is_running = is_running;
+        move || {
+            if is_running() {
+                stop_simulation();
+            } else {
+                start_simulation();
+            }
+        }
+    };
+
+    // Auto-start if requested
+    #[cfg(not(feature = "ssr"))]
+    if auto_start {
+        let initial_probability = alive_probability();
+        let initial_grid_size = grid_size();
+        Effect::new(move |prev: Option<()>| {
+            // Only run once on mount
+            if prev.is_some() {
+                return;
+            }
+            // Randomize cells on mount
+            randomize_cells(initial_probability, initial_grid_size, set_cells);
+            // Start simulation
+            start_simulation();
+        });
+    }
+
+    #[cfg(feature = "ssr")]
+    let start_simulation = || {};
+    #[cfg(feature = "ssr")]
+    let stop_simulation = || {};
+
+    #[cfg(not(feature = "ssr"))]
+    let reset = move || {
+        stop_simulation();
+        randomize_cells(alive_probability(), grid_size(), set_cells);
+        start_simulation();
+    };
+
+    #[cfg(feature = "ssr")]
+    #[allow(unused_variables)]
+    let reset = || {};
+
+    view! {
+        <div class="w-full flex flex-col gap-4 items-center">
+            <div class="flex gap-2">
+                {
+                    #[cfg(not(feature = "ssr"))]
+                    {
+                        view! {
+                            <button
+                                class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                style:border-color="#3B82F6"
+                                style:color="#3B82F6"
+                                class:hover:bg-opacity-20=true
+                                on:click=move |_| toggle_simulation()
+                            >
+                                {move || if is_running() { "▌▌" } else { "▶" }}
+                            </button>
+                            <button
+                                class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                style:border-color="#3B82F6"
+                                style:color="#3B82F6"
+                                class:hover:bg-opacity-20=true
+                                on:click=move |_| reset()
+                            >
+                                "↻"
+                            </button>
+                        }
+                    }
+                    #[cfg(feature = "ssr")]
+                    {
+                        view! {
+                            <button
+                                class="px-4 py-1.5 text-sm rounded border border-border dark:border-border-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-20 dark:hover:bg-opacity-20 transition-all duration-200"
+                            >
+                                "▶"
+                            </button>
+                            <button
+                                class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                style:border-color="#3B82F6"
+                                style:color="#3B82F6"
+                            >
+                                "↻"
+                            </button>
+                        }
+                    }
+                }
+            </div>
+            {show_controls.then(|| view! {
+                <Controls
+                    grid_size
+                    set_grid_size
+                    alive_probability
+                    set_alive_probability
+                    cells
+                    set_cells
+                    interval_ms
+                    set_interval_ms
+                    start_simulation
+                    stop_simulation
+                />
+                <div class="flex items-center gap-4 text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+                    <span>"Alive Cells: " {alive_cells}</span>
+                    <span class="text-border dark:text-border-dark">"|"</span>
+                    <a
+                        class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
+                        href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+                        target="_blank"
+                        rel="noreferrer"
+                    >
+                        "Learn More"
+                    </a>
+                </div>
+            })}
+            <div>
+                <Grid grid_size cells set_cells />
+            </div>
+        </div>
+    }
+}
+
+#[component]
+pub fn Life() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
             <h1 class="text-3xl font-bold text-charcoal dark:text-gray">
                 "Conway's Game of Life"
             </h1>
-            <Controls
-                grid_size
-                set_grid_size
-                alive_probability
-                set_alive_probability
-                cells
-                set_cells
-            />
-            <div class="flex items-center gap-4 text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
-                <span>"Alive Cells: " {alive_cells}</span>
-                <span class="text-border dark:text-border-dark">"|"</span>
-                <a
-                    class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
-                    href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
-                    target="_blank"
-                    rel="noreferrer"
-                >
-                    "Learn More"
-                </a>
-            </div>
-            <div class="mt-4">
-                <Grid grid_size cells set_cells />
-            </div>
+            <LifeGame />
         </div>
     }
 }

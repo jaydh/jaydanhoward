@@ -1,5 +1,6 @@
 use crate::components::cluster_stats::ClusterStats;
 use crate::components::source_anchor::SourceAnchor;
+use crate::components::LifeGame;
 
 use leptos::prelude::*;
 
@@ -14,7 +15,19 @@ pub fn MeSection() -> impl IntoView {
                 </a> " and self-hosting "
                 <a href="https://kubernetes.io/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
                     Kubernetes
-                </a> ". "
+                </a> ". The cluster also runs self-hosted autoscaling "
+                <a href="https://github.com/actions/actions-runner-controller" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
+                    GitHub Actions runners
+                </a>
+                " across both x86 and arm nodes, along with an in-cluster "
+                <a href="https://goharbor.io/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
+                    Harbor
+                </a>
+                " deployment for a self-hosted Docker registry (which the runners use to build the images for this site). Storage is provided by "
+                <a href="https://rook.io/" target="_blank" class="text-accent dark:text-accent-light hover:underline transition-colors duration-200">
+                    Rook-Ceph
+                </a>
+                ", a distributed file system that backs everything from the registry to backups. "
                 <a
                     href="https://developers.cloudflare.com/cloudflare-one/"
                     target="_blank"
@@ -42,6 +55,27 @@ pub fn About() -> impl IntoView {
         <ClusterStats />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex justify-center">
             <MeSection />
+        </div>
+        <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col items-center gap-8">
+            <div class="max-w-3xl text-center">
+                <p class="text-base text-charcoal dark:text-gray opacity-90 dark:opacity-85">
+                    "And here's "
+                    <a
+                        href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+                        target="_blank"
+                        class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
+                    >
+                        "Conway's Game of Life"
+                    </a>
+                    ", in Rust of course."
+                </p>
+            </div>
+            <LifeGame
+                initial_grid_size=500
+                initial_interval_ms=20
+                show_controls=false
+                auto_start=true
+            />
         </div>
     }
 }
