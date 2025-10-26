@@ -202,8 +202,13 @@ crates_repository(
             features = [
                   "AbortController",
                   "AbortSignal",
+                  "CanvasRenderingContext2d",
+                  "DomRect",
+                  "Element",
+                  "HtmlCanvasElement",
                   "HtmlDocument",
                   "MediaQueryList",
+                  "MouseEvent",
                   "Touch",
                   "TouchEvent",
                   "TouchEventInit",
