@@ -2,7 +2,6 @@ mod about;
 mod app;
 mod beliefs;
 mod cluster_stats;
-mod dark_mode_toggle;
 mod dev;
 mod life;
 mod link;

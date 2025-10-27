@@ -5,7 +5,7 @@ pub fn SourceAnchor(href: &'static str) -> impl IntoView {
     view! {
         <div class="group fixed bottom-8 right-8 aria-hidden='true' z-50">
             <a
-                class="flex items-center justify-center w-12 h-12 rounded-full bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 shadow-minimal-lg hover:shadow-minimal-xl"
+                class="flex items-center justify-center w-12 h-12 rounded-full bg-accent text-white hover:bg-accent-dark transition-all duration-200 shadow-minimal-lg hover:shadow-minimal-xl"
                 href=href
                 target="_blank"
                 rel="noreferrer"
@@ -13,7 +13,7 @@ pub fn SourceAnchor(href: &'static str) -> impl IntoView {
             >
                 <i class="fas fa-code"></i>
             </a>
-            <span class="absolute bottom-full mb-2 right-0 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 bg-surface dark:bg-surface-dark border border-border dark:border-border-dark text-charcoal dark:text-gray px-3 py-2 rounded-lg shadow-minimal-lg whitespace-nowrap text-sm">
+            <span class="absolute bottom-full mb-2 right-0 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 bg-surface border border-border text-charcoal px-3 py-2 rounded-lg shadow-minimal-lg whitespace-nowrap text-sm">
                 View Source Code
             </span>
         </div>

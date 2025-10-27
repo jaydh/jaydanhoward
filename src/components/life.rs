@@ -80,13 +80,13 @@ fn Controls(
         <div class="flex flex-col gap-6 w-full max-w-2xl">
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div class="flex flex-col gap-2">
-                    <label for="grid_size" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="grid_size" class="text-sm font-medium text-charcoal">
                         Grid Size
                     </label>
                     <input
                         type="text"
                         id="grid_size"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:input=move |ev| {
                             set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
                         }
@@ -95,13 +95,13 @@ fn Controls(
                     />
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="alive_probability" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="alive_probability" class="text-sm font-medium text-charcoal">
                         Alive Probability
                     </label>
                     <input
                         type="text"
                         id="alive_probability"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:input=move |ev| {
                             set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
                         }
@@ -110,13 +110,13 @@ fn Controls(
                     />
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="interval_time" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="interval_time" class="text-sm font-medium text-charcoal">
                         Speed (ms)
                     </label>
                     <input
                         type="text"
                         id="interval_time"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:input=move |ev| {
                             set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
                         }
@@ -127,7 +127,7 @@ fn Controls(
             </div>
             <div class="flex flex-row gap-3">
                 <button
-                    class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
+                    class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
                         stop_simulation();
                         set_cells(AliveCells::default())
@@ -136,7 +136,7 @@ fn Controls(
                     Reset
                 </button>
                 <button
-                    class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
+                    class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
                         stop_simulation();
                         randomize_cells(alive_probability(), grid_size(), set_cells)
@@ -145,7 +145,7 @@ fn Controls(
                     Randomize
                 </button>
                 <button
-                    class="px-6 py-2 rounded-lg bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 font-medium shadow-minimal"
+                    class="px-6 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition-all duration-200 font-medium shadow-minimal"
                     on:click=move |_| {
                         start_simulation();
                     }
@@ -295,7 +295,7 @@ fn Grid(
     return view! {
         <canvas
             node_ref=canvas_ref
-            class="border border-border dark:border-border-dark cursor-pointer"
+            class="border border-border cursor-pointer"
             on:click=handle_click
         ></canvas>
     };
@@ -303,7 +303,7 @@ fn Grid(
     #[cfg(feature = "ssr")]
     view! {
         <canvas
-            class="border border-border dark:border-border-dark cursor-pointer"
+            class="border border-border cursor-pointer"
             on:click=handle_click
         ></canvas>
     }
@@ -444,7 +444,7 @@ pub fn LifeGame(
                         {
                             view! {
                                 <button
-                                    class="px-4 py-1.5 text-sm rounded border border-border dark:border-border-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-20 dark:hover:bg-opacity-20 transition-all duration-200"
+                                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200"
                                 >
                                     "▶"
                                 </button>
@@ -459,7 +459,7 @@ pub fn LifeGame(
                         }
                     }
                 </div>
-                <span class="text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+                <span class="text-sm text-charcoal opacity-75">
                     {alive_cells} " cells"
                 </span>
             </div>
@@ -476,11 +476,11 @@ pub fn LifeGame(
                     start_simulation
                     stop_simulation
                 />
-                <div class="flex items-center gap-4 text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+                <div class="flex items-center gap-4 text-sm text-charcoal opacity-75">
                     <span>"Alive Cells: " {alive_cells}</span>
-                    <span class="text-border dark:text-border-dark">"|"</span>
+                    <span class="text-border">"|"</span>
                     <a
-                        class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
+                        class="text-accent hover:underline transition-colors duration-200"
                         href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
                         target="_blank"
                         rel="noreferrer"
@@ -501,7 +501,7 @@ pub fn Life() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
-            <h1 class="text-3xl font-bold text-charcoal dark:text-gray">
+            <h1 class="text-3xl font-bold text-charcoal">
                 "Conway's Game of Life"
             </h1>
             <LifeGame />

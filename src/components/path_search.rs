@@ -377,13 +377,13 @@ fn Controls(
         <div class="flex flex-col gap-6 w-full max-w-3xl">
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div class="flex flex-col gap-2">
-                    <label for="grid_size" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="grid_size" class="text-sm font-medium text-charcoal">
                         Grid Size
                     </label>
                     <input
                         type="text"
                         id="grid_size"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:input=move |ev| {
                             set_grid_size(event_target_value(&ev).parse::<u64>().unwrap());
                         }
@@ -392,13 +392,13 @@ fn Controls(
                     />
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="obstacle_probability" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="obstacle_probability" class="text-sm font-medium text-charcoal">
                         Obstacle Probability
                     </label>
                     <input
                         type="text"
                         id="obstacle_probability"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:input=move |ev| {
                             set_obstacle_probability(event_target_value(&ev).parse::<f64>().unwrap());
                         }
@@ -407,13 +407,13 @@ fn Controls(
                     />
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="interval_time" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="interval_time" class="text-sm font-medium text-charcoal">
                         Speed (ms)
                     </label>
                     <input
                         type="text"
                         id="interval_time"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:input=move |ev| {
                             set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
                             if interval_handle().is_some() {
@@ -425,13 +425,13 @@ fn Controls(
                     />
                 </div>
                 <div class="flex flex-col gap-2">
-                    <label for="algorithm" class="text-sm font-medium text-charcoal dark:text-gray">
+                    <label for="algorithm" class="text-sm font-medium text-charcoal">
                         Algorithm
                     </label>
                     <select
                         name="algorithm"
                         id="algorithm"
-                        class="px-4 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray focus:outline-none focus:ring-2 focus:ring-accent dark:focus:ring-accent-light transition-all"
+                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
                         on:change=move |ev| {
                             set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap());
                         }
@@ -445,13 +445,13 @@ fn Controls(
                 </div>
             </div>
             <div class="flex flex-row gap-3 items-center">
-                <span class="text-sm text-charcoal dark:text-gray opacity-90 dark:opacity-85">
+                <span class="text-sm text-charcoal opacity-90">
                     "Visited: " {visited_count}
                 </span>
                 <div class="flex-1"></div>
                 <button
                     type="button"
-                    class="px-6 py-2 rounded-lg border border-border dark:border-border-dark bg-surface dark:bg-surface-dark text-charcoal dark:text-gray hover:bg-border dark:hover:bg-border-dark hover:bg-opacity-30 dark:hover:bg-opacity-30 transition-all duration-200 font-medium"
+                    class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
                         if let Some(handle) = interval_handle() {
                             handle.clear();
@@ -466,7 +466,7 @@ fn Controls(
                     Randomize
                 </button>
                 <button
-                    class="px-6 py-2 rounded-lg bg-accent dark:bg-accent-light text-white hover:bg-accent-dark dark:hover:bg-accent transition-all duration-200 font-medium shadow-minimal"
+                    class="px-6 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition-all duration-200 font-medium shadow-minimal"
                     on:click=move |_| {
                         create_simulation_interval();
                     }
@@ -573,13 +573,13 @@ fn SearchGrid(
                                             };
                                             view! {
                                                 <div
-                                                    class="w-10 h-10 border border-border dark:border-border-dark cursor-pointer transition-colors"
+                                                    class="w-10 h-10 border border-border cursor-pointer transition-colors"
                                                     class=("bg-green-500", move || is_start_cell())
                                                     class=("bg-amber-500", move || is_end_cell())
                                                     class=("bg-red-500", move || { is_current_cell() })
 
                                                     class=(
-                                                        "bg-accent bg-opacity-40 dark:bg-accent-light dark:bg-opacity-40",
+                                                        "bg-accent bg-opacity-40",
                                                         move || {
                                                             !is_start_cell() && !is_end_cell() && !is_current_cell()
                                                                 && is_visited()
@@ -587,7 +587,7 @@ fn SearchGrid(
                                                     )
 
                                                     class=(
-                                                        "bg-surface dark:bg-surface-dark hover:bg-border hover:bg-opacity-30 dark:hover:bg-border-dark dark:hover:bg-opacity-30",
+                                                        "bg-surface hover:bg-border hover:bg-opacity-30",
                                                         move || {
                                                             !is_start_cell() && !is_end_cell() && !is_visited()
                                                                 && is_passable()
@@ -595,7 +595,7 @@ fn SearchGrid(
                                                     )
 
                                                     class=(
-                                                        "bg-charcoal dark:bg-gray",
+                                                        "bg-charcoal",
                                                         move || {
                                                             !is_start_cell() && !is_end_cell() && !is_current_cell()
                                                                 && !is_passable()
@@ -658,7 +658,7 @@ pub fn PathSearch() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
-            <h1 class="text-3xl font-bold text-charcoal dark:text-gray">
+            <h1 class="text-3xl font-bold text-charcoal">
                 "Path Search Visualizations"
             </h1>
             <Controls
@@ -679,7 +679,7 @@ pub fn PathSearch() -> impl IntoView {
                 algorithm=algorithm
                 set_algorithm=set_algorithm
             />
-            <p class="text-sm text-charcoal dark:text-gray opacity-75 dark:opacity-70">
+            <p class="text-sm text-charcoal opacity-75">
                 "Click to set start (green) and end (yellow) points, then simulate"
             </p>
             <div class="mt-4">

@@ -1,12 +1,8 @@
-use crate::components::dark_mode_toggle::DarkModeToggle;
 use leptos::prelude::*;
 use leptos_router::hooks::{use_location, use_navigate};
 
 #[component]
-pub fn Nav(
-    dark_mode_enabled: ReadSignal<bool>,
-    set_dark_mode_enabled: WriteSignal<bool>,
-) -> impl IntoView {
+pub fn Nav() -> impl IntoView {
     let location = use_location();
     let pathname = move || location.pathname.get();
     let navigate = use_navigate();
@@ -33,11 +29,11 @@ pub fn Nav(
     let (show_contact_links, set_show_contact_links) = signal(false);
 
     view! {
-        <nav class="sticky top-0 flex flex-row pointer-events-auto px-8 py-6 text-base border-b border-border dark:border-border-dark bg-surface dark:bg-surface-dark bg-opacity-80 dark:bg-opacity-80 backdrop-blur-md z-40">
+        <nav class="sticky top-0 flex flex-row pointer-events-auto px-8 py-6 text-base border-b border-border bg-surface bg-opacity-80 backdrop-blur-md z-40">
             <div class="flex items-center gap-8 max-w-7xl mx-auto w-full">
                 <a
                     href="/"
-                    class="font-bold text-lg tracking-tight hover:text-accent dark:hover:text-accent-light transition-colors duration-200"
+                    class="font-bold text-lg tracking-tight hover:text-accent transition-colors duration-200"
                     on:click=move |_| {
                         set_show_contact_links.set(false);
                     }
@@ -55,7 +51,7 @@ pub fn Nav(
                                     type="button"
                                     class="px-4 py-2 relative transition-all duration-200"
                                     class=(
-                                        "text-accent dark:text-accent-light",
+                                        "text-accent",
                                         move || {
                                             let path = pathname();
                                             path == route || path.starts_with(&format!("{}/", route))
@@ -63,7 +59,7 @@ pub fn Nav(
                                     )
 
                                     class=(
-                                        "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent dark:after:bg-accent-light after:scale-x-100",
+                                        "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent after:scale-x-100",
                                         move || {
                                             let path = pathname();
                                             path == route || path.starts_with(&format!("{}/", route))
@@ -71,7 +67,7 @@ pub fn Nav(
                                     )
 
                                     class=(
-                                        "text-charcoal dark:text-gray hover:text-accent dark:hover:text-accent-light",
+                                        "text-charcoal hover:text-accent",
                                         move || {
                                             let path = pathname();
                                             !(path == route || path.starts_with(&format!("{}/", route)))
@@ -79,7 +75,7 @@ pub fn Nav(
                                     )
 
                                     class=(
-                                        "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent dark:after:bg-accent-light after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200",
+                                        "after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200",
                                         move || {
                                             let path = pathname();
                                             !(path == route || path.starts_with(&format!("{}/", route)))
@@ -99,7 +95,7 @@ pub fn Nav(
                         .collect_view()} <div class="flex flex-col relative">
                         <button
                             type="button"
-                            class="px-4 py-2 text-charcoal dark:text-gray hover:text-accent dark:hover:text-accent-light transition-colors duration-200"
+                            class="px-4 py-2 text-charcoal hover:text-accent transition-colors duration-200"
                             on:click=move |_| {
                                 set_show_contact_links.set(!show_contact_links());
                             }
@@ -112,7 +108,7 @@ pub fn Nav(
                             <Show when=move || {
                                 show_contact_links()
                             }>
-                                <div class="bg-surface dark:bg-surface-dark border border-border dark:border-border-dark rounded-lg shadow-minimal-lg overflow-hidden min-w-[160px]">
+                                <div class="bg-surface border border-border rounded-lg shadow-minimal-lg overflow-hidden min-w-[160px]">
                                     {contact_links
                                         .clone()
                                         .into_iter()
@@ -121,7 +117,7 @@ pub fn Nav(
                                             view! {
                                                 <a
                                                     href=route
-                                                    class="hover:bg-border hover:bg-opacity-50 dark:hover:bg-border-dark dark:hover:bg-opacity-30 hover:text-accent dark:hover:text-accent-light flex items-center gap-3 px-4 py-3 transition-colors duration-200"
+                                                    class="hover:bg-border hover:bg-opacity-50 hover:text-accent flex items-center gap-3 px-4 py-3 transition-colors duration-200"
                                                     target=target
                                                     rel="noreferrer"
                                                 >
@@ -135,10 +131,6 @@ pub fn Nav(
                             </Show>
                         </div>
                     </div>
-                    <DarkModeToggle
-                        dark_mode_enabled=dark_mode_enabled
-                        set_dark_mode_enabled=set_dark_mode_enabled
-                    />
                 </div>
             </div>
         </nav>

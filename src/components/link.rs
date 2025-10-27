@@ -14,12 +14,12 @@ pub fn Link(path: &'static str, display_text: &'static str) -> impl IntoView {
         <A href=path>
             <span
                 class="transition-all duration-200 px-4 py-2 rounded-md relative"
-                class=("text-accent dark:text-accent-light", is_match)
+                class=("text-accent", is_match)
                 class=("font-semibold", is_match)
-                class=("after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent dark:after:bg-accent-light", is_match)
+                class=("after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent", is_match)
                 class=("cursor-default", is_match)
                 class=("cursor-pointer", is_not_match)
-                class=("hover:text-accent dark:hover:text-accent-light", is_not_match)
+                class=("hover:text-accent", is_not_match)
                 class=("font-medium", is_not_match)
             >
                 {display_text}
