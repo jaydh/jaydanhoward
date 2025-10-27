@@ -74,12 +74,12 @@ oci.pull(
     tag = "latest",
 )
 oci.pull(
-    name = "distroless_cc_debian12",
-    image = "gcr.io/distroless/cc-debian12",
+    name = "distroless_cc_debian13",
+    image = "gcr.io/distroless/cc-debian13",
     platforms = [
         "linux/amd64",
         "linux/arm64/v8",
     ],
     tag = "latest",
 )
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian12", "distroless_cc_debian12_linux_amd64", "distroless_cc_debian12_linux_arm64_v8")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8")
