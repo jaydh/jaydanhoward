@@ -22,7 +22,7 @@ pub fn Photography() -> impl IntoView {
                         .map(|(title, src)| {
                             view! {
                                 <div class="group relative overflow-hidden rounded-xl shadow-minimal-lg hover:shadow-minimal-xl transition-all duration-300">
-                                    <div class="aspect-square overflow-hidden bg-border dark:bg-border-dark">
+                                    <div class="aspect-square overflow-hidden bg-border">
                                         <img
                                             src=src
                                             alt=title

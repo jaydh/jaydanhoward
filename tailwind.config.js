@@ -1,6 +1,5 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  darkMode: "class",
   content: {
     files: ["*.html", "./src/**/*.rs"],
   },
@@ -11,11 +10,8 @@ module.exports = {
         "gray": "#E1E1E1",
         "accent": "#3B82F6",
         "accent-dark": "#2563EB",
-        "accent-light": "#60A5FA",
         "surface": "#FFFFFF",
-        "surface-dark": "#111111",
         "border": "#E5E7EB",
-        "border-dark": "#374151",
       },
       boxShadow: {
         'minimal': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',

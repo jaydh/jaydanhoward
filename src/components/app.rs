@@ -26,31 +26,19 @@ fn Stylesheets() -> impl IntoView {
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
-    let (dark_mode_enabled, set_dark_mode_enabled) = signal(true);
 
     view! {
         <Stylesheets />
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
         <Title text="Jay Dan Howard" />
         <main>
-            <Html
-                {..}
-                class=move || {
-                    match dark_mode_enabled() {
-                        true => "dark",
-                        false => "light",
-                    }
-                }
-            />
+            <Html {..} />
             <div
                 id="root"
-                class="flex flex-col min-w-screen min-h-screen bg-surface text-charcoal dark:bg-surface-dark dark:text-gray"
+                class="flex flex-col min-w-screen min-h-screen bg-surface text-charcoal"
             >
                 <Router>
-                    <Nav
-                        dark_mode_enabled=dark_mode_enabled
-                        set_dark_mode_enabled=set_dark_mode_enabled
-                    />
+                    <Nav />
                     <div class="overflow-y-auto grow flex flex-col w-full">
                         <Routes fallback=|| "Not found">
                             <Route

@@ -5,10 +5,10 @@ use leptos::prelude::*;
 pub fn Lighthouse() -> impl IntoView {
     view! {
         <div class="flex flex-col gap-6 h-full">
-            <div class="text-base leading-loose text-charcoal dark:text-gray opacity-90 dark:opacity-85">
+            <div class="text-base leading-loose text-charcoal opacity-90">
                 "Here is a programmatically generated lighthouse report "
                 <a
-                    class="text-accent dark:text-accent-light hover:underline transition-colors duration-200"
+                    class="text-accent hover:underline transition-colors duration-200"
                     href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh"
                     target="_blank"
                     rel="noreferrer"
@@ -19,7 +19,7 @@ pub fn Lighthouse() -> impl IntoView {
             <iframe
                 src="/assets/lighthouse.html"
                 title="Lighthouse Report"
-                class="grow w-full rounded-xl border border-border dark:border-border-dark shadow-minimal-lg"
+                class="grow w-full rounded-xl border border-border shadow-minimal-lg"
             ></iframe>
         </div>
     }
