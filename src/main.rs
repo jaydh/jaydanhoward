@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 mod components;
 mod prometheus_client;
 mod routes;

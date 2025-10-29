@@ -16,9 +16,9 @@ pub fn Work() -> impl IntoView {
                     </p>
                     <p>
                         <a href="/work/path" class="text-accent hover:underline transition-colors duration-200 font-medium">
-                            "Path Search Visualizations"
+                            "Pathfinding Algorithms"
                         </a>
-                        " - Visualize pathfinding algorithms"
+                        " - Compare blind and informed search strategies"
                     </p>
                 </div>
             </section>

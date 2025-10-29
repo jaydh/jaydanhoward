@@ -9,6 +9,11 @@ enum Algorithm {
     Corner,
     Wall,
     Bfs,
+    Dfs,
+    AStar,
+    Greedy,
+    Bidirectional,
+    RandomWalk,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -16,7 +21,12 @@ impl std::fmt::Display for Algorithm {
         match self {
             Algorithm::Wall => write!(f, "Wall"),
             Algorithm::Corner => write!(f, "Corner"),
-            Algorithm::Bfs => write!(f, "BFS (Shortest Path)"),
+            Algorithm::Bfs => write!(f, "BFS"),
+            Algorithm::Dfs => write!(f, "DFS"),
+            Algorithm::AStar => write!(f, "A*"),
+            Algorithm::Greedy => write!(f, "Greedy Best-First"),
+            Algorithm::Bidirectional => write!(f, "Bidirectional BFS"),
+            Algorithm::RandomWalk => write!(f, "Random Walk"),
         }
     }
 }
@@ -28,7 +38,12 @@ impl std::str::FromStr for Algorithm {
         match s {
             "Wall" => Ok(Algorithm::Wall),
             "Corner" => Ok(Algorithm::Corner),
-            "BFS (Shortest Path)" => Ok(Algorithm::Bfs),
+            "BFS" => Ok(Algorithm::Bfs),
+            "DFS" => Ok(Algorithm::Dfs),
+            "A*" => Ok(Algorithm::AStar),
+            "Greedy Best-First" => Ok(Algorithm::Greedy),
+            "Bidirectional BFS" => Ok(Algorithm::Bidirectional),
+            "Random Walk" => Ok(Algorithm::RandomWalk),
             _ => Err(()),
         }
     }
@@ -207,6 +222,11 @@ fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
 }
 
 #[cfg(not(feature = "ssr"))]
+fn manhattan_distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> i64 {
+    (coord1.x_pos - coord2.x_pos).abs() + (coord1.y_pos - coord2.y_pos).abs()
+}
+
+#[cfg(not(feature = "ssr"))]
 fn distance_to_closest_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> i64 {
     let distance_left = point.x_pos;
     let distance_right = grid_size() as i64 - point.x_pos - 1;
@@ -369,6 +389,7 @@ fn calculate_next(
     grid: ReadSignal<Grid>,
     set_grid: WriteSignal<Grid>,
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
@@ -398,8 +419,8 @@ fn calculate_next(
                 current_path_candidates,
                 set_current_path_candidates,
             ),
-            Algorithm::Bfs => {
-                // BFS: add all neighbors to the back of the queue (FIFO)
+            Algorithm::Bfs | Algorithm::Bidirectional => {
+                // BFS/Bidirectional: mark visited when adding to queue (FIFO needs this)
                 let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
                     .iter()
                     .filter_map(|(x, y)| {
@@ -433,10 +454,98 @@ fn calculate_next(
                     path.0.extend(viable_neighbors);
                 });
             }
+            Algorithm::Dfs => {
+                // DFS: don't mark when adding, let pop logic handle it (LIFO behavior)
+                // Explore clockwise: up, right, down, left
+                // Since we pop from back (LIFO), add in reverse: left, down, right, up
+                let viable_neighbors = [(-1, 0), (0, 1), (1, 0), (0, -1)]
+                    .iter()
+                    .filter_map(|(x, y)| {
+                        let coord = CoordinatePair {
+                            x_pos: current_cell().unwrap().x_pos + x,
+                            y_pos: current_cell().unwrap().y_pos + y,
+                        };
+                        grid().0.get(&coord).and_then(|c| {
+                            if c.is_passable && !c.visited {
+                                Some(coord)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect::<Vec<CoordinatePair>>();
+
+                set_current_path_candidates.update(|path| {
+                    path.0.extend(viable_neighbors);
+                });
+            }
+            Algorithm::RandomWalk => {
+                // Random Walk: explore neighbors in random order (allows backtracking)
+                let mut viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                    .iter()
+                    .filter_map(|(x, y)| {
+                        let coord = CoordinatePair {
+                            x_pos: current_cell().unwrap().x_pos + x,
+                            y_pos: current_cell().unwrap().y_pos + y,
+                        };
+                        grid().0.get(&coord).and_then(|c| {
+                            if c.is_passable && !c.visited {
+                                Some(coord)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect::<Vec<CoordinatePair>>();
+
+                // Shuffle neighbors using coordinate-based pseudo-random ordering
+                // This gives random exploration with backtracking capability
+                let curr = current_cell().unwrap();
+                viable_neighbors.sort_by_key(|coord| {
+                    let hash = ((coord.x_pos * 73856093) ^ (coord.y_pos * 19349663) ^ (curr.x_pos * 83492791)) as usize;
+                    hash
+                });
+
+                set_current_path_candidates.update(|path| {
+                    path.0.extend(viable_neighbors);
+                });
+            }
+            Algorithm::AStar | Algorithm::Greedy => {
+                // A* / Greedy: don't mark when adding, let pop logic handle it
+                let mut viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                    .iter()
+                    .filter_map(|(x, y)| {
+                        let coord = CoordinatePair {
+                            x_pos: current_cell().unwrap().x_pos + x,
+                            y_pos: current_cell().unwrap().y_pos + y,
+                        };
+                        grid().0.get(&coord).and_then(|c| {
+                            if c.is_passable && !c.visited {
+                                Some(coord)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect::<Vec<CoordinatePair>>();
+
+                // Sort by heuristic (Manhattan distance to goal) - higher distance last so we pop best first
+                if let Some(end) = end_cell_coord() {
+                    viable_neighbors.sort_by_key(|coord| -(manhattan_distance(coord, &end)));
+                }
+
+                set_current_path_candidates.update(|path| {
+                    path.0.extend(viable_neighbors);
+                    // Keep sorted by heuristic
+                    if let Some(end) = end_cell_coord() {
+                        path.0.sort_by_key(|coord| -(manhattan_distance(coord, &end)));
+                    }
+                });
+            }
         };
         // Pop next cell from queue
-        if matches!(algorithm(), Algorithm::Bfs) {
-            // BFS: pop from front (FIFO)
+        if matches!(algorithm(), Algorithm::Bfs | Algorithm::Bidirectional) {
+            // BFS and Bidirectional: pop from front (FIFO)
             if let Some(next_visit_coord) = current_path_candidates().0.first().copied() {
                 set_current_path_candidates.update(|path| {
                     if !path.0.is_empty() {
@@ -446,7 +555,7 @@ fn calculate_next(
                 set_current_cell(Some(next_visit_coord));
             }
         } else {
-            // Other algorithms: pop from back
+            // DFS, A*, Greedy, Corner, Wall, RandomWalk: pop from back (LIFO)
             loop {
                 let next_visit_coord = current_path_candidates().0.last().copied();
 
@@ -830,10 +939,10 @@ fn AlgorithmSimulation(
                         // Record completion steps
                         set_completion_steps(Some(step_count()));
 
-                        // For non-BFS algorithms, find the shortest path using BFS within visited cells
-                        // For BFS, just backtrack the path we already found
-                        let path = if matches!(algo_signal(), Algorithm::Bfs) {
-                            // BFS: backtrack the path
+                        // For BFS and Bidirectional BFS, backtrack the path we already found (guaranteed shortest)
+                        // For other algorithms, find the shortest path using BFS within visited cells
+                        let path = if matches!(algo_signal(), Algorithm::Bfs | Algorithm::Bidirectional) {
+                            // BFS/Bidirectional: backtrack the path (guaranteed shortest)
                             let mut path = HashSet::new();
                             let mut current = end_cell_coord();
 
@@ -851,7 +960,7 @@ fn AlgorithmSimulation(
                             }
                             path
                         } else {
-                            // Corner/Wall: find shortest path within visited cells only
+                            // DFS/A*/Greedy/Corner/Wall: find shortest path within visited cells only
                             let current_grid = grid();
                             let visited_cells: HashSet<CoordinatePair> = current_grid.0
                                 .iter()
@@ -887,6 +996,7 @@ fn AlgorithmSimulation(
                             grid,
                             set_grid,
                             start_cell_coord,
+                            end_cell_coord,
                             current_path_candidates,
                             set_current_path_candidates,
                             current_cell,
@@ -926,16 +1036,16 @@ fn AlgorithmSimulation(
                     <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
                     {move || {
                         let order = completion_order();
-                        order.iter().position(|a| matches!((a, &algo),
-                            (Algorithm::Bfs, Algorithm::Bfs) |
-                            (Algorithm::Corner, Algorithm::Corner) |
-                            (Algorithm::Wall, Algorithm::Wall)
-                        )).map(|pos| {
+                        order.iter().position(|a| a == &algo).map(|pos| {
                             let rank_text = match pos {
-                                0 => "🥇 1st",
-                                1 => "🥈 2nd",
-                                2 => "🥉 3rd",
-                                _ => ""
+                                0 => "🥇 1st".to_string(),
+                                1 => "🥈 2nd".to_string(),
+                                2 => "🥉 3rd".to_string(),
+                                3 => "4th".to_string(),
+                                4 => "5th".to_string(),
+                                5 => "6th".to_string(),
+                                6 => "7th".to_string(),
+                                _ => format!("{}th", pos + 1),
                             };
                             view! {
                                 <span class="text-xs font-bold text-accent">{rank_text}</span>
@@ -985,7 +1095,8 @@ pub fn PathSearch() -> impl IntoView {
     let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
     let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
     let (is_running, set_is_running) = signal(false);
-    let (completion_order, set_completion_order) = signal(Vec::<Algorithm>::new());
+    let (blind_completion_order, set_blind_completion_order) = signal(Vec::<Algorithm>::new());
+    let (informed_completion_order, set_informed_completion_order) = signal(Vec::<Algorithm>::new());
 
     // Randomize grid on initial mount and when grid size changes
     #[cfg(not(feature = "ssr"))]
@@ -1002,7 +1113,8 @@ pub fn PathSearch() -> impl IntoView {
             );
             // Reset state when grid size changes
             set_is_running(false);
-            set_completion_order(Vec::new());
+            set_blind_completion_order(Vec::new());
+            set_informed_completion_order(Vec::new());
         });
     }
 
@@ -1010,7 +1122,7 @@ pub fn PathSearch() -> impl IntoView {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
             <h1 class="text-3xl font-bold text-charcoal">
-                "Path Search Visualizations"
+                "Pathfinding Algorithms"
             </h1>
             <Controls
                 grid_size=grid_size
@@ -1024,43 +1136,120 @@ pub fn PathSearch() -> impl IntoView {
                 is_running=is_running
                 set_is_running=set_is_running
             />
-            <div class="text-sm text-charcoal opacity-75">
-                "Random start (green) and end (yellow) points. Compare algorithms side-by-side."
+            <div class="text-sm text-charcoal opacity-75 max-w-4xl mx-auto mb-8">
+                "Pathfinding algorithms racing to find the shortest route from start (green) to end (yellow)."
             </div>
-            <div class="mt-4 w-full flex flex-wrap gap-8 justify-center items-start">
-                <AlgorithmSimulation
-                    algorithm=Algorithm::Bfs
-                    grid_size=grid_size
-                    shared_grid=grid
-                    set_shared_grid=set_grid
-                    start_cell_coord=start_cell_coord
-                    end_cell_coord=end_cell_coord
-                    is_running=is_running
-                    completion_order=completion_order
-                    set_completion_order=set_completion_order
-                />
-                <AlgorithmSimulation
-                    algorithm=Algorithm::Corner
-                    grid_size=grid_size
-                    shared_grid=grid
-                    set_shared_grid=set_grid
-                    start_cell_coord=start_cell_coord
-                    end_cell_coord=end_cell_coord
-                    is_running=is_running
-                    completion_order=completion_order
-                    set_completion_order=set_completion_order
-                />
-                <AlgorithmSimulation
-                    algorithm=Algorithm::Wall
-                    grid_size=grid_size
-                    shared_grid=grid
-                    set_shared_grid=set_grid
-                    start_cell_coord=start_cell_coord
-                    end_cell_coord=end_cell_coord
-                    is_running=is_running
-                    completion_order=completion_order
-                    set_completion_order=set_completion_order
-                />
+
+            // Blind Search Algorithms
+            <div class="w-full flex flex-col gap-6 mb-12">
+                <div class="flex flex-col gap-2 items-center">
+                    <h2 class="text-2xl font-bold text-charcoal">"Blind Search"</h2>
+                    <p class="text-sm text-charcoal opacity-75 max-w-2xl text-center">
+                        "Explores without knowing the destination location"
+                    </p>
+                </div>
+                <div class="w-full flex flex-wrap gap-8 justify-center items-start">
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Bfs
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=blind_completion_order
+                        set_completion_order=set_blind_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Dfs
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=blind_completion_order
+                        set_completion_order=set_blind_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Bidirectional
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=blind_completion_order
+                        set_completion_order=set_blind_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Corner
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=blind_completion_order
+                        set_completion_order=set_blind_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Wall
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=blind_completion_order
+                        set_completion_order=set_blind_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::RandomWalk
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=blind_completion_order
+                        set_completion_order=set_blind_completion_order
+                    />
+                </div>
+            </div>
+
+            // Informed Search Algorithms
+            <div class="w-full flex flex-col gap-6">
+                <div class="flex flex-col gap-2 items-center">
+                    <h2 class="text-2xl font-bold text-charcoal">"Informed Search"</h2>
+                    <p class="text-sm text-charcoal opacity-75 max-w-2xl text-center">
+                        "Uses Manhattan distance to the yellow end point as a heuristic to guide exploration"
+                    </p>
+                </div>
+                <div class="w-full flex flex-wrap gap-8 justify-center items-start">
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::AStar
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=informed_completion_order
+                        set_completion_order=set_informed_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Greedy
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=informed_completion_order
+                        set_completion_order=set_informed_completion_order
+                    />
+                </div>
             </div>
         </div>
     }
