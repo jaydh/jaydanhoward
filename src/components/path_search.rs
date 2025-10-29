@@ -605,12 +605,29 @@ fn SearchGrid(
         let window = web_sys::window().unwrap();
         let window_height = window.inner_height().unwrap().as_f64().unwrap();
 
-        let max_width = container_width * 0.95;
-        let max_height = window_height * 0.6;
-        let max_size = max_width.min(max_height).min(800.0).max(300.0);
-
         let grid_sz = grid_size();
-        let cell_px = (max_size / grid_sz as f64).floor().max(1.0);
+
+        // Set minimum cell size based on grid size for visibility
+        let min_cell_px = if grid_sz <= 50 {
+            8.0
+        } else if grid_sz <= 100 {
+            5.0
+        } else {
+            3.0  // Smaller minimum for very large grids
+        };
+
+        // For layout, aim for canvas that's roughly 1/3 of container width (to fit 3 side by side)
+        // Or full container width on mobile
+        let target_width = if container_width < 768.0 {
+            container_width * 0.9  // Mobile: nearly full width
+        } else {
+            (container_width / 3.2).min(600.0)  // Desktop: ~1/3 width, max 600px
+        };
+
+        let max_height = window_height * 0.5;
+        let available_size = target_width.min(max_height).max(250.0);
+
+        let cell_px = (available_size / grid_sz as f64).floor().max(min_cell_px);
         let canvas_size = (cell_px * grid_sz as f64) as u32;
 
         canvas.set_width(canvas_size);
@@ -674,7 +691,7 @@ fn SearchGrid(
             }
         }
 
-        // Draw grid lines
+        // Draw grid lines (only for larger cells)
         if cell_px >= 5.0 {
             context.set_stroke_style_str("#d1d5db");
             context.set_line_width(1.0);
@@ -689,6 +706,43 @@ fn SearchGrid(
                 context.line_to(canvas_size as f64, pos);
                 context.stroke();
             }
+        }
+
+        // Draw special markers for start and end (always visible)
+        if let Some(s) = start {
+            let center_x = s.x_pos as f64 * cell_px + cell_px / 2.0;
+            let center_y = s.y_pos as f64 * cell_px + cell_px / 2.0;
+            let marker_size = (cell_px * 0.7).max(6.0).min(20.0);
+
+            context.set_fill_style_str("#22c55e"); // green
+            context.begin_path();
+            context
+                .arc(center_x, center_y, marker_size / 2.0, 0.0, 2.0 * std::f64::consts::PI)
+                .unwrap();
+            context.fill();
+
+            // White border for visibility
+            context.set_stroke_style_str("#ffffff");
+            context.set_line_width(2.0);
+            context.stroke();
+        }
+
+        if let Some(e) = end {
+            let center_x = e.x_pos as f64 * cell_px + cell_px / 2.0;
+            let center_y = e.y_pos as f64 * cell_px + cell_px / 2.0;
+            let marker_size = (cell_px * 0.7).max(6.0).min(20.0);
+
+            context.set_fill_style_str("#f59e0b"); // amber
+            context.begin_path();
+            context
+                .arc(center_x, center_y, marker_size / 2.0, 0.0, 2.0 * std::f64::consts::PI)
+                .unwrap();
+            context.fill();
+
+            // White border for visibility
+            context.set_stroke_style_str("#ffffff");
+            context.set_line_width(2.0);
+            context.stroke();
         }
     });
 
@@ -910,7 +964,7 @@ pub fn PathSearch() -> impl IntoView {
             <div class="text-sm text-charcoal opacity-75">
                 "Random start (green) and end (yellow) points. Compare algorithms side-by-side."
             </div>
-            <div class="mt-4 w-full grid grid-cols-1 md:grid-cols-3 gap-8 justify-items-center">
+            <div class="mt-4 w-full flex flex-wrap gap-8 justify-center items-start">
                 <AlgorithmSimulation
                     algorithm=Algorithm::Bfs
                     grid_size=grid_size
