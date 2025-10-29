@@ -782,7 +782,8 @@ fn AlgorithmSimulation(
         signal(VecCoordinate(Vec::<CoordinatePair>::new()));
     let (final_path, set_final_path) = signal(HashSet::<CoordinatePair>::new());
     let (fps, set_fps) = signal(0.0);
-    let (completed, set_completed) = signal(false);
+    let (step_count, set_step_count) = signal(0_u64);
+    let (completion_steps, set_completion_steps) = signal(None::<u64>);
 
     // Clone the shared grid when it changes
     #[cfg(not(feature = "ssr"))]
@@ -812,6 +813,9 @@ fn AlgorithmSimulation(
                         return;
                     }
 
+                    // Increment step counter
+                    set_step_count.update(|c| *c += 1);
+
                     // Update FPS (steps per second)
                     set_frame_count.update(|c| *c += 1);
                     if frame_count() >= 100 {
@@ -821,6 +825,9 @@ fn AlgorithmSimulation(
 
                     // Check if simulation is complete
                     if current_cell() == end_cell_coord() && current_cell().is_some() {
+                        // Record completion steps
+                        set_completion_steps(Some(step_count()));
+
                         // For non-BFS algorithms, find the shortest path using BFS
                         // For BFS, just backtrack the path we already found
                         let path = if matches!(algo_signal(), Algorithm::Bfs) {
@@ -879,7 +886,7 @@ fn AlgorithmSimulation(
                         );
                     }
                 },
-                std::time::Duration::from_millis(0),
+                std::time::Duration::from_millis(1),  // Fast rendering: 1ms interval
             )
             .ok();
         });
@@ -897,6 +904,8 @@ fn AlgorithmSimulation(
             set_frame_count(0);
             set_fps(0.0);
             set_completed(false);
+            set_step_count(0);
+            set_completion_steps(None);
         });
     }
 
@@ -904,23 +913,34 @@ fn AlgorithmSimulation(
 
     view! {
         <div class="flex flex-col gap-2 items-center">
-            <div class="flex items-center gap-2">
-                <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
+            <div class="flex flex-col items-center gap-1">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
+                    {move || {
+                        let order = completion_order();
+                        order.iter().position(|a| matches!((a, &algo),
+                            (Algorithm::Bfs, Algorithm::Bfs) |
+                            (Algorithm::Corner, Algorithm::Corner) |
+                            (Algorithm::Wall, Algorithm::Wall)
+                        )).map(|pos| {
+                            let rank_text = match pos {
+                                0 => "🥇 1st",
+                                1 => "🥈 2nd",
+                                2 => "🥉 3rd",
+                                _ => ""
+                            };
+                            view! {
+                                <span class="text-xs font-bold text-accent">{rank_text}</span>
+                            }
+                        })
+                    }}
+                </div>
                 {move || {
-                    let order = completion_order();
-                    order.iter().position(|a| matches!((a, &algo),
-                        (Algorithm::Bfs, Algorithm::Bfs) |
-                        (Algorithm::Corner, Algorithm::Corner) |
-                        (Algorithm::Wall, Algorithm::Wall)
-                    )).map(|pos| {
-                        let rank_text = match pos {
-                            0 => "🥇 1st",
-                            1 => "🥈 2nd",
-                            2 => "🥉 3rd",
-                            _ => ""
-                        };
+                    completion_steps().map(|steps| {
                         view! {
-                            <span class="text-xs font-bold text-accent">{rank_text}</span>
+                            <span class="text-xs text-charcoal opacity-75 font-mono">
+                                {format!("{} steps", steps)}
+                            </span>
                         }
                     })
                 }}
