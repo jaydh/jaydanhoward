@@ -4,7 +4,7 @@ use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum Algorithm {
     Corner,
     Wall,
@@ -772,6 +772,8 @@ fn AlgorithmSimulation(
     start_cell_coord: ReadSignal<Option<CoordinatePair>>,
     end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     is_running: ReadSignal<bool>,
+    completion_order: ReadSignal<Vec<Algorithm>>,
+    set_completion_order: WriteSignal<Vec<Algorithm>>,
 ) -> impl IntoView {
     // Each algorithm has its own copy of the grid and simulation state
     let (grid, set_grid) = signal(Grid(HashMap::new()));
@@ -850,6 +852,15 @@ fn AlgorithmSimulation(
 
                         set_final_path(path);
                         set_completed(true);
+
+                        // Record completion order
+                        let algo = algo_signal();
+                        set_completion_order.update(|order| {
+                            if !order.contains(&algo) {
+                                order.push(algo);
+                            }
+                        });
+
                         return;
                     }
 
@@ -889,9 +900,31 @@ fn AlgorithmSimulation(
         });
     }
 
+    let algo = algorithm.clone();
+
     view! {
         <div class="flex flex-col gap-2 items-center">
-            <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
+            <div class="flex items-center gap-2">
+                <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
+                {move || {
+                    let order = completion_order();
+                    order.iter().position(|a| matches!((a, &algo),
+                        (Algorithm::Bfs, Algorithm::Bfs) |
+                        (Algorithm::Corner, Algorithm::Corner) |
+                        (Algorithm::Wall, Algorithm::Wall)
+                    )).map(|pos| {
+                        let rank_text = match pos {
+                            0 => "🥇 1st",
+                            1 => "🥈 2nd",
+                            2 => "🥉 3rd",
+                            _ => ""
+                        };
+                        view! {
+                            <span class="text-xs font-bold text-accent">{rank_text}</span>
+                        }
+                    })
+                }}
+            </div>
             <SearchGrid
                 grid_size=grid_size
                 grid=grid
@@ -924,6 +957,7 @@ pub fn PathSearch() -> impl IntoView {
     let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
     let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
     let (is_running, set_is_running) = signal(false);
+    let (completion_order, set_completion_order) = signal(Vec::<Algorithm>::new());
 
     // Randomize grid on initial mount and when grid size changes
     #[cfg(not(feature = "ssr"))]
@@ -940,6 +974,7 @@ pub fn PathSearch() -> impl IntoView {
             );
             // Reset state when grid size changes
             set_is_running(false);
+            set_completion_order(Vec::new());
         });
     }
 
@@ -973,6 +1008,8 @@ pub fn PathSearch() -> impl IntoView {
                     start_cell_coord=start_cell_coord
                     end_cell_coord=end_cell_coord
                     is_running=is_running
+                    completion_order=completion_order
+                    set_completion_order=set_completion_order
                 />
                 <AlgorithmSimulation
                     algorithm=Algorithm::Corner
@@ -982,6 +1019,8 @@ pub fn PathSearch() -> impl IntoView {
                     start_cell_coord=start_cell_coord
                     end_cell_coord=end_cell_coord
                     is_running=is_running
+                    completion_order=completion_order
+                    set_completion_order=set_completion_order
                 />
                 <AlgorithmSimulation
                     algorithm=Algorithm::Wall
@@ -991,6 +1030,8 @@ pub fn PathSearch() -> impl IntoView {
                     start_cell_coord=start_cell_coord
                     end_cell_coord=end_cell_coord
                     is_running=is_running
+                    completion_order=completion_order
+                    set_completion_order=set_completion_order
                 />
             </div>
         </div>
