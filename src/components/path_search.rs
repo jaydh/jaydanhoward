@@ -144,10 +144,11 @@ fn randomize_cells(
 }
 
 #[cfg(not(feature = "ssr"))]
-fn find_shortest_path(
+fn find_shortest_path_in_visited(
     start: CoordinatePair,
     end: CoordinatePair,
     grid: &HashMap<CoordinatePair, Cell>,
+    visited_cells: &HashSet<CoordinatePair>,
 ) -> HashSet<CoordinatePair> {
     use std::collections::VecDeque;
 
@@ -176,7 +177,7 @@ fn find_shortest_path(
             return path;
         }
 
-        // Explore neighbors
+        // Explore neighbors (only within visited cells)
         for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
             let neighbor = CoordinatePair {
                 x_pos: current.x_pos + dx,
@@ -184,7 +185,8 @@ fn find_shortest_path(
             };
 
             if let Some(cell) = grid.get(&neighbor) {
-                if cell.is_passable && !visited.contains(&neighbor) {
+                // Only explore if the cell was visited by the original algorithm
+                if cell.is_passable && visited_cells.contains(&neighbor) && !visited.contains(&neighbor) {
                     visited.insert(neighbor);
                     parent_map.insert(neighbor, current);
                     queue.push_back(neighbor);
@@ -809,7 +811,7 @@ fn AlgorithmSimulation(
 
             set_interval_with_handle(
                 move || {
-                    if !is_running() || completed() {
+                    if !is_running() || completion_steps().is_some() {
                         return;
                     }
 
@@ -828,7 +830,7 @@ fn AlgorithmSimulation(
                         // Record completion steps
                         set_completion_steps(Some(step_count()));
 
-                        // For non-BFS algorithms, find the shortest path using BFS
+                        // For non-BFS algorithms, find the shortest path using BFS within visited cells
                         // For BFS, just backtrack the path we already found
                         let path = if matches!(algo_signal(), Algorithm::Bfs) {
                             // BFS: backtrack the path
@@ -849,16 +851,23 @@ fn AlgorithmSimulation(
                             }
                             path
                         } else {
-                            // Corner/Wall: found *a* path, now find the shortest path using BFS
-                            find_shortest_path(
+                            // Corner/Wall: find shortest path within visited cells only
+                            let current_grid = grid();
+                            let visited_cells: HashSet<CoordinatePair> = current_grid.0
+                                .iter()
+                                .filter(|(_, cell)| cell.visited)
+                                .map(|(coord, _)| *coord)
+                                .collect();
+
+                            find_shortest_path_in_visited(
                                 start_cell_coord().unwrap(),
                                 end_cell_coord().unwrap(),
-                                &grid().0,
+                                &current_grid.0,
+                                &visited_cells,
                             )
                         };
 
                         set_final_path(path);
-                        set_completed(true);
 
                         // Record completion order
                         let algo = algo_signal();
@@ -872,7 +881,7 @@ fn AlgorithmSimulation(
                     }
 
                     // Run one step of the algorithm
-                    if current_cell() != end_cell_coord() && !completed() {
+                    if current_cell() != end_cell_coord() && completion_steps().is_none() {
                         calculate_next(
                             grid_size,
                             grid,
@@ -903,7 +912,6 @@ fn AlgorithmSimulation(
             set_final_path(HashSet::new());
             set_frame_count(0);
             set_fps(0.0);
-            set_completed(false);
             set_step_count(0);
             set_completion_steps(None);
         });
