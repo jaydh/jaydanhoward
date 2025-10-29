@@ -144,6 +144,60 @@ fn randomize_cells(
 }
 
 #[cfg(not(feature = "ssr"))]
+fn find_shortest_path(
+    start: CoordinatePair,
+    end: CoordinatePair,
+    grid: &HashMap<CoordinatePair, Cell>,
+) -> HashSet<CoordinatePair> {
+    use std::collections::VecDeque;
+
+    let mut queue = VecDeque::new();
+    let mut visited = HashSet::new();
+    let mut parent_map: HashMap<CoordinatePair, CoordinatePair> = HashMap::new();
+
+    queue.push_back(start);
+    visited.insert(start);
+
+    while let Some(current) = queue.pop_front() {
+        if current == end {
+            // Found the end, backtrack to build path
+            let mut path = HashSet::new();
+            let mut curr = end;
+            path.insert(curr);
+
+            while let Some(&p) = parent_map.get(&curr) {
+                path.insert(p);
+                curr = p;
+                if curr == start {
+                    break;
+                }
+            }
+
+            return path;
+        }
+
+        // Explore neighbors
+        for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
+            let neighbor = CoordinatePair {
+                x_pos: current.x_pos + dx,
+                y_pos: current.y_pos + dy,
+            };
+
+            if let Some(cell) = grid.get(&neighbor) {
+                if cell.is_passable && !visited.contains(&neighbor) {
+                    visited.insert(neighbor);
+                    parent_map.insert(neighbor, current);
+                    queue.push_back(neighbor);
+                }
+            }
+        }
+    }
+
+    // No path found, return empty set
+    HashSet::new()
+}
+
+#[cfg(not(feature = "ssr"))]
 fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
     let dx = (coord1.x_pos - coord2.x_pos) as f64;
     let dy = (coord1.y_pos - coord2.y_pos) as f64;
@@ -672,6 +726,7 @@ fn AlgorithmSimulation(
         signal(VecCoordinate(Vec::<CoordinatePair>::new()));
     let (final_path, set_final_path) = signal(HashSet::<CoordinatePair>::new());
     let (fps, set_fps) = signal(0.0);
+    let (completed, set_completed) = signal(false);
 
     // Clone the shared grid when it changes
     #[cfg(not(feature = "ssr"))]
@@ -697,7 +752,7 @@ fn AlgorithmSimulation(
 
             set_interval_with_handle(
                 move || {
-                    if !is_running() {
+                    if !is_running() || completed() {
                         return;
                     }
 
@@ -710,30 +765,42 @@ fn AlgorithmSimulation(
 
                     // Check if simulation is complete
                     if current_cell() == end_cell_coord() && current_cell().is_some() {
-                        // Backtrack to build the final path
-                        let mut path = HashSet::new();
-                        let mut current = end_cell_coord();
+                        // For non-BFS algorithms, find the shortest path using BFS
+                        // For BFS, just backtrack the path we already found
+                        let path = if matches!(algo_signal(), Algorithm::Bfs) {
+                            // BFS: backtrack the path
+                            let mut path = HashSet::new();
+                            let mut current = end_cell_coord();
 
-                        let mut iterations = 0;
-                        while let Some(coord) = current {
-                            if path.contains(&coord) {
-                                break;
+                            let mut iterations = 0;
+                            while let Some(coord) = current {
+                                if path.contains(&coord) {
+                                    break;
+                                }
+                                path.insert(coord);
+                                current = grid().0.get(&coord).and_then(|cell| cell.parent);
+                                iterations += 1;
+                                if iterations > 10000 {
+                                    break;
+                                }
                             }
-                            path.insert(coord);
-                            current = grid().0.get(&coord).and_then(|cell| cell.parent);
-                            iterations += 1;
-                            if iterations > 10000 {
-                                break;
-                            }
-                        }
+                            path
+                        } else {
+                            // Corner/Wall: found *a* path, now find the shortest path using BFS
+                            find_shortest_path(
+                                start_cell_coord().unwrap(),
+                                end_cell_coord().unwrap(),
+                                &grid().0,
+                            )
+                        };
 
                         set_final_path(path);
-                        set_current_cell(None);
+                        set_completed(true);
                         return;
                     }
 
                     // Run one step of the algorithm
-                    if current_cell() != end_cell_coord() {
+                    if current_cell() != end_cell_coord() && !completed() {
                         calculate_next(
                             grid_size,
                             grid,
@@ -764,6 +831,7 @@ fn AlgorithmSimulation(
             set_final_path(HashSet::new());
             set_frame_count(0);
             set_fps(0.0);
+            set_completed(false);
         });
     }
 
