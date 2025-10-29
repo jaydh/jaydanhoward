@@ -1,15 +1,14 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
-use leptos::*;
-use leptos_dom::helpers::IntervalHandle;
 use rand::Rng;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 #[derive(Clone, Debug)]
 enum Algorithm {
     Corner,
     Wall,
+    Bfs,
 }
 
 impl std::fmt::Display for Algorithm {
@@ -17,6 +16,7 @@ impl std::fmt::Display for Algorithm {
         match self {
             Algorithm::Wall => write!(f, "Wall"),
             Algorithm::Corner => write!(f, "Corner"),
+            Algorithm::Bfs => write!(f, "BFS (Shortest Path)"),
         }
     }
 }
@@ -28,6 +28,7 @@ impl std::str::FromStr for Algorithm {
         match s {
             "Wall" => Ok(Algorithm::Wall),
             "Corner" => Ok(Algorithm::Corner),
+            "BFS (Shortest Path)" => Ok(Algorithm::Bfs),
             _ => Err(()),
         }
     }
@@ -55,6 +56,7 @@ struct Cell {
     is_passable: bool,
     visited: bool,
     coordiantes: CoordinatePair,
+    parent: Option<CoordinatePair>,
 }
 
 impl fmt::Display for CoordinatePair {
@@ -67,8 +69,8 @@ impl fmt::Display for Cell {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "is_passable: {}, x_pos: {}, y_pos: {}, visited: {}",
-            self.is_passable, self.coordiantes.x_pos, self.coordiantes.y_pos, self.visited
+            "is_passable: {}, x_pos: {}, y_pos: {}, visited: {}, parent: {:?}",
+            self.is_passable, self.coordiantes.x_pos, self.coordiantes.y_pos, self.visited, self.parent
         )
     }
 }
@@ -88,36 +90,67 @@ impl fmt::Display for VecCoordinate {
 #[derive(Debug, Clone)]
 struct Grid(HashMap<CoordinatePair, Cell>);
 
-fn randomize_cells(obstacle_probability: f64, grid_size: u64, set_grid: WriteSignal<Grid>) {
+fn randomize_cells(
+    obstacle_probability: f64,
+    grid_size: u64,
+    set_grid: WriteSignal<Grid>,
+    set_start: WriteSignal<Option<CoordinatePair>>,
+    set_end: WriteSignal<Option<CoordinatePair>>,
+) {
     let mut rng = rand::thread_rng();
     let mut grid = Grid(HashMap::new());
+    let mut passable_cells = Vec::new();
+
     for x in 0..grid_size {
         for y in 0..grid_size {
+            let coord = CoordinatePair {
+                x_pos: x as i64,
+                y_pos: y as i64,
+            };
+            let is_passable = rng.gen::<f64>() > obstacle_probability;
+
+            if is_passable {
+                passable_cells.push(coord);
+            }
+
             grid.0.insert(
-                CoordinatePair {
-                    x_pos: x as i64,
-                    y_pos: y as i64,
-                },
+                coord,
                 Cell {
-                    coordiantes: CoordinatePair {
-                        x_pos: x as i64,
-                        y_pos: y as i64,
-                    },
-                    is_passable: rng.gen::<f64>() > obstacle_probability,
+                    coordiantes: coord,
+                    is_passable,
                     visited: false,
+                    parent: None,
                 },
             );
         }
     }
+
+    // Pick random start and end from passable cells
+    if passable_cells.len() >= 2 {
+        let start_idx = rng.gen_range(0..passable_cells.len());
+        let start = passable_cells[start_idx];
+        set_start(Some(start));
+
+        // Pick a different cell for end
+        let mut end_idx = rng.gen_range(0..passable_cells.len());
+        while end_idx == start_idx && passable_cells.len() > 1 {
+            end_idx = rng.gen_range(0..passable_cells.len());
+        }
+        let end = passable_cells[end_idx];
+        set_end(Some(end));
+    }
+
     set_grid(grid);
 }
 
+#[cfg(not(feature = "ssr"))]
 fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
     let dx = (coord1.x_pos - coord2.x_pos) as f64;
     let dy = (coord1.y_pos - coord2.y_pos) as f64;
     (dx * dx + dy * dy).sqrt()
 }
 
+#[cfg(not(feature = "ssr"))]
 fn distance_to_closest_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> i64 {
     let distance_left = point.x_pos;
     let distance_right = grid_size() as i64 - point.x_pos - 1;
@@ -130,6 +163,7 @@ fn distance_to_closest_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>)
         .unwrap()
 }
 
+#[cfg(not(feature = "ssr"))]
 fn add_candidates(
     grid_size: ReadSignal<u64>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
@@ -203,6 +237,7 @@ fn add_candidates(
     });
 }
 
+#[cfg(not(feature = "ssr"))]
 fn add_candidates_walls(
     grid_size: ReadSignal<u64>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
@@ -271,6 +306,7 @@ fn add_candidates_walls(
     });
 }
 
+#[cfg(not(feature = "ssr"))]
 #[allow(clippy::too_many_arguments)]
 fn calculate_next(
     grid_size: ReadSignal<u64>,
@@ -288,6 +324,7 @@ fn calculate_next(
         set_grid.update(|grid| {
             let cell = grid.0.get_mut(&start_cell_coord().unwrap()).unwrap();
             cell.visited = true;
+            cell.parent = None;
         });
     } else {
         match algorithm() {
@@ -305,17 +342,81 @@ fn calculate_next(
                 current_path_candidates,
                 set_current_path_candidates,
             ),
-        };
-        if let Some(next_visit_coord) = current_path_candidates().0.last() {
-            set_current_path_candidates.update(|path| {
-                path.0.pop();
-            });
+            Algorithm::Bfs => {
+                // BFS: add all neighbors to the back of the queue (FIFO)
+                let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                    .iter()
+                    .filter_map(|(x, y)| {
+                        let coord = CoordinatePair {
+                            x_pos: current_cell().unwrap().x_pos + x,
+                            y_pos: current_cell().unwrap().y_pos + y,
+                        };
+                        grid().0.get(&coord).and_then(|c| {
+                            if c.is_passable && !c.visited {
+                                Some(coord)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect::<Vec<CoordinatePair>>();
 
-            set_current_cell(Some(*next_visit_coord));
-            set_grid.update(|grid| {
-                let cell = grid.0.get_mut(next_visit_coord).unwrap();
-                cell.visited = true;
-            });
+                // Mark all neighbors as visited NOW and set their parent
+                for neighbor in &viable_neighbors {
+                    set_grid.update(|grid| {
+                        if let Some(cell) = grid.0.get_mut(neighbor) {
+                            if !cell.visited {
+                                cell.visited = true;
+                                cell.parent = current_cell();
+                            }
+                        }
+                    });
+                }
+
+                set_current_path_candidates.update(|path| {
+                    path.0.extend(viable_neighbors);
+                });
+            }
+        };
+        // Pop next cell from queue
+        if matches!(algorithm(), Algorithm::Bfs) {
+            // BFS: pop from front (FIFO)
+            if let Some(next_visit_coord) = current_path_candidates().0.first().copied() {
+                set_current_path_candidates.update(|path| {
+                    if !path.0.is_empty() {
+                        path.0.remove(0);
+                    }
+                });
+                set_current_cell(Some(next_visit_coord));
+            }
+        } else {
+            // Other algorithms: pop from back
+            loop {
+                let next_visit_coord = current_path_candidates().0.last().copied();
+
+                if let Some(next_visit_coord) = next_visit_coord {
+                    let is_visited = grid().0.get(&next_visit_coord).map(|c| c.visited).unwrap_or(true);
+
+                    set_current_path_candidates.update(|path| {
+                        path.0.pop();
+                    });
+
+                    if is_visited {
+                        continue;
+                    }
+
+                    let previous_cell = current_cell();
+                    set_current_cell(Some(next_visit_coord));
+                    set_grid.update(|grid| {
+                        let cell = grid.0.get_mut(&next_visit_coord).unwrap();
+                        cell.visited = true;
+                        cell.parent = previous_cell;
+                    });
+                    break;
+                } else {
+                    break;
+                }
+            }
         }
     }
 }
@@ -324,58 +425,22 @@ fn calculate_next(
 fn Controls(
     grid_size: ReadSignal<u64>,
     set_grid_size: WriteSignal<u64>,
-    grid: ReadSignal<Grid>,
+    #[allow(unused_variables)] grid: ReadSignal<Grid>,
     set_grid: WriteSignal<Grid>,
     obstacle_probability: ReadSignal<f64>,
     set_obstacle_probability: WriteSignal<f64>,
-    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
     set_start_cell_coord: WriteSignal<Option<CoordinatePair>>,
-    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     set_end_cell_coord: WriteSignal<Option<CoordinatePair>>,
-    current_path_candidates: ReadSignal<VecCoordinate>,
-    set_current_path_candidates: WriteSignal<VecCoordinate>,
-    current_cell: ReadSignal<Option<CoordinatePair>>,
-    set_current_cell: WriteSignal<Option<CoordinatePair>>,
-    algorithm: ReadSignal<Algorithm>,
-    set_algorithm: WriteSignal<Algorithm>,
+    is_running: ReadSignal<bool>,
+    set_is_running: WriteSignal<bool>,
 ) -> impl IntoView {
-    let (interval_handle, set_interval_handle) = signal(None::<IntervalHandle>);
-    let (interval_ms, set_interval_ms) = signal(200);
-    let visited_count = move || grid().0.values().filter(|c| c.visited).count();
-
-    let create_simulation_interval = move || {
-        if let Some(handle) = interval_handle() {
-            handle.clear();
-        }
-        if start_cell_coord().is_none() || end_cell_coord().is_none() {
-            return;
-        }
-
-        let interval_handle = set_interval_with_handle(
-            move || {
-                if current_cell() == end_cell_coord() {
-                    interval_handle().unwrap().clear();
-                }
-                calculate_next(
-                    grid_size,
-                    grid,
-                    set_grid,
-                    start_cell_coord,
-                    current_path_candidates,
-                    set_current_path_candidates,
-                    current_cell,
-                    set_current_cell,
-                    algorithm,
-                )
-            },
-            std::time::Duration::from_millis(interval_ms()),
-        );
-        set_interval_handle(interval_handle.ok());
+    let toggle_simulation = move |_| {
+        set_is_running.update(|r| *r = !*r);
     };
 
     view! {
         <div class="flex flex-col gap-6 w-full max-w-3xl">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="flex flex-col gap-2">
                     <label for="grid_size" class="text-sm font-medium text-charcoal">
                         Grid Size
@@ -406,72 +471,24 @@ fn Controls(
                         prop:value=obstacle_probability
                     />
                 </div>
-                <div class="flex flex-col gap-2">
-                    <label for="interval_time" class="text-sm font-medium text-charcoal">
-                        Speed (ms)
-                    </label>
-                    <input
-                        type="text"
-                        id="interval_time"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:input=move |ev| {
-                            set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
-                            if interval_handle().is_some() {
-                                create_simulation_interval();
-                            }
-                        }
-
-                        prop:value=interval_ms
-                    />
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label for="algorithm" class="text-sm font-medium text-charcoal">
-                        Algorithm
-                    </label>
-                    <select
-                        name="algorithm"
-                        id="algorithm"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:change=move |ev| {
-                            set_algorithm(event_target_value(&ev).parse::<Algorithm>().unwrap());
-                        }
-                    >
-
-                        <option value="">Choose...</option>
-                        <option value=Algorithm::Corner
-                            .to_string()>{Algorithm::Corner.to_string()}</option>
-                        <option value=Algorithm::Wall.to_string()>{Algorithm::Wall.to_string()}</option>
-                    </select>
-                </div>
             </div>
             <div class="flex flex-row gap-3 items-center">
-                <span class="text-sm text-charcoal opacity-90">
-                    "Visited: " {visited_count}
-                </span>
                 <div class="flex-1"></div>
                 <button
                     type="button"
                     class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
                     on:click=move |_| {
-                        if let Some(handle) = interval_handle() {
-                            handle.clear();
-                        }
-                        randomize_cells(obstacle_probability(), grid_size(), set_grid);
-                        set_start_cell_coord(None);
-                        set_end_cell_coord(None);
-                        set_current_cell(None);
-                        set_current_path_candidates(VecCoordinate(Vec::new()));
+                        set_is_running(false);
+                        randomize_cells(obstacle_probability(), grid_size(), set_grid, set_start_cell_coord, set_end_cell_coord);
                     }
                 >
                     Randomize
                 </button>
                 <button
                     class="px-6 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition-all duration-200 font-medium shadow-minimal"
-                    on:click=move |_| {
-                        create_simulation_interval();
-                    }
+                    on:click=toggle_simulation
                 >
-                    Simulate
+                    {move || if is_running() { "⏸ Pause" } else { "▶ Play" }}
                 </button>
             </div>
         </div>
@@ -480,180 +497,329 @@ fn Controls(
 
 #[component]
 fn SearchGrid(
-    grid_size: ReadSignal<u64>,
-    grid: ReadSignal<Grid>,
-    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    set_start_cell_coord: WriteSignal<Option<CoordinatePair>>,
-    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    set_end_cell_coord: WriteSignal<Option<CoordinatePair>>,
-    current_cell: ReadSignal<Option<CoordinatePair>>,
+    #[allow(unused_variables)] grid_size: ReadSignal<u64>,
+    #[allow(unused_variables)] grid: ReadSignal<Grid>,
+    #[allow(unused_variables)] start_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    #[allow(unused_variables)] end_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    #[allow(unused_variables)] current_cell: ReadSignal<Option<CoordinatePair>>,
+    #[allow(unused_variables)] final_path: ReadSignal<HashSet<CoordinatePair>>,
 ) -> impl IntoView {
-    let range = move || 0..grid_size();
+    #[cfg(not(feature = "ssr"))]
+    use leptos::html::Canvas;
+    #[cfg(not(feature = "ssr"))]
+    use wasm_bindgen::JsCast;
+
+    #[cfg(not(feature = "ssr"))]
+    let canvas_ref = NodeRef::<Canvas>::new();
+
+    #[cfg(not(feature = "ssr"))]
+    let (resize_trigger, set_resize_trigger) = signal(0);
+
+    // Set up window resize listener
+    #[cfg(not(feature = "ssr"))]
+    {
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+
+        Effect::new(move |_| {
+            let window = web_sys::window().unwrap();
+            let closure = Closure::wrap(Box::new(move || {
+                set_resize_trigger.update(|n| *n += 1);
+            }) as Box<dyn Fn()>);
+
+            window
+                .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
+                .unwrap();
+
+            closure.forget();
+        });
+    }
+
+    // Render canvas
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        let _ = resize_trigger();
+
+        let Some(canvas) = canvas_ref.get() else {
+            return;
+        };
+
+        let canvas_element: &web_sys::HtmlCanvasElement = canvas.as_ref();
+        let parent = canvas_element.parent_element().unwrap();
+        let container_width = parent.client_width() as f64;
+
+        let window = web_sys::window().unwrap();
+        let window_height = window.inner_height().unwrap().as_f64().unwrap();
+
+        let max_width = container_width * 0.95;
+        let max_height = window_height * 0.6;
+        let max_size = max_width.min(max_height).min(800.0).max(300.0);
+
+        let grid_sz = grid_size();
+        let cell_px = (max_size / grid_sz as f64).floor().max(1.0);
+        let canvas_size = (cell_px * grid_sz as f64) as u32;
+
+        canvas.set_width(canvas_size);
+        canvas.set_height(canvas_size);
+
+        let context = canvas
+            .get_context("2d")
+            .unwrap()
+            .unwrap()
+            .unchecked_into::<web_sys::CanvasRenderingContext2d>();
+
+        // Clear canvas
+        context.set_fill_style_str("#f9fafb");
+        context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
+
+        let current_grid = grid();
+        let start = start_cell_coord();
+        let end = end_cell_coord();
+        let current = current_cell();
+        let path = final_path();
+
+        // Draw all cells
+        for x in 0..grid_sz {
+            for y in 0..grid_sz {
+                let coord = CoordinatePair {
+                    x_pos: x as i64,
+                    y_pos: y as i64,
+                };
+
+                let cell = current_grid.0.get(&coord);
+                let is_passable = cell.map(|c| c.is_passable).unwrap_or(false);
+                let is_visited = cell.map(|c| c.visited).unwrap_or(false);
+                let is_start = start.map(|c| coord == c).unwrap_or(false);
+                let is_end = end.map(|c| coord == c).unwrap_or(false);
+                let is_current = current.map(|c| coord == c).unwrap_or(false);
+                let in_final_path = path.contains(&coord);
+
+                let color = if !is_passable {
+                    "#1f2937" // gray-800 - walls
+                } else if is_start {
+                    "#22c55e" // green-500 - start
+                } else if is_end {
+                    "#f59e0b" // amber-500 - end
+                } else if is_current {
+                    "#ef4444" // red-500 - current
+                } else if in_final_path {
+                    "#c084fc" // purple-400 - path
+                } else if is_visited {
+                    "#93c5fd" // blue-300 - visited
+                } else {
+                    "#f9fafb" // gray-50 - unvisited
+                };
+
+                context.set_fill_style_str(color);
+                context.fill_rect(
+                    x as f64 * cell_px,
+                    y as f64 * cell_px,
+                    cell_px,
+                    cell_px,
+                );
+            }
+        }
+
+        // Draw grid lines
+        if cell_px >= 5.0 {
+            context.set_stroke_style_str("#d1d5db");
+            context.set_line_width(1.0);
+            for i in 0..=grid_sz {
+                let pos = i as f64 * cell_px;
+                context.begin_path();
+                context.move_to(pos, 0.0);
+                context.line_to(pos, canvas_size as f64);
+                context.stroke();
+                context.begin_path();
+                context.move_to(0.0, pos);
+                context.line_to(canvas_size as f64, pos);
+                context.stroke();
+            }
+        }
+    });
+
+    #[cfg(not(feature = "ssr"))]
+    return view! {
+        <canvas
+            node_ref=canvas_ref
+            class="border border-border"
+        ></canvas>
+    };
+
+    #[cfg(feature = "ssr")]
     view! {
-        <div class="flex flex-col">
-            {move || {
-                range()
-                    .clone()
-                    .map(|y| {
-                        view! {
-                            <div class="flex flex-row">
-                                {move || {
-                                    range()
-                                        .clone()
-                                        .map(|x| {
-                                            let is_passable = move || {
-                                                grid.get()
-                                                    .0
-                                                    .get(
-                                                        &CoordinatePair {
-                                                            x_pos: x as i64,
-                                                            y_pos: y as i64,
-                                                        },
-                                                    )
-                                                    .map(|c| c.is_passable)
-                                                    .unwrap_or(false)
-                                            };
-                                            let is_current_cell = move || {
-                                                current_cell()
-                                                    .map(|c| (x as i64, y as i64) == (c.x_pos, c.y_pos))
-                                                    .unwrap_or(false)
-                                            };
-                                            let is_start_cell = move || {
-                                                start_cell_coord()
-                                                    .map(|c| (x as i64, y as i64) == (c.x_pos, c.y_pos))
-                                                    .unwrap_or(false)
-                                            };
-                                            let is_end_cell = move || {
-                                                end_cell_coord()
-                                                    .map(|c| (x as i64, y as i64) == (c.x_pos, c.y_pos))
-                                                    .unwrap_or(false)
-                                            };
-                                            let is_visited = move || {
-                                                grid()
-                                                    .0
-                                                    .get(
-                                                        &CoordinatePair {
-                                                            x_pos: x as i64,
-                                                            y_pos: y as i64,
-                                                        },
-                                                    )
-                                                    .map(|c| c.visited)
-                                                    .unwrap_or(false)
-                                            };
-                                            let on_click = move |_| {
-                                                let clicked_on_start = move || {
-                                                    start_cell_coord()
-                                                        .map(|c| (c.x_pos, c.y_pos) == (x as i64, y as i64))
-                                                        .unwrap_or(false)
-                                                };
-                                                let clicked_on_end = move || {
-                                                    end_cell_coord()
-                                                        .map(|c| (c.x_pos, c.y_pos) == (x as i64, y as i64))
-                                                        .unwrap_or(false)
-                                                };
-                                                if clicked_on_start() {
-                                                    set_start_cell_coord(None);
-                                                } else if clicked_on_end() {
-                                                    set_end_cell_coord(None);
-                                                } else if start_cell_coord().is_none() {
-                                                    set_start_cell_coord(
-                                                        Some(CoordinatePair {
-                                                            x_pos: x as i64,
-                                                            y_pos: y as i64,
-                                                        }),
-                                                    );
-                                                } else if end_cell_coord().is_none() {
-                                                    set_end_cell_coord(
-                                                        Some(CoordinatePair {
-                                                            x_pos: x as i64,
-                                                            y_pos: y as i64,
-                                                        }),
-                                                    );
-                                                }
-                                            };
-                                            view! {
-                                                <div
-                                                    class="w-10 h-10 border border-border cursor-pointer transition-colors"
-                                                    class=("bg-green-500", move || is_start_cell())
-                                                    class=("bg-amber-500", move || is_end_cell())
-                                                    class=("bg-red-500", move || { is_current_cell() })
+        <canvas
+            class="border border-border"
+        ></canvas>
+    }
+}
 
-                                                    class=(
-                                                        "bg-accent bg-opacity-40",
-                                                        move || {
-                                                            !is_start_cell() && !is_end_cell() && !is_current_cell()
-                                                                && is_visited()
-                                                        },
-                                                    )
+#[component]
+#[allow(unused_variables)]
+fn AlgorithmSimulation(
+    algorithm: Algorithm,
+    grid_size: ReadSignal<u64>,
+    shared_grid: ReadSignal<Grid>,
+    #[allow(unused_variables)] set_shared_grid: WriteSignal<Grid>,
+    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
+    is_running: ReadSignal<bool>,
+) -> impl IntoView {
+    // Each algorithm has its own copy of the grid and simulation state
+    let (grid, set_grid) = signal(Grid(HashMap::new()));
+    let (current_cell, set_current_cell) = signal(None::<CoordinatePair>);
+    let (current_path_candidates, set_current_path_candidates) =
+        signal(VecCoordinate(Vec::<CoordinatePair>::new()));
+    let (final_path, set_final_path) = signal(HashSet::<CoordinatePair>::new());
+    let (fps, set_fps) = signal(0.0);
 
-                                                    class=(
-                                                        "bg-surface hover:bg-border hover:bg-opacity-30",
-                                                        move || {
-                                                            !is_start_cell() && !is_end_cell() && !is_visited()
-                                                                && is_passable()
-                                                        },
-                                                    )
+    // Clone the shared grid when it changes
+    #[cfg(not(feature = "ssr"))]
+    {
+        Effect::new(move |_| {
+            set_grid(shared_grid().clone());
+        });
+    }
 
-                                                    class=(
-                                                        "bg-charcoal",
-                                                        move || {
-                                                            !is_start_cell() && !is_end_cell() && !is_current_cell()
-                                                                && !is_passable()
-                                                        },
-                                                    )
+    // Fast simulation loop
+    #[cfg(not(feature = "ssr"))]
+    let (frame_count, set_frame_count) = signal(0);
 
-                                                    on:click=on_click
-                                                ></div>
-                                            }
-                                        })
-                                        .collect_view()
-                                }}
+    #[cfg(not(feature = "ssr"))]
+    let (algo_signal, _) = signal(algorithm.clone());
 
-                            </div>
+    #[cfg(not(feature = "ssr"))]
+    {
+        Effect::new(move |_| {
+            if !is_running() {
+                return;
+            }
+
+            set_interval_with_handle(
+                move || {
+                    if !is_running() {
+                        return;
+                    }
+
+                    // Update FPS (steps per second)
+                    set_frame_count.update(|c| *c += 1);
+                    if frame_count() >= 100 {
+                        set_fps(frame_count() as f64);
+                        set_frame_count(0);
+                    }
+
+                    // Check if simulation is complete
+                    if current_cell() == end_cell_coord() && current_cell().is_some() {
+                        // Backtrack to build the final path
+                        let mut path = HashSet::new();
+                        let mut current = end_cell_coord();
+
+                        let mut iterations = 0;
+                        while let Some(coord) = current {
+                            if path.contains(&coord) {
+                                break;
+                            }
+                            path.insert(coord);
+                            current = grid().0.get(&coord).and_then(|cell| cell.parent);
+                            iterations += 1;
+                            if iterations > 10000 {
+                                break;
+                            }
                         }
-                    })
-                    .collect_view()
-            }}
 
+                        set_final_path(path);
+                        set_current_cell(None);
+                        return;
+                    }
+
+                    // Run one step of the algorithm
+                    if current_cell() != end_cell_coord() {
+                        calculate_next(
+                            grid_size,
+                            grid,
+                            set_grid,
+                            start_cell_coord,
+                            current_path_candidates,
+                            set_current_path_candidates,
+                            current_cell,
+                            set_current_cell,
+                            algo_signal,
+                        );
+                    }
+                },
+                std::time::Duration::from_millis(0),
+            )
+            .ok();
+        });
+    }
+
+    // Reset state when shared_grid changes
+    #[cfg(not(feature = "ssr"))]
+    {
+        Effect::new(move |_| {
+            let _ = shared_grid();
+            // Always reset when grid changes
+            set_current_cell(None);
+            set_current_path_candidates(VecCoordinate(Vec::new()));
+            set_final_path(HashSet::new());
+            set_frame_count(0);
+            set_fps(0.0);
+        });
+    }
+
+    view! {
+        <div class="flex flex-col gap-2 items-center">
+            <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
+            <SearchGrid
+                grid_size=grid_size
+                grid=grid
+                start_cell_coord=start_cell_coord
+                end_cell_coord=end_cell_coord
+                current_cell=current_cell
+                final_path=final_path
+            />
+            <div class="text-xs text-charcoal opacity-75 font-mono min-h-[1.5rem]">
+                {move || if is_running() && fps() > 0.0 {
+                    format!("{:.0} steps/s", fps())
+                } else {
+                    String::from(" ")
+                }}
+            </div>
         </div>
     }
 }
 
 #[component]
+#[allow(unused_variables)]
 pub fn PathSearch() -> impl IntoView {
     let (grid_size, set_grid_size) = signal(25_u64);
     let (obstacle_probability, set_obstacle_probability) = signal(0.2);
 
-    // Initialize grid with cells
-    let mut initial_grid = Grid(HashMap::new());
-    let mut rng = rand::thread_rng();
-    for x in 0..25 {
-        for y in 0..25 {
-            initial_grid.0.insert(
-                CoordinatePair {
-                    x_pos: x as i64,
-                    y_pos: y as i64,
-                },
-                Cell {
-                    coordiantes: CoordinatePair {
-                        x_pos: x as i64,
-                        y_pos: y as i64,
-                    },
-                    is_passable: rng.gen::<f64>() > 0.2,
-                    visited: false,
-                },
-            );
-        }
-    }
-
+    // Initialize empty grid - will be randomized on mount
+    let initial_grid = Grid(HashMap::new());
     let (grid, set_grid) = signal(initial_grid);
-    let (current_cell, set_current_cell) = signal(None::<CoordinatePair>);
-    let (algorithm, set_algorithm) = signal(Algorithm::Wall);
 
     let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
     let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
-    let (current_path_candidates, set_current_path_candidates) =
-        signal(VecCoordinate(Vec::<CoordinatePair>::new()));
+    let (is_running, set_is_running) = signal(false);
+
+    // Randomize grid on initial mount and when grid size changes
+    #[cfg(not(feature = "ssr"))]
+    {
+        use leptos::prelude::Effect;
+        Effect::new(move |_| {
+            let _ = grid_size(); // Track grid_size changes
+            randomize_cells(
+                obstacle_probability(),
+                grid_size(),
+                set_grid,
+                set_start_cell_coord,
+                set_end_cell_coord,
+            );
+            // Reset state when grid size changes
+            set_is_running(false);
+        });
+    }
 
     view! {
         <SourceAnchor href="#[git]" />
@@ -668,29 +834,41 @@ pub fn PathSearch() -> impl IntoView {
                 set_grid=set_grid
                 obstacle_probability=obstacle_probability
                 set_obstacle_probability=set_obstacle_probability
-                start_cell_coord=start_cell_coord
                 set_start_cell_coord=set_start_cell_coord
-                end_cell_coord=end_cell_coord
                 set_end_cell_coord=set_end_cell_coord
-                current_path_candidates=current_path_candidates
-                set_current_path_candidates=set_current_path_candidates
-                current_cell=current_cell
-                set_current_cell=set_current_cell
-                algorithm=algorithm
-                set_algorithm=set_algorithm
+                is_running=is_running
+                set_is_running=set_is_running
             />
-            <p class="text-sm text-charcoal opacity-75">
-                "Click to set start (green) and end (yellow) points, then simulate"
-            </p>
-            <div class="mt-4">
-                <SearchGrid
+            <div class="text-sm text-charcoal opacity-75">
+                "Random start (green) and end (yellow) points. Compare algorithms side-by-side."
+            </div>
+            <div class="mt-4 w-full grid grid-cols-1 md:grid-cols-3 gap-8 justify-items-center">
+                <AlgorithmSimulation
+                    algorithm=Algorithm::Bfs
                     grid_size=grid_size
-                    grid=grid
+                    shared_grid=grid
+                    set_shared_grid=set_grid
                     start_cell_coord=start_cell_coord
-                    set_start_cell_coord
                     end_cell_coord=end_cell_coord
-                    set_end_cell_coord=set_end_cell_coord
-                    current_cell=current_cell
+                    is_running=is_running
+                />
+                <AlgorithmSimulation
+                    algorithm=Algorithm::Corner
+                    grid_size=grid_size
+                    shared_grid=grid
+                    set_shared_grid=set_grid
+                    start_cell_coord=start_cell_coord
+                    end_cell_coord=end_cell_coord
+                    is_running=is_running
+                />
+                <AlgorithmSimulation
+                    algorithm=Algorithm::Wall
+                    grid_size=grid_size
+                    shared_grid=grid
+                    set_shared_grid=set_grid
+                    start_cell_coord=start_cell_coord
+                    end_cell_coord=end_cell_coord
+                    is_running=is_running
                 />
             </div>
         </div>

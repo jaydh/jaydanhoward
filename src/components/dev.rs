@@ -4,7 +4,7 @@ use leptos::prelude::*;
 #[component]
 pub fn Lighthouse() -> impl IntoView {
     view! {
-        <div class="flex flex-col gap-6 h-full">
+        <div class="flex flex-col gap-6 h-full min-h-[50vh]">
             <div class="text-base leading-loose text-charcoal opacity-90">
                 "Here is a programmatically generated lighthouse report "
                 <a
