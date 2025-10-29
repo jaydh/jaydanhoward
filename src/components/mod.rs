@@ -14,4 +14,3 @@ mod source_anchor;
 mod work;
 
 pub use app::App;
-pub use life::LifeGame;

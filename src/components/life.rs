@@ -1,7 +1,9 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
-use rand::Rng;
 use std::collections::HashSet;
+
+#[cfg(not(feature = "ssr"))]
+use rand::Rng;
 
 #[derive(Clone, Default)]
 struct AliveCells(HashSet<(i32, i32)>);
@@ -49,6 +51,7 @@ fn calculate_next(
     set_cells(AliveCells(next_alive));
 }
 
+#[cfg(not(feature = "ssr"))]
 fn randomize_cells(alive_probability: f64, grid_size: u32, set_cells: WriteSignal<AliveCells>) {
     let mut rng = rand::thread_rng();
     let mut alive_cells = HashSet::new();
@@ -60,101 +63,6 @@ fn randomize_cells(alive_probability: f64, grid_size: u32, set_cells: WriteSigna
         }
     }
     set_cells(AliveCells(alive_cells));
-}
-
-#[component]
-fn Controls(
-    grid_size: ReadSignal<u32>,
-    set_grid_size: WriteSignal<u32>,
-    alive_probability: ReadSignal<f64>,
-    set_alive_probability: WriteSignal<f64>,
-    #[allow(unused_variables)] cells: ReadSignal<AliveCells>,
-    set_cells: WriteSignal<AliveCells>,
-    interval_ms: ReadSignal<u64>,
-    set_interval_ms: WriteSignal<u64>,
-    start_simulation: impl Fn() + 'static + Copy,
-    stop_simulation: impl Fn() + 'static + Copy,
-) -> impl IntoView {
-
-    view! {
-        <div class="flex flex-col gap-6 w-full max-w-2xl">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div class="flex flex-col gap-2">
-                    <label for="grid_size" class="text-sm font-medium text-charcoal">
-                        Grid Size
-                    </label>
-                    <input
-                        type="text"
-                        id="grid_size"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:input=move |ev| {
-                            set_grid_size(event_target_value(&ev).parse::<u32>().unwrap());
-                        }
-
-                        prop:value=grid_size
-                    />
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label for="alive_probability" class="text-sm font-medium text-charcoal">
-                        Alive Probability
-                    </label>
-                    <input
-                        type="text"
-                        id="alive_probability"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:input=move |ev| {
-                            set_alive_probability(event_target_value(&ev).parse::<f64>().unwrap());
-                        }
-
-                        prop:value=alive_probability
-                    />
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label for="interval_time" class="text-sm font-medium text-charcoal">
-                        Speed (ms)
-                    </label>
-                    <input
-                        type="text"
-                        id="interval_time"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:input=move |ev| {
-                            set_interval_ms(event_target_value(&ev).parse::<u64>().unwrap());
-                        }
-
-                        prop:value=interval_ms
-                    />
-                </div>
-            </div>
-            <div class="flex flex-row gap-3">
-                <button
-                    class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
-                    on:click=move |_| {
-                        stop_simulation();
-                        set_cells(AliveCells::default())
-                    }
-                >
-                    Reset
-                </button>
-                <button
-                    class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
-                    on:click=move |_| {
-                        stop_simulation();
-                        randomize_cells(alive_probability(), grid_size(), set_cells)
-                    }
-                >
-                    Randomize
-                </button>
-                <button
-                    class="px-6 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition-all duration-200 font-medium shadow-minimal"
-                    on:click=move |_| {
-                        start_simulation();
-                    }
-                >
-                    Simulate
-                </button>
-            </div>
-        </div>
-    }
 }
 
 #[component]
@@ -314,7 +222,6 @@ pub fn LifeGame(
     #[prop(optional)] initial_grid_size: Option<u32>,
     #[prop(optional)] initial_alive_probability: Option<f64>,
     #[prop(optional)] initial_interval_ms: Option<u64>,
-    #[prop(default = true)] show_controls: bool,
     #[prop(default = false)] #[allow(unused_variables)] auto_start: bool,
 ) -> impl IntoView {
     let (cells, set_cells) = signal::<AliveCells>(AliveCells::default());
@@ -323,6 +230,8 @@ pub fn LifeGame(
     let (grid_size, set_grid_size) = signal(initial_grid_size.unwrap_or(25));
     let (alive_probability, set_alive_probability) = signal(initial_alive_probability.unwrap_or(0.6));
     let (interval_ms, set_interval_ms) = signal(initial_interval_ms.unwrap_or(200));
+
+    let (show_settings, set_show_settings) = signal(false);
 
     #[cfg(not(feature = "ssr"))]
     let (interval_handle, set_interval_handle) = signal(None::<leptos::prelude::IntervalHandle>);
@@ -382,8 +291,8 @@ pub fn LifeGame(
     // Auto-start if requested
     #[cfg(not(feature = "ssr"))]
     if auto_start {
-        let initial_probability = alive_probability();
-        let initial_grid_size = grid_size();
+        let initial_probability = alive_probability.get_untracked();
+        let initial_grid_size = grid_size.get_untracked();
         Effect::new(move |prev: Option<()>| {
             // Only run once on mount
             if prev.is_some() {
@@ -397,9 +306,9 @@ pub fn LifeGame(
     }
 
     #[cfg(feature = "ssr")]
-    let start_simulation = || {};
+    let _start_simulation = || {};
     #[cfg(feature = "ssr")]
-    let stop_simulation = || {};
+    let _stop_simulation = || {};
 
     #[cfg(not(feature = "ssr"))]
     let reset = move || {
@@ -413,7 +322,7 @@ pub fn LifeGame(
     let reset = || {};
 
     view! {
-        <div class="w-full flex flex-col gap-4 items-center">
+        <div class="w-full flex flex-col gap-4 items-center relative">
             <div class="flex gap-3 items-center">
                 <div class="flex gap-2">
                     {
@@ -421,39 +330,44 @@ pub fn LifeGame(
                         {
                             view! {
                                 <button
-                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
                                     style:border-color="#3B82F6"
                                     style:color="#3B82F6"
-                                    class:hover:bg-opacity-20=true
                                     on:click=move |_| toggle_simulation()
                                 >
                                     {move || if is_running() { "▌▌" } else { "▶" }}
                                 </button>
                                 <button
-                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
                                     style:border-color="#3B82F6"
                                     style:color="#3B82F6"
-                                    class:hover:bg-opacity-20=true
                                     on:click=move |_| reset()
                                 >
                                     "↻"
+                                </button>
+                                <button
+                                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200"
+                                    on:click=move |_| set_show_settings.update(|v| *v = !*v)
+                                >
+                                    <i class="fas fa-cog"></i>
                                 </button>
                             }
                         }
                         #[cfg(feature = "ssr")]
                         {
                             view! {
-                                <button
-                                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200"
-                                >
+                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal">
                                     "▶"
                                 </button>
                                 <button
-                                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200"
+                                    class="px-4 py-1.5 text-sm rounded border"
                                     style:border-color="#3B82F6"
                                     style:color="#3B82F6"
                                 >
                                     "↻"
+                                </button>
+                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal">
+                                    <i class="fas fa-cog"></i>
                                 </button>
                             }
                         }
@@ -463,32 +377,91 @@ pub fn LifeGame(
                     {alive_cells} " cells"
                 </span>
             </div>
-            {show_controls.then(|| view! {
-                <Controls
-                    grid_size
-                    set_grid_size
-                    alive_probability
-                    set_alive_probability
-                    cells
-                    set_cells
-                    interval_ms
-                    set_interval_ms
-                    start_simulation
-                    stop_simulation
-                />
-                <div class="flex items-center gap-4 text-sm text-charcoal opacity-75">
-                    <span>"Alive Cells: " {alive_cells}</span>
-                    <span class="text-border">"|"</span>
-                    <a
-                        class="text-accent hover:underline transition-colors duration-200"
-                        href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
-                        target="_blank"
-                        rel="noreferrer"
-                    >
-                        "Learn More"
-                    </a>
+
+            <Show when=move || show_settings()>
+                <div class="absolute top-12 right-0 z-20 bg-surface border border-border rounded-lg shadow-minimal-lg p-6 min-w-[320px]">
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-medium text-charcoal">"Settings"</h3>
+                            <button
+                                class="text-charcoal opacity-50 hover:opacity-100 transition-opacity"
+                                on:click=move |_| set_show_settings.set(false)
+                            >
+                                "✕"
+                            </button>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label for="grid_size" class="text-sm font-medium text-charcoal">
+                                "Grid Size"
+                            </label>
+                            <input
+                                type="number"
+                                id="grid_size"
+                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                                on:input=move |ev| {
+                                    if let Ok(val) = event_target_value(&ev).parse::<u32>() {
+                                        set_grid_size(val);
+                                    }
+                                }
+
+                                prop:value=grid_size
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label for="alive_probability" class="text-sm font-medium text-charcoal">
+                                "Alive Probability"
+                            </label>
+                            <input
+                                type="number"
+                                id="alive_probability"
+                                step="0.1"
+                                min="0"
+                                max="1"
+                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                                on:input=move |ev| {
+                                    if let Ok(val) = event_target_value(&ev).parse::<f64>() {
+                                        set_alive_probability(val);
+                                    }
+                                }
+
+                                prop:value=alive_probability
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label for="interval_ms" class="text-sm font-medium text-charcoal">
+                                "Speed (ms)"
+                            </label>
+                            <input
+                                type="number"
+                                id="interval_ms"
+                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                                on:input=move |ev| {
+                                    if let Ok(val) = event_target_value(&ev).parse::<u64>() {
+                                        set_interval_ms(val);
+                                    }
+                                }
+
+                                prop:value=interval_ms
+                            />
+                        </div>
+
+                        <div class="flex items-center gap-4 pt-2 text-sm text-charcoal opacity-75">
+                            <a
+                                class="text-accent hover:underline transition-colors duration-200"
+                                href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+                                target="_blank"
+                                rel="noreferrer"
+                            >
+                                "Learn More"
+                            </a>
+                        </div>
+                    </div>
                 </div>
-            })}
+            </Show>
+
             <div class="w-full flex justify-center">
                 <Grid grid_size cells set_cells />
             </div>
@@ -500,11 +473,11 @@ pub fn LifeGame(
 pub fn Life() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
-        <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
+        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
             <h1 class="text-3xl font-bold text-charcoal">
                 "Conway's Game of Life"
             </h1>
-            <LifeGame />
+            <LifeGame auto_start=true initial_grid_size=150 />
         </div>
     }
 }
