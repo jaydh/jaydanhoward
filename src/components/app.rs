@@ -3,7 +3,6 @@ use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
-use crate::components::work::Work;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Html, Link, Stylesheet, Title};
 use leptos_router::components::*;
@@ -24,6 +23,30 @@ fn Stylesheets() -> impl IntoView {
 }
 
 #[component]
+fn HomePage() -> impl IntoView {
+    view! {
+        <div
+            id="main-scroll-container"
+            class="overflow-y-scroll grow"
+            style="scroll-behavior: smooth;"
+        >
+            <section id="about" class="flex flex-col">
+                <About />
+            </section>
+            <section id="life" class="flex flex-col">
+                <Life />
+            </section>
+            <section id="path" class="flex-col">
+                <PathSearch />
+            </section>
+            <section id="photography" class="flex flex-col">
+                <Photography />
+            </section>
+        </div>
+    }
+}
+
+#[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
@@ -35,23 +58,13 @@ pub fn App() -> impl IntoView {
             <Html {..} />
             <div
                 id="root"
-                class="flex flex-col min-w-screen min-h-screen bg-surface text-charcoal"
+                class="flex flex-col min-w-screen h-screen bg-surface text-charcoal"
             >
                 <Router>
                     <Nav />
-                    <div class="overflow-y-auto grow flex flex-col w-full">
-                        <Routes fallback=|| "Not found">
-                            <Route
-                                path=path!("/")
-                                view=move || view! { <Redirect path="/about" /> }
-                            />
-                            <Route path=path!("about") view=About />
-                            <Route path=path!("work") view=Work />
-                            <Route path=path!("work/life") view=Life />
-                            <Route path=path!("work/path") view=PathSearch />
-                            <Route path=path!("photography") view=Photography />
-                        </Routes>
-                    </div>
+                    <Routes fallback=|| "Not found">
+                        <Route path=path!("/") view=HomePage />
+                    </Routes>
                 </Router>
             </div>
         </main>

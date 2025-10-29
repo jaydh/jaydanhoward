@@ -1,5 +1,6 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
+#[cfg(not(feature = "ssr"))]
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -103,8 +104,10 @@ impl fmt::Display for VecCoordinate {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct Grid(HashMap<CoordinatePair, Cell>);
 
+#[cfg(not(feature = "ssr"))]
 fn randomize_cells(
     obstacle_probability: f64,
     grid_size: u64,
@@ -587,80 +590,6 @@ fn calculate_next(
 }
 
 #[component]
-fn Controls(
-    grid_size: ReadSignal<u64>,
-    set_grid_size: WriteSignal<u64>,
-    #[allow(unused_variables)] grid: ReadSignal<Grid>,
-    set_grid: WriteSignal<Grid>,
-    obstacle_probability: ReadSignal<f64>,
-    set_obstacle_probability: WriteSignal<f64>,
-    set_start_cell_coord: WriteSignal<Option<CoordinatePair>>,
-    set_end_cell_coord: WriteSignal<Option<CoordinatePair>>,
-    is_running: ReadSignal<bool>,
-    set_is_running: WriteSignal<bool>,
-) -> impl IntoView {
-    let toggle_simulation = move |_| {
-        set_is_running.update(|r| *r = !*r);
-    };
-
-    view! {
-        <div class="flex flex-col gap-6 w-full max-w-3xl">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="flex flex-col gap-2">
-                    <label for="grid_size" class="text-sm font-medium text-charcoal">
-                        Grid Size
-                    </label>
-                    <input
-                        type="text"
-                        id="grid_size"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:input=move |ev| {
-                            set_grid_size(event_target_value(&ev).parse::<u64>().unwrap());
-                        }
-
-                        prop:value=grid_size
-                    />
-                </div>
-                <div class="flex flex-col gap-2">
-                    <label for="obstacle_probability" class="text-sm font-medium text-charcoal">
-                        Obstacle Probability
-                    </label>
-                    <input
-                        type="text"
-                        id="obstacle_probability"
-                        class="px-4 py-2 rounded-lg border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                        on:input=move |ev| {
-                            set_obstacle_probability(event_target_value(&ev).parse::<f64>().unwrap());
-                        }
-
-                        prop:value=obstacle_probability
-                    />
-                </div>
-            </div>
-            <div class="flex flex-row gap-3 items-center">
-                <div class="flex-1"></div>
-                <button
-                    type="button"
-                    class="px-6 py-2 rounded-lg border border-border bg-surface text-charcoal hover:bg-border hover:bg-opacity-30 transition-all duration-200 font-medium"
-                    on:click=move |_| {
-                        set_is_running(false);
-                        randomize_cells(obstacle_probability(), grid_size(), set_grid, set_start_cell_coord, set_end_cell_coord);
-                    }
-                >
-                    Randomize
-                </button>
-                <button
-                    class="px-6 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition-all duration-200 font-medium shadow-minimal"
-                    on:click=toggle_simulation
-                >
-                    {move || if is_running() { "⏸ Pause" } else { "▶ Play" }}
-                </button>
-            </div>
-        </div>
-    }
-}
-
-#[component]
 fn SearchGrid(
     #[allow(unused_variables)] grid_size: ReadSignal<u64>,
     #[allow(unused_variables)] grid: ReadSignal<Grid>,
@@ -1085,8 +1014,9 @@ fn AlgorithmSimulation(
 #[component]
 #[allow(unused_variables)]
 pub fn PathSearch() -> impl IntoView {
-    let (grid_size, set_grid_size) = signal(25_u64);
+    let (grid_size, set_grid_size) = signal(75_u64);
     let (obstacle_probability, set_obstacle_probability) = signal(0.2);
+    let (show_settings, set_show_settings) = signal(false);
 
     // Initialize empty grid - will be randomized on mount
     let initial_grid = Grid(HashMap::new());
@@ -1094,7 +1024,7 @@ pub fn PathSearch() -> impl IntoView {
 
     let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
     let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
-    let (is_running, set_is_running) = signal(false);
+    let (is_running, set_is_running) = signal(true); // Auto-start
     let (blind_completion_order, set_blind_completion_order) = signal(Vec::<Algorithm>::new());
     let (informed_completion_order, set_informed_completion_order) = signal(Vec::<Algorithm>::new());
 
@@ -1102,7 +1032,7 @@ pub fn PathSearch() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     {
         use leptos::prelude::Effect;
-        Effect::new(move |_| {
+        Effect::new(move |prev: Option<()>| {
             let _ = grid_size(); // Track grid_size changes
             randomize_cells(
                 obstacle_probability(),
@@ -1111,31 +1041,115 @@ pub fn PathSearch() -> impl IntoView {
                 set_start_cell_coord,
                 set_end_cell_coord,
             );
-            // Reset state when grid size changes
-            set_is_running(false);
+            // Only reset state on subsequent changes (not on initial mount)
+            if prev.is_some() {
+                set_is_running(false);
+            }
             set_blind_completion_order(Vec::new());
             set_informed_completion_order(Vec::new());
         });
     }
 
+    let toggle_simulation = move |_| {
+        set_is_running.update(|r| *r = !*r);
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let randomize = move |_| {
+        set_is_running(false);
+        randomize_cells(obstacle_probability(), grid_size(), set_grid, set_start_cell_coord, set_end_cell_coord);
+        set_blind_completion_order(Vec::new());
+        set_informed_completion_order(Vec::new());
+    };
+
+    #[cfg(feature = "ssr")]
+    let randomize = move |_| {};
+
     view! {
         <SourceAnchor href="#[git]" />
-        <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-8 items-center">
+        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center relative">
             <h1 class="text-3xl font-bold text-charcoal">
                 "Pathfinding Algorithms"
             </h1>
-            <Controls
-                grid_size=grid_size
-                set_grid_size=set_grid_size
-                grid=grid
-                set_grid=set_grid
-                obstacle_probability=obstacle_probability
-                set_obstacle_probability=set_obstacle_probability
-                set_start_cell_coord=set_start_cell_coord
-                set_end_cell_coord=set_end_cell_coord
-                is_running=is_running
-                set_is_running=set_is_running
-            />
+
+            <div class="flex gap-3 items-center">
+                <button
+                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
+                    style:border-color="#3B82F6"
+                    style:color="#3B82F6"
+                    on:click=toggle_simulation
+                >
+                    {move || if is_running() { "▌▌" } else { "▶" }}
+                </button>
+                <button
+                    class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
+                    style:border-color="#3B82F6"
+                    style:color="#3B82F6"
+                    on:click=randomize
+                >
+                    "↻"
+                </button>
+                <button
+                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200"
+                    on:click=move |_| set_show_settings.update(|v| *v = !*v)
+                >
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+
+            <Show when=move || show_settings()>
+                <div class="absolute top-32 right-8 z-20 bg-surface border border-border rounded-lg shadow-minimal-lg p-6 min-w-[320px]">
+                    <div class="flex flex-col gap-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-lg font-medium text-charcoal">"Settings"</h3>
+                            <button
+                                class="text-charcoal opacity-50 hover:opacity-100 transition-opacity"
+                                on:click=move |_| set_show_settings.set(false)
+                            >
+                                "✕"
+                            </button>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label for="grid_size" class="text-sm font-medium text-charcoal">
+                                "Grid Size"
+                            </label>
+                            <input
+                                type="number"
+                                id="grid_size"
+                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                                on:input=move |ev| {
+                                    if let Ok(val) = event_target_value(&ev).parse::<u64>() {
+                                        set_grid_size(val);
+                                    }
+                                }
+                                prop:value=grid_size
+                            />
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label for="obstacle_probability" class="text-sm font-medium text-charcoal">
+                                "Obstacle Probability"
+                            </label>
+                            <input
+                                type="number"
+                                id="obstacle_probability"
+                                step="0.1"
+                                min="0"
+                                max="1"
+                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
+                                on:input=move |ev| {
+                                    if let Ok(val) = event_target_value(&ev).parse::<f64>() {
+                                        set_obstacle_probability(val);
+                                    }
+                                }
+                                prop:value=obstacle_probability
+                            />
+                        </div>
+                    </div>
+                </div>
+            </Show>
+
             <div class="text-sm text-charcoal opacity-75 max-w-4xl mx-auto mb-8">
                 "Pathfinding algorithms racing to find the shortest route from start (green) to end (yellow)."
             </div>
