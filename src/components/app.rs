@@ -28,18 +28,18 @@ fn HomePage() -> impl IntoView {
         <div
             id="main-scroll-container"
             class="overflow-y-scroll grow"
-            style="scroll-behavior: smooth;"
+            style="scroll-behavior: smooth; -webkit-overflow-scrolling: touch; will-change: scroll-position;"
         >
-            <section id="about" class="flex flex-col">
+            <section id="about" class="flex flex-col py-20">
                 <About />
             </section>
-            <section id="life" class="flex flex-col">
+            <section id="life" class="flex flex-col py-20 border-t border-border">
                 <Life />
             </section>
-            <section id="path" class="flex-col">
+            <section id="path" class="flex flex-col py-20 border-t border-border">
                 <PathSearch />
             </section>
-            <section id="photography" class="flex flex-col">
+            <section id="photography" class="flex flex-col py-20 border-t border-border">
                 <Photography />
             </section>
         </div>

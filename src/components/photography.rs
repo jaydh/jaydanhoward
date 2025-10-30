@@ -28,8 +28,11 @@ pub fn Photography() -> impl IntoView {
 
     view! {
         <SourceAnchor href="#[git]" />
-        <div class="max-w-7xl mx-auto px-8 w-full">
-            <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+            <h1 class="text-3xl font-bold text-charcoal">
+                "Photography"
+            </h1>
+            <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style="contain: layout style paint;">
                     {images
                         .iter()
                         .enumerate()
@@ -38,14 +41,17 @@ pub fn Photography() -> impl IntoView {
                             let title = *title;
                             view! {
                                 <div
-                                    class="group relative overflow-hidden rounded-xl shadow-minimal-lg hover:shadow-minimal-xl transition-all duration-300 cursor-pointer"
+                                    class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer"
+                                    style="contain: layout style paint;"
                                     on:click=move |_| set_selected_image(Some(idx))
                                 >
                                     <div class="aspect-square overflow-hidden bg-border">
                                         <img
                                             src=src
                                             alt=title.unwrap_or(src)
-                                            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                            loading="lazy"
+                                            decoding="async"
+                                            class="w-full h-full object-cover"
                                         />
                                     </div>
                                     {

@@ -26,17 +26,22 @@ pub fn Nav() -> impl IntoView {
 
     let (show_contact_links, set_show_contact_links) = signal(false);
 
-    // Set up scroll spy with scroll event listener
+    // Set up scroll spy with scroll event listener (throttled with RAF)
     #[cfg(not(feature = "ssr"))]
     {
         use wasm_bindgen::closure::Closure;
         use wasm_bindgen::JsCast;
+        use std::rc::Rc;
+        use std::cell::RefCell;
 
         Effect::new(move |_| {
             let window = web_sys::window().unwrap();
             let document = window.document().unwrap();
 
-            let scroll_handler = Closure::wrap(Box::new(move || {
+            // Track if we've scheduled an update
+            let ticking = Rc::new(RefCell::new(false));
+
+            let update_active_section = move || {
                 let document = web_sys::window().unwrap().document().unwrap();
 
                 // Get the scroll container
@@ -68,6 +73,24 @@ pub fn Nav() -> impl IntoView {
 
                     set_active_section.set(best_section);
                 }
+            };
+
+            let ticking_clone = ticking.clone();
+            let scroll_handler = Closure::wrap(Box::new(move || {
+                if !*ticking_clone.borrow() {
+                    let window = web_sys::window().unwrap();
+                    let ticking_inner = ticking_clone.clone();
+
+                    let callback = Closure::once(move || {
+                        update_active_section();
+                        *ticking_inner.borrow_mut() = false;
+                    });
+
+                    let _ = window.request_animation_frame(callback.as_ref().unchecked_ref());
+                    callback.forget();
+
+                    *ticking_clone.borrow_mut() = true;
+                }
             }) as Box<dyn Fn()>);
 
             // Attach scroll listener to the scroll container
@@ -82,7 +105,7 @@ pub fn Nav() -> impl IntoView {
     }
 
     view! {
-        <nav class="sticky top-0 flex flex-row pointer-events-auto px-8 py-6 text-base border-b border-border bg-surface bg-opacity-80 backdrop-blur-md z-40">
+        <nav class="sticky top-0 flex flex-row pointer-events-auto px-8 py-6 text-base border-b border-border bg-surface z-40">
             <div class="flex items-center gap-8 max-w-7xl mx-auto w-full">
                 <a
                     href="#about"
