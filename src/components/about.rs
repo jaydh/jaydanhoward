@@ -1,4 +1,5 @@
 use crate::components::cluster_stats::ClusterStats;
+use crate::components::dev::Lighthouse;
 use crate::components::source_anchor::SourceAnchor;
 
 use leptos::prelude::*;
@@ -54,11 +55,14 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <ClusterStats />
-        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-12 items-center">
             <h1 class="text-3xl font-bold text-charcoal">
                 "About"
             </h1>
             <MeSection />
+            <div class="w-full">
+                <Lighthouse />
+            </div>
         </div>
     }
 }
