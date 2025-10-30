@@ -268,6 +268,8 @@ pub fn LifeGame(
     #[cfg(not(feature = "ssr"))]
     let (is_running, set_is_running) = signal(false);
 
+    let container_ref = NodeRef::<leptos::html::Div>::new();
+
     // Animation loop using Web Worker for off-thread calculations
     #[cfg(not(feature = "ssr"))]
     {
@@ -439,20 +441,44 @@ pub fn LifeGame(
         }
     };
 
-    // Auto-start if requested
+    // Auto-start when element comes into view
     #[cfg(not(feature = "ssr"))]
-    if auto_start {
+    {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        use std::rc::Rc;
+        use std::cell::RefCell;
+
+        let has_started = Rc::new(RefCell::new(false));
         let initial_probability = alive_probability.get_untracked();
         let initial_grid_size = grid_size.get_untracked();
-        Effect::new(move |prev: Option<()>| {
-            // Only run once on mount
-            if prev.is_some() {
+
+        Effect::new(move |_| {
+            let Some(container) = container_ref.get() else {
                 return;
-            }
-            // Randomize cells on mount
-            randomize_cells(initial_probability, initial_grid_size, set_cells);
-            // Start simulation
-            start_simulation();
+            };
+
+            let has_started = has_started.clone();
+
+            // Create IntersectionObserver to detect when element is visible
+            let callback = Closure::wrap(Box::new(move |entries: js_sys::Array, _observer: web_sys::IntersectionObserver| {
+                for entry in entries.iter() {
+                    let entry: web_sys::IntersectionObserverEntry = entry.unchecked_into();
+
+                    if entry.is_intersecting() && !*has_started.borrow() {
+                        *has_started.borrow_mut() = true;
+                        // Randomize cells
+                        randomize_cells(initial_probability, initial_grid_size, set_cells);
+                        // Start simulation
+                        set_is_running(true);
+                    }
+                }
+            }) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
+
+            let observer = web_sys::IntersectionObserver::new(callback.as_ref().unchecked_ref()).unwrap();
+            observer.observe(&container);
+
+            callback.forget();
         });
     }
 
@@ -473,7 +499,10 @@ pub fn LifeGame(
     let reset = || {};
 
     view! {
-        <div class="w-full flex flex-col gap-4 items-center relative">
+        <div
+            node_ref=container_ref
+            class="w-full flex flex-col gap-4 items-center relative"
+        >
             <div class="flex gap-3 items-center">
                 <div class="flex gap-2">
                     {

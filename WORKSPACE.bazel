@@ -168,6 +168,9 @@ crates_repository(
             version = "0.2",
             features = ["js"]
         ),
+        "js-sys": crate.spec(
+            version = "0.3",
+        ),
         "leptos": crate.spec(
             version = "0.8.2",
             features = ["hydrate", "nightly"]
@@ -210,6 +213,8 @@ crates_repository(
                   "Element",
                   "HtmlCanvasElement",
                   "HtmlDocument",
+                  "IntersectionObserver",
+                  "IntersectionObserverEntry",
                   "MediaQueryList",
                   "MessageEvent",
                   "MouseEvent",

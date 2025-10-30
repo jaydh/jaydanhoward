@@ -1,5 +1,5 @@
 {
-  "checksum": "5ac6740652d430b95c2a156cc5f85d5944fc3d37fd87c4985d8d0d5f8f97d7c9",
+  "checksum": "5f50bdab1c111e2d236afc370a4d04fc45413a5505efcd9d5a48221b9316b56f",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -2117,6 +2117,10 @@
             {
               "id": "getrandom 0.2.15",
               "target": "getrandom"
+            },
+            {
+              "id": "js-sys 0.3.77",
+              "target": "js_sys"
             },
             {
               "id": "leptos 0.8.2",
@@ -13085,6 +13089,8 @@
             "HtmlUListElement",
             "HtmlVideoElement",
             "InputEvent",
+            "IntersectionObserver",
+            "IntersectionObserverEntry",
             "KeyboardEvent",
             "Location",
             "MediaQueryList",
@@ -14956,6 +14962,7 @@
     "console_error_panic_hook 0.1.7",
     "console_log 1.0.0",
     "getrandom 0.2.15",
+    "js-sys 0.3.77",
     "leptos 0.8.2",
     "leptos_meta 0.8.2",
     "leptos_router 0.8.2",
