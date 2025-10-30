@@ -73,6 +73,10 @@ struct Cell {
     visited: bool,
     coordiantes: CoordinatePair,
     parent: Option<CoordinatePair>,
+    // For bidirectional BFS: track which direction visited this cell
+    // None = not visited by either, Some(true) = visited from start, Some(false) = visited from end
+    #[allow(dead_code)]
+    visited_direction: Option<bool>,
 }
 
 impl fmt::Display for CoordinatePair {
@@ -138,6 +142,7 @@ fn randomize_cells(
                     is_passable,
                     visited: false,
                     parent: None,
+                    visited_direction: None,
                 },
             );
         }
@@ -395,17 +400,50 @@ fn calculate_next(
     end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     current_path_candidates: ReadSignal<VecCoordinate>,
     set_current_path_candidates: WriteSignal<VecCoordinate>,
+    reverse_candidates: ReadSignal<VecCoordinate>,
+    set_reverse_candidates: WriteSignal<VecCoordinate>,
+    expanding_from_start: ReadSignal<bool>,
+    set_expanding_from_start: WriteSignal<bool>,
     current_cell: ReadSignal<Option<CoordinatePair>>,
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
     algorithm: ReadSignal<Algorithm>,
 ) {
     if current_cell.get_untracked().is_none() {
-        set_current_cell(start_cell_coord.get_untracked());
-        set_grid.update(|grid| {
-            let cell = grid.0.get_mut(&start_cell_coord.get_untracked().unwrap()).unwrap();
-            cell.visited = true;
-            cell.parent = None;
-        });
+        // For Bidirectional BFS, add both start and end to their respective queues
+        if matches!(algorithm.get_untracked(), Algorithm::Bidirectional) {
+            // Mark start and add to forward queue
+            set_grid.update(|grid| {
+                let cell = grid.0.get_mut(&start_cell_coord.get_untracked().unwrap()).unwrap();
+                cell.visited = true;
+                cell.parent = None;
+                cell.visited_direction = Some(true); // true = from start
+            });
+            set_current_path_candidates.update(|candidates| {
+                candidates.0.push(start_cell_coord.get_untracked().unwrap());
+            });
+
+            // Mark end and add to reverse queue
+            if let Some(end_coord) = end_cell_coord.get_untracked() {
+                set_grid.update(|grid| {
+                    if let Some(cell) = grid.0.get_mut(&end_coord) {
+                        cell.visited = true;
+                        cell.parent = None;
+                        cell.visited_direction = Some(false); // false = from end
+                    }
+                });
+                set_reverse_candidates.update(|candidates| {
+                    candidates.0.push(end_coord);
+                });
+            }
+        } else {
+            // For other algorithms, set current_cell and mark as visited
+            set_current_cell(start_cell_coord.get_untracked());
+            set_grid.update(|grid| {
+                let cell = grid.0.get_mut(&start_cell_coord.get_untracked().unwrap()).unwrap();
+                cell.visited = true;
+                cell.parent = None;
+            });
+        }
     } else {
         match algorithm.get_untracked() {
             Algorithm::Wall => add_candidates_walls(
@@ -422,8 +460,8 @@ fn calculate_next(
                 current_path_candidates,
                 set_current_path_candidates,
             ),
-            Algorithm::Bfs | Algorithm::Bidirectional => {
-                // BFS/Bidirectional: mark visited when adding to queue (FIFO needs this)
+            Algorithm::Bfs => {
+                // BFS: mark visited when adding to queue (FIFO needs this)
                 let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
                     .iter()
                     .filter_map(|(x, y)| {
@@ -457,6 +495,70 @@ fn calculate_next(
                 set_current_path_candidates.update(|path| {
                     path.0.extend(viable_neighbors);
                 });
+            }
+            Algorithm::Bidirectional => {
+                // Bidirectional BFS: Expand current_cell in the direction it came from
+                // Determine direction from current_cell's visited_direction
+                let current_cell_coord = current_cell.get_untracked().unwrap();
+                let current_direction = grid.get_untracked()
+                    .0.get(&current_cell_coord)
+                    .and_then(|c| c.visited_direction);
+
+                let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
+                    .iter()
+                    .filter_map(|(x, y)| {
+                        let coord = CoordinatePair {
+                            x_pos: current_cell_coord.x_pos + x,
+                            y_pos: current_cell_coord.y_pos + y,
+                        };
+                        grid.get_untracked().0.get(&coord).and_then(|c| {
+                            if c.is_passable {
+                                // For bidirectional: only skip if already visited from SAME direction
+                                // Allow visiting if from opposite direction (that's where we meet!)
+                                if c.visited_direction == current_direction {
+                                    None // Already visited from same direction, skip
+                                } else {
+                                    Some(coord) // Not visited from this direction yet
+                                }
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .collect::<Vec<CoordinatePair>>();
+
+                // Mark all neighbors as visited from THIS cell's direction and set their parent
+                let current_cell_value = current_cell.get_untracked();
+                for neighbor in &viable_neighbors {
+                    set_grid.update(|grid| {
+                        if let Some(cell) = grid.0.get_mut(neighbor) {
+                            if cell.visited_direction != current_direction {
+                                cell.visited = true;
+                                cell.visited_direction = current_direction;
+                                cell.parent = current_cell_value;
+                            }
+                        }
+                    });
+                }
+
+                // Add to appropriate frontier based on current cell's direction
+                match current_direction {
+                    Some(true) => {
+                        // Expanding from start (forward)
+                        set_current_path_candidates.update(|path| {
+                            path.0.extend(viable_neighbors);
+                        });
+                    }
+                    Some(false) => {
+                        // Expanding from end (backward)
+                        set_reverse_candidates.update(|path| {
+                            path.0.extend(viable_neighbors);
+                        });
+                    }
+                    None => {
+                        // Should not happen if initialization is correct
+                    }
+                }
             }
             Algorithm::Dfs => {
                 // DFS: don't mark when adding, let pop logic handle it (LIFO behavior)
@@ -548,8 +650,8 @@ fn calculate_next(
             }
         };
         // Pop next cell from queue
-        if matches!(algorithm.get_untracked(), Algorithm::Bfs | Algorithm::Bidirectional) {
-            // BFS and Bidirectional: pop from front (FIFO)
+        if matches!(algorithm.get_untracked(), Algorithm::Bfs) {
+            // BFS: pop from front (FIFO)
             if let Some(next_visit_coord) = current_path_candidates.get_untracked().0.first().copied() {
                 set_current_path_candidates.update(|path| {
                     if !path.0.is_empty() {
@@ -558,6 +660,52 @@ fn calculate_next(
                 });
                 set_current_cell(Some(next_visit_coord));
             }
+        } else if matches!(algorithm.get_untracked(), Algorithm::Bidirectional) {
+            // Bidirectional: alternate between forward and backward frontiers
+            let is_forward = expanding_from_start.get_untracked();
+
+            if is_forward {
+                if let Some(next_visit_coord) = current_path_candidates.get_untracked().0.first().copied() {
+                    set_current_path_candidates.update(|path| {
+                        if !path.0.is_empty() {
+                            path.0.remove(0);
+                        }
+                    });
+                    set_current_cell(Some(next_visit_coord));
+                } else {
+                    // Forward queue empty, switch to backward
+                    if let Some(next_visit_coord) = reverse_candidates.get_untracked().0.first().copied() {
+                        set_reverse_candidates.update(|path| {
+                            if !path.0.is_empty() {
+                                path.0.remove(0);
+                            }
+                        });
+                        set_current_cell(Some(next_visit_coord));
+                    }
+                }
+            } else {
+                if let Some(next_visit_coord) = reverse_candidates.get_untracked().0.first().copied() {
+                    set_reverse_candidates.update(|path| {
+                        if !path.0.is_empty() {
+                            path.0.remove(0);
+                        }
+                    });
+                    set_current_cell(Some(next_visit_coord));
+                } else {
+                    // Backward queue empty, switch to forward
+                    if let Some(next_visit_coord) = current_path_candidates.get_untracked().0.first().copied() {
+                        set_current_path_candidates.update(|path| {
+                            if !path.0.is_empty() {
+                                path.0.remove(0);
+                            }
+                        });
+                        set_current_cell(Some(next_visit_coord));
+                    }
+                }
+            }
+
+            // NOW toggle direction for next iteration (after popping from current queue)
+            set_expanding_from_start(!is_forward);
         } else {
             // DFS, A*, Greedy, Corner, Wall, RandomWalk: pop from back (LIFO)
             loop {
@@ -701,6 +849,7 @@ fn SearchGrid(
                 let cell = current_grid.0.get(&coord);
                 let is_passable = cell.map(|c| c.is_passable).unwrap_or(false);
                 let is_visited = cell.map(|c| c.visited).unwrap_or(false);
+                let visited_direction = cell.and_then(|c| c.visited_direction);
                 let is_start = start.map(|c| coord == c).unwrap_or(false);
                 let is_end = end.map(|c| coord == c).unwrap_or(false);
                 let is_current = current.map(|c| coord == c).unwrap_or(false);
@@ -717,7 +866,12 @@ fn SearchGrid(
                 } else if in_final_path {
                     "#c084fc" // purple-400 - path
                 } else if is_visited {
-                    "#93c5fd" // blue-300 - visited
+                    // For bidirectional BFS, color based on which direction visited
+                    match visited_direction {
+                        Some(true) => "#86efac", // green-300 - visited from start
+                        Some(false) => "#fde047", // yellow-300 - visited from end
+                        None => "#93c5fd", // blue-300 - visited (other algorithms)
+                    }
                 } else {
                     "#f9fafb" // gray-50 - unvisited
                 };
@@ -826,6 +980,11 @@ fn AlgorithmSimulation(
     let (step_count, set_step_count) = signal(0_u64);
     let (completion_steps, set_completion_steps) = signal(None::<u64>);
 
+    // Bidirectional-specific state: second frontier from end
+    let (reverse_candidates, set_reverse_candidates) =
+        signal(VecCoordinate(Vec::<CoordinatePair>::new()));
+    let (expanding_from_start, set_expanding_from_start) = signal(true);
+
     // Clone the shared grid when it changes
     #[cfg(not(feature = "ssr"))]
     {
@@ -884,7 +1043,17 @@ fn AlgorithmSimulation(
                     }
 
                     // Check if simulation is complete
-                    if current_cell.get_untracked() == end_cell_coord.get_untracked() && current_cell.get_untracked().is_some() {
+                    // For bidirectional, we complete when both queues are empty (frontiers have met)
+                    // For other algorithms, we complete when we reach the end cell
+                    let is_complete = if matches!(algo_signal.get_untracked(), Algorithm::Bidirectional) {
+                        current_path_candidates.get_untracked().0.is_empty() &&
+                        reverse_candidates.get_untracked().0.is_empty()
+                    } else {
+                        current_cell.get_untracked() == end_cell_coord.get_untracked() &&
+                        current_cell.get_untracked().is_some()
+                    };
+
+                    if is_complete {
                     // Record completion steps
                     set_completion_steps(Some(step_count.get_untracked()));
 
@@ -939,7 +1108,21 @@ fn AlgorithmSimulation(
                     }
 
                     // Run one step of the algorithm
-                    if current_cell.get_untracked() != end_cell_coord.get_untracked() && completion_steps.get_untracked().is_none() {
+                    // For Bidirectional BFS, we need to continue even if current_cell == end
+                    // because we expand from both ends
+                    let should_continue = if matches!(algo_signal.get_untracked(), Algorithm::Bidirectional) {
+                        // For bidirectional: continue until queues are empty or we find a path
+                        completion_steps.get_untracked().is_none() &&
+                        (!current_path_candidates.get_untracked().0.is_empty() ||
+                         !reverse_candidates.get_untracked().0.is_empty() ||
+                         current_cell.get_untracked().is_some())
+                    } else {
+                        // For other algorithms: stop when we reach the end
+                        current_cell.get_untracked() != end_cell_coord.get_untracked() &&
+                        completion_steps.get_untracked().is_none()
+                    };
+
+                    if should_continue {
                         calculate_next(
                             grid_size,
                             grid,
@@ -948,6 +1131,10 @@ fn AlgorithmSimulation(
                             end_cell_coord,
                             current_path_candidates,
                             set_current_path_candidates,
+                            reverse_candidates,
+                            set_reverse_candidates,
+                            expanding_from_start,
+                            set_expanding_from_start,
                             current_cell,
                             set_current_cell,
                             algo_signal,
@@ -985,6 +1172,8 @@ fn AlgorithmSimulation(
             // Always reset when grid changes
             set_current_cell(None);
             set_current_path_candidates(VecCoordinate(Vec::new()));
+            set_reverse_candidates(VecCoordinate(Vec::new()));
+            set_expanding_from_start(true);
             set_final_path(HashSet::new());
             set_frame_count(0);
             set_fps(0.0);
@@ -1061,9 +1250,11 @@ pub fn PathSearch() -> impl IntoView {
 
     let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
     let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
-    let (is_running, set_is_running) = signal(true); // Auto-start
+    let (is_running, set_is_running) = signal(false); // Will auto-start when visible
     let (blind_completion_order, set_blind_completion_order) = signal(Vec::<Algorithm>::new());
     let (informed_completion_order, set_informed_completion_order) = signal(Vec::<Algorithm>::new());
+
+    let container_ref = NodeRef::<leptos::html::Div>::new();
 
     // Randomize grid on initial mount and when grid size changes
     #[cfg(not(feature = "ssr"))]
@@ -1087,6 +1278,43 @@ pub fn PathSearch() -> impl IntoView {
         });
     }
 
+    // Auto-start when element comes into view
+    #[cfg(not(feature = "ssr"))]
+    {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        use std::rc::Rc;
+        use std::cell::RefCell;
+
+        let has_started = Rc::new(RefCell::new(false));
+
+        Effect::new(move |_| {
+            let Some(container) = container_ref.get() else {
+                return;
+            };
+
+            let has_started = has_started.clone();
+
+            // Create IntersectionObserver to detect when element is visible
+            let callback = Closure::wrap(Box::new(move |entries: js_sys::Array, _observer: web_sys::IntersectionObserver| {
+                for entry in entries.iter() {
+                    let entry: web_sys::IntersectionObserverEntry = entry.unchecked_into();
+
+                    if entry.is_intersecting() && !*has_started.borrow() {
+                        *has_started.borrow_mut() = true;
+                        // Start simulation
+                        set_is_running(true);
+                    }
+                }
+            }) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
+
+            let observer = web_sys::IntersectionObserver::new(callback.as_ref().unchecked_ref()).unwrap();
+            observer.observe(&container);
+
+            callback.forget();
+        });
+    }
+
     let toggle_simulation = move |_| {
         set_is_running.update(|r| *r = !*r);
     };
@@ -1104,7 +1332,10 @@ pub fn PathSearch() -> impl IntoView {
 
     view! {
         <SourceAnchor href="#[git]" />
-        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center relative">
+        <div
+            node_ref=container_ref
+            class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center relative"
+        >
             <h1 class="text-3xl font-bold text-charcoal">
                 "Pathfinding Algorithms"
             </h1>

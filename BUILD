@@ -54,6 +54,7 @@ wasm_deps = [
     "@wasm_crates//:cfg-if",
     "@wasm_crates//:console_log",
     "@wasm_crates//:console_error_panic_hook",
+    "@wasm_crates//:js-sys",
     "@wasm_crates//:leptos",
     "@wasm_crates//:leptos_meta",
     "@wasm_crates//:leptos_router",
