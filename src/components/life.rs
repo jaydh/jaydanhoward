@@ -247,9 +247,13 @@ pub fn LifeGame(
             }
 
             // Create interval that updates the game state
+            // Run multiple generations per tick for better performance
             let handle = leptos::leptos_dom::helpers::set_interval_with_handle(
                 move || {
-                    calculate_next(cells, set_cells, grid_size.get_untracked());
+                    const GENERATIONS_PER_TICK: u32 = 1;
+                    for _ in 0..GENERATIONS_PER_TICK {
+                        calculate_next(cells, set_cells, grid_size.get_untracked());
+                    }
                 },
                 std::time::Duration::from_millis(interval_ms.get_untracked()),
             )
@@ -472,7 +476,7 @@ pub fn Life() -> impl IntoView {
             <h1 class="text-3xl font-bold text-charcoal">
                 "Conway's Game of Life"
             </h1>
-            <LifeGame auto_start=true initial_grid_size=150 />
+            <LifeGame auto_start=true initial_grid_size=250 />
         </div>
     }
 }
