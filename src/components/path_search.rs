@@ -864,18 +864,27 @@ fn AlgorithmSimulation(
                     return;
                 }
 
-                // Increment step counter
-                set_step_count.update(|c| *c += 1);
+                // Run multiple steps per frame for better performance
+                const STEPS_PER_FRAME: u32 = 50;
 
-                // Update FPS (steps per second)
-                set_frame_count.update(|c| *c += 1);
-                if frame_count.get_untracked() >= 100 {
-                    set_fps(frame_count.get_untracked() as f64);
-                    set_frame_count(0);
-                }
+                for _ in 0..STEPS_PER_FRAME {
+                    // Check if already complete
+                    if completion_steps.get_untracked().is_some() {
+                        break;
+                    }
 
-                // Check if simulation is complete
-                if current_cell.get_untracked() == end_cell_coord.get_untracked() && current_cell.get_untracked().is_some() {
+                    // Increment step counter
+                    set_step_count.update(|c| *c += 1);
+
+                    // Update FPS (steps per second)
+                    set_frame_count.update(|c| *c += 1);
+                    if frame_count.get_untracked() >= 100 {
+                        set_fps(frame_count.get_untracked() as f64);
+                        set_frame_count(0);
+                    }
+
+                    // Check if simulation is complete
+                    if current_cell.get_untracked() == end_cell_coord.get_untracked() && current_cell.get_untracked().is_some() {
                     // Record completion steps
                     set_completion_steps(Some(step_count.get_untracked()));
 
@@ -926,23 +935,24 @@ fn AlgorithmSimulation(
                         }
                     });
 
-                    return;
-                }
+                        break;
+                    }
 
-                // Run one step of the algorithm
-                if current_cell.get_untracked() != end_cell_coord.get_untracked() && completion_steps.get_untracked().is_none() {
-                    calculate_next(
-                        grid_size,
-                        grid,
-                        set_grid,
-                        start_cell_coord,
-                        end_cell_coord,
-                        current_path_candidates,
-                        set_current_path_candidates,
-                        current_cell,
-                        set_current_cell,
-                        algo_signal,
-                    );
+                    // Run one step of the algorithm
+                    if current_cell.get_untracked() != end_cell_coord.get_untracked() && completion_steps.get_untracked().is_none() {
+                        calculate_next(
+                            grid_size,
+                            grid,
+                            set_grid,
+                            start_cell_coord,
+                            end_cell_coord,
+                            current_path_candidates,
+                            set_current_path_candidates,
+                            current_cell,
+                            set_current_cell,
+                            algo_signal,
+                        );
+                    }
                 }
 
                 // Schedule next frame
