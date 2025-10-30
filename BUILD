@@ -60,6 +60,8 @@ wasm_deps = [
     "@wasm_crates//:log",
     "@wasm_crates//:rand",
     "@wasm_crates//:serde",
+    "@wasm_crates//:serde_json",
+    "@wasm_crates//:serde-wasm-bindgen",
     "@wasm_crates//:wasm-bindgen",
     "@wasm_crates//:web-sys",
     "@rules_rust//tools/runfiles",

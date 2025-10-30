@@ -1223,17 +1223,6 @@ pub fn PathSearch() -> impl IntoView {
                         set_completion_order=set_blind_completion_order
                     />
                     <AlgorithmSimulation
-                        algorithm=Algorithm::Bidirectional
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=blind_completion_order
-                        set_completion_order=set_blind_completion_order
-                    />
-                    <AlgorithmSimulation
                         algorithm=Algorithm::Corner
                         grid_size=grid_size
                         shared_grid=grid
@@ -1274,7 +1263,7 @@ pub fn PathSearch() -> impl IntoView {
                 <div class="flex flex-col gap-2 items-center">
                     <h2 class="text-2xl font-bold text-charcoal">"Informed Search"</h2>
                     <p class="text-sm text-charcoal opacity-75 max-w-2xl text-center">
-                        "Uses Manhattan distance to the yellow end point as a heuristic to guide exploration"
+                        "Uses heuristics or knowledge of the destination to guide exploration more efficiently"
                     </p>
                 </div>
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
@@ -1291,6 +1280,17 @@ pub fn PathSearch() -> impl IntoView {
                     />
                     <AlgorithmSimulation
                         algorithm=Algorithm::Greedy
+                        grid_size=grid_size
+                        shared_grid=grid
+                        set_shared_grid=set_grid
+                        start_cell_coord=start_cell_coord
+                        end_cell_coord=end_cell_coord
+                        is_running=is_running
+                        completion_order=informed_completion_order
+                        set_completion_order=set_informed_completion_order
+                    />
+                    <AlgorithmSimulation
+                        algorithm=Algorithm::Bidirectional
                         grid_size=grid_size
                         shared_grid=grid
                         set_shared_grid=set_grid

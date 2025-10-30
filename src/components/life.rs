@@ -5,6 +5,22 @@ use std::collections::HashSet;
 #[cfg(not(feature = "ssr"))]
 use rand::Rng;
 
+#[cfg(not(feature = "ssr"))]
+use serde::{Deserialize, Serialize};
+
+#[cfg(not(feature = "ssr"))]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct WorkerRequest {
+    alive_cells: Vec<(i32, i32)>,
+    grid_size: u32,
+}
+
+#[cfg(not(feature = "ssr"))]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct WorkerResponse {
+    alive_cells: Vec<(i32, i32)>,
+}
+
 #[derive(Clone, Default)]
 struct AliveCells(HashSet<(i32, i32)>);
 
@@ -15,6 +31,16 @@ fn calculate_next(
     grid_size: u32,
 ) {
     let current_alive = &cells.get_untracked().0;
+    let next_alive = calculate_next_generation_pure(current_alive, grid_size);
+    set_cells(AliveCells(next_alive));
+}
+
+// Pure function for calculation (can be called from worker or main thread)
+#[cfg(not(feature = "ssr"))]
+fn calculate_next_generation_pure(
+    current_alive: &HashSet<(i32, i32)>,
+    grid_size: u32,
+) -> HashSet<(i32, i32)> {
     let mut neighbor_counts: std::collections::HashMap<(i32, i32), i32> =
         std::collections::HashMap::new();
 
@@ -43,12 +69,27 @@ fn calculate_next(
     let mut next_alive = HashSet::new();
     for (&pos, &count) in neighbor_counts.iter() {
         let is_alive = current_alive.contains(&pos);
-        if count == 3 || is_alive && count == 2 {
+        if count == 3 || (is_alive && count == 2) {
             next_alive.insert(pos);
         }
     }
 
-    set_cells(AliveCells(next_alive));
+    next_alive
+}
+
+// Export for use in Web Worker
+#[cfg(not(feature = "ssr"))]
+#[wasm_bindgen::prelude::wasm_bindgen]
+pub fn life_worker_calculate(request_json: &str) -> String {
+    let request: WorkerRequest = serde_json::from_str(request_json).unwrap();
+    let current_alive: HashSet<(i32, i32)> = request.alive_cells.into_iter().collect();
+    let next_alive = calculate_next_generation_pure(&current_alive, request.grid_size);
+
+    let response = WorkerResponse {
+        alive_cells: next_alive.into_iter().collect(),
+    };
+
+    serde_json::to_string(&response).unwrap()
 }
 
 #[cfg(not(feature = "ssr"))]
@@ -227,40 +268,151 @@ pub fn LifeGame(
     #[cfg(not(feature = "ssr"))]
     let (is_running, set_is_running) = signal(false);
 
-    // Animation loop using setInterval for better performance
+    // Animation loop using Web Worker for off-thread calculations
     #[cfg(not(feature = "ssr"))]
     {
         use leptos::leptos_dom::helpers::IntervalHandle;
+        use wasm_bindgen::{prelude::*, JsCast};
+        use web_sys::{Worker, MessageEvent};
+        use std::rc::Rc;
+        use std::cell::RefCell;
 
         let interval_handle: StoredValue<Option<IntervalHandle>> = StoredValue::new(None);
+        let worker: Rc<RefCell<Option<Worker>>> = Rc::new(RefCell::new(None));
+        let worker_ready: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
+        let calculation_pending: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
 
-        Effect::new(move |_| {
-            // Clear previous interval if any
-            if let Some(handle) = interval_handle.get_value() {
-                handle.clear();
-            }
+        // Initialize Web Worker
+        {
+            let worker = worker.clone();
+            let worker_ready = worker_ready.clone();
+            let calculation_pending = calculation_pending.clone();
 
-            // Track is_running to re-run effect when it changes
-            if !is_running() {
-                interval_handle.set_value(None);
-                return;
-            }
+            Effect::new(move |_| {
+                if worker.borrow().is_some() {
+                    return;
+                }
 
-            // Create interval that updates the game state
-            // Run multiple generations per tick for better performance
-            let handle = leptos::leptos_dom::helpers::set_interval_with_handle(
-                move || {
-                    const GENERATIONS_PER_TICK: u32 = 1;
-                    for _ in 0..GENERATIONS_PER_TICK {
-                        calculate_next(cells, set_cells, grid_size.get_untracked());
+                let Ok(w) = Worker::new("/life-worker.js") else {
+                    web_sys::console::error_1(&"Failed to create worker".into());
+                    return;
+                };
+
+                // Set up message handler for worker responses
+                let worker_ready = worker_ready.clone();
+                let calculation_pending = calculation_pending.clone();
+
+                let onmessage = Closure::wrap(Box::new(move |event: MessageEvent| {
+                    let data = event.data();
+                    let Ok(response) = serde_wasm_bindgen::from_value::<serde_json::Value>(data) else {
+                        return;
+                    };
+
+                    match response.get("type").and_then(|t| t.as_str()) {
+                        Some("ready") => {
+                            *worker_ready.borrow_mut() = true;
+                        }
+                        Some("result") => {
+                            *calculation_pending.borrow_mut() = false;
+                            if let Some(alive_cells) = response.get("aliveCells") {
+                                if let Ok(cells_vec) = serde_json::from_value::<Vec<(i32, i32)>>(alive_cells.clone()) {
+                                    let new_cells: HashSet<(i32, i32)> = cells_vec.into_iter().collect();
+                                    set_cells(AliveCells(new_cells));
+                                }
+                            }
+                        }
+                        Some("error") => {
+                            *calculation_pending.borrow_mut() = false;
+                            if let Some(error) = response.get("error") {
+                                web_sys::console::error_1(&format!("Worker error: {}", error).into());
+                            }
+                        }
+                        _ => {}
                     }
-                },
-                std::time::Duration::from_millis(interval_ms.get_untracked()),
-            )
-            .ok();
+                }) as Box<dyn FnMut(_)>);
 
-            interval_handle.set_value(handle);
-        });
+                w.set_onmessage(Some(onmessage.as_ref().unchecked_ref()));
+                onmessage.forget();
+
+                // Initialize worker with WASM path
+                let init_msg = serde_json::json!({
+                    "type": "init",
+                    "wasmPath": "/jaydanhoward_wasm/jaydanhoward_wasm.js"
+                });
+                if let Ok(msg) = serde_wasm_bindgen::to_value(&init_msg) {
+                    let _ = w.post_message(&msg);
+                }
+
+                *worker.borrow_mut() = Some(w);
+            });
+        }
+
+        // Animation loop
+        {
+            let worker = worker.clone();
+            let worker_ready = worker_ready.clone();
+            let calculation_pending = calculation_pending.clone();
+
+            Effect::new(move |_| {
+                // Clear previous interval if any
+                if let Some(handle) = interval_handle.get_value() {
+                    handle.clear();
+                }
+
+                // Track is_running to re-run effect when it changes
+                if !is_running() {
+                    interval_handle.set_value(None);
+                    return;
+                }
+
+                let worker = worker.clone();
+                let worker_ready = worker_ready.clone();
+                let calculation_pending = calculation_pending.clone();
+
+                // Create interval that sends calculation requests to worker or falls back to sync
+                let handle = leptos::leptos_dom::helpers::set_interval_with_handle(
+                    move || {
+                        let use_worker = *worker_ready.borrow() && worker.borrow().is_some();
+
+                        if use_worker {
+                            // Use Web Worker for off-thread calculation
+                            if *calculation_pending.borrow() {
+                                return; // Skip if calculation already in progress
+                            }
+
+                            let worker_guard = worker.borrow();
+                            let Some(ref w) = *worker_guard else {
+                                return;
+                            };
+
+                            *calculation_pending.borrow_mut() = true;
+
+                            let current_cells = cells.get_untracked();
+                            let alive_vec: Vec<(i32, i32)> = current_cells.0.iter().copied().collect();
+
+                            let request = serde_json::json!({
+                                "type": "calculate",
+                                "aliveCells": alive_vec,
+                                "gridSize": grid_size.get_untracked()
+                            });
+
+                            if let Ok(msg) = serde_wasm_bindgen::to_value(&request) {
+                                let _ = w.post_message(&msg);
+                            } else {
+                                *calculation_pending.borrow_mut() = false;
+                            }
+                        } else {
+                            // Fallback to synchronous calculation if worker not ready
+                            calculate_next(cells, set_cells, grid_size.get_untracked());
+                        }
+                    },
+                    std::time::Duration::from_millis(interval_ms.get_untracked()),
+                )
+                .ok();
+
+                interval_handle.set_value(handle);
+            });
+        }
     }
 
     #[cfg(not(feature = "ssr"))]
