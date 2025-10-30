@@ -54,7 +54,10 @@ pub fn About() -> impl IntoView {
     view! {
         <SourceAnchor href="#[git]" />
         <ClusterStats />
-        <div class="max-w-7xl mx-auto px-8 w-full flex justify-center">
+        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+            <h1 class="text-3xl font-bold text-charcoal">
+                "About"
+            </h1>
             <MeSection />
         </div>
     }
