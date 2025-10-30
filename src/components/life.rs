@@ -14,7 +14,7 @@ fn calculate_next(
     set_cells: WriteSignal<AliveCells>,
     grid_size: u32,
 ) {
-    let current_alive = &cells().0;
+    let current_alive = &cells.get_untracked().0;
     let mut neighbor_counts: std::collections::HashMap<(i32, i32), i32> =
         std::collections::HashMap::new();
 
@@ -85,20 +85,13 @@ fn Grid(
     // Set up window resize listener
     #[cfg(not(feature = "ssr"))]
     {
-        use wasm_bindgen::closure::Closure;
-        use wasm_bindgen::JsCast;
-
         Effect::new(move |_| {
-            let window = web_sys::window().unwrap();
-            let closure = Closure::wrap(Box::new(move || {
-                set_resize_trigger.update(|n| *n += 1);
-            }) as Box<dyn Fn()>);
-
-            window
-                .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
-                .unwrap();
-
-            closure.forget(); // Keep the closure alive
+            let handle =
+                leptos::leptos_dom::helpers::window_event_listener(leptos::ev::resize, move |_| {
+                    set_resize_trigger.update(|n| *n += 1);
+                });
+            // Store handle to keep listener alive; it auto-cleans on drop
+            std::mem::forget(handle);
         });
     }
 
@@ -163,12 +156,7 @@ fn Grid(
         // Draw alive cells
         context.set_fill_style_str("#3B82F6");
         for &(x, y) in cells().0.iter() {
-            context.fill_rect(
-                x as f64 * cell_px,
-                y as f64 * cell_px,
-                cell_px,
-                cell_px,
-            );
+            context.fill_rect(x as f64 * cell_px, y as f64 * cell_px, cell_px, cell_px);
         }
     });
 
@@ -222,56 +210,67 @@ pub fn LifeGame(
     #[prop(optional)] initial_grid_size: Option<u32>,
     #[prop(optional)] initial_alive_probability: Option<f64>,
     #[prop(optional)] initial_interval_ms: Option<u64>,
-    #[prop(default = false)] #[allow(unused_variables)] auto_start: bool,
+    #[prop(default = false)]
+    #[allow(unused_variables)]
+    auto_start: bool,
 ) -> impl IntoView {
     let (cells, set_cells) = signal::<AliveCells>(AliveCells::default());
     let alive_cells = move || cells().0.len();
 
     let (grid_size, set_grid_size) = signal(initial_grid_size.unwrap_or(25));
-    let (alive_probability, set_alive_probability) = signal(initial_alive_probability.unwrap_or(0.6));
-    let (interval_ms, set_interval_ms) = signal(initial_interval_ms.unwrap_or(200));
+    let (alive_probability, set_alive_probability) =
+        signal(initial_alive_probability.unwrap_or(0.6));
+    let (interval_ms, set_interval_ms) = signal(initial_interval_ms.unwrap_or(100));
 
     let (show_settings, set_show_settings) = signal(false);
 
     #[cfg(not(feature = "ssr"))]
-    let (interval_handle, set_interval_handle) = signal(None::<leptos::prelude::IntervalHandle>);
-    #[cfg(not(feature = "ssr"))]
     let (is_running, set_is_running) = signal(false);
+
+    // Animation loop using setInterval for better performance
+    #[cfg(not(feature = "ssr"))]
+    {
+        use leptos::leptos_dom::helpers::IntervalHandle;
+
+        let interval_handle: StoredValue<Option<IntervalHandle>> = StoredValue::new(None);
+
+        Effect::new(move |_| {
+            // Clear previous interval if any
+            if let Some(handle) = interval_handle.get_value() {
+                handle.clear();
+            }
+
+            // Track is_running to re-run effect when it changes
+            if !is_running() {
+                interval_handle.set_value(None);
+                return;
+            }
+
+            // Create interval that updates the game state
+            let handle = leptos::leptos_dom::helpers::set_interval_with_handle(
+                move || {
+                    calculate_next(cells, set_cells, grid_size.get_untracked());
+                },
+                std::time::Duration::from_millis(interval_ms.get_untracked()),
+            )
+            .ok();
+
+            interval_handle.set_value(handle);
+        });
+    }
 
     #[cfg(not(feature = "ssr"))]
     let start_simulation = {
-        let interval_handle = interval_handle;
-        let set_interval_handle = set_interval_handle;
         let set_is_running = set_is_running;
-        let interval_ms = interval_ms;
-        let cells = cells;
-        let set_cells = set_cells;
-        let grid_size = grid_size;
         move || {
-            if let Some(handle) = interval_handle() {
-                handle.clear();
-            }
-            let handle = set_interval_with_handle(
-                move || {
-                    calculate_next(cells, set_cells, grid_size());
-                },
-                std::time::Duration::from_millis(interval_ms()),
-            );
-            set_interval_handle(handle.ok());
             set_is_running(true);
         }
     };
 
     #[cfg(not(feature = "ssr"))]
     let stop_simulation = {
-        let interval_handle = interval_handle;
-        let set_interval_handle = set_interval_handle;
         let set_is_running = set_is_running;
         move || {
-            if let Some(handle) = interval_handle() {
-                handle.clear();
-            }
-            set_interval_handle(None);
             set_is_running(false);
         }
     };
@@ -280,11 +279,7 @@ pub fn LifeGame(
     let toggle_simulation = {
         let is_running = is_running;
         move || {
-            if is_running() {
-                stop_simulation();
-            } else {
-                start_simulation();
-            }
+            set_is_running(!is_running());
         }
     };
 
