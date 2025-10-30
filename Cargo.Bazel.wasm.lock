@@ -1,5 +1,5 @@
 {
-  "checksum": "8f293a52a672be9c259119137a00631a488c0309c5912731552bbbe5c69be051",
+  "checksum": "5ac6740652d430b95c2a156cc5f85d5944fc3d37fd87c4985d8d0d5f8f97d7c9",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -2145,6 +2145,10 @@
             {
               "id": "serde-aux 4.5.0",
               "target": "serde_aux"
+            },
+            {
+              "id": "serde-wasm-bindgen 0.6.5",
+              "target": "serde_wasm_bindgen"
             },
             {
               "id": "serde_json 1.0.134",
@@ -9877,6 +9881,61 @@
       ],
       "license_file": "LICENSE"
     },
+    "serde-wasm-bindgen 0.6.5": {
+      "name": "serde-wasm-bindgen",
+      "version": "0.6.5",
+      "package_url": "https://github.com/RReverser/serde-wasm-bindgen",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/serde-wasm-bindgen/0.6.5/download",
+          "sha256": "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "serde_wasm_bindgen",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "serde_wasm_bindgen",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "js-sys 0.3.77",
+              "target": "js_sys"
+            },
+            {
+              "id": "serde 1.0.216",
+              "target": "serde"
+            },
+            {
+              "id": "wasm-bindgen 0.2.100",
+              "target": "wasm_bindgen"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2018",
+        "version": "0.6.5"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
     "serde_derive 1.0.216": {
       "name": "serde_derive",
       "version": "1.0.216",
@@ -13086,6 +13145,7 @@
             "WebSocket",
             "WheelEvent",
             "Window",
+            "Worker",
             "WritableStream",
             "WritableStreamDefaultController",
             "WritableStreamDefaultWriter",
@@ -14903,6 +14963,7 @@
     "rand 0.8.5",
     "serde 1.0.216",
     "serde-aux 4.5.0",
+    "serde-wasm-bindgen 0.6.5",
     "serde_json 1.0.134",
     "wasm-bindgen 0.2.100",
     "web-sys 0.3.77"

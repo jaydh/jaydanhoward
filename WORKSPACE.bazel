@@ -194,6 +194,9 @@ crates_repository(
         "serde_json": crate.spec(
             version = "1",
         ),
+        "serde-wasm-bindgen": crate.spec(
+            version = "0.6",
+        ),
         "wasm-bindgen": crate.spec(
             version = "0.2.100",
         ),
@@ -208,13 +211,15 @@ crates_repository(
                   "HtmlCanvasElement",
                   "HtmlDocument",
                   "MediaQueryList",
+                  "MessageEvent",
                   "MouseEvent",
                   "Touch",
                   "TouchEvent",
                   "TouchEventInit",
                   "TouchInit",
                   "TouchList",
-                  "Window"
+                  "Window",
+                  "Worker"
             ]
         ),
     },

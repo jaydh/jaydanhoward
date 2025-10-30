@@ -4,13 +4,23 @@ use leptos::prelude::*;
 #[component]
 pub fn Photography() -> impl IntoView {
     // Sample image data - you can replace these with actual image paths
-    let images = vec![
-        ("Sample Photo 1", "/assets/profile.webp"),
-        ("Sample Photo 2", "/assets/cluster.webp"),
-        ("Sample Photo 3", "/assets/profile.webp"),
-        ("Sample Photo 4", "/assets/cluster.webp"),
-        ("Sample Photo 5", "/assets/profile.webp"),
-        ("Sample Photo 6", "/assets/cluster.webp"),
+    let images: Vec<(Option<&str>, &str)> = vec![
+        (
+            None,
+            "https://caddy.jaydanhoward.com/data/DSC00196.ARW.webp",
+        ),
+        (
+            None,
+            "https://caddy.jaydanhoward.com/data/DSC00215.ARW.webp",
+        ),
+        (
+            None,
+            "https://caddy.jaydanhoward.com/data/DSC00278.ARW.webp",
+        ),
+        (
+            None,
+            "https://caddy.jaydanhoward.com/data/DSC00279.ARW.webp",
+        ),
     ];
 
     view! {
@@ -25,15 +35,19 @@ pub fn Photography() -> impl IntoView {
                                     <div class="aspect-square overflow-hidden bg-border">
                                         <img
                                             src=src
-                                            alt=title
+                                            alt=title.unwrap_or(src)
                                             class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                         />
                                     </div>
-                                    <div class="absolute inset-0 bg-gradient-to-t from-charcoal/80 via-charcoal/0 to-charcoal/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                                        <div class="absolute bottom-0 left-0 right-0 p-6">
-                                            <p class="text-white font-medium">{title}</p>
-                                        </div>
-                                    </div>
+                                    {
+                                        title.map(|t| view! {
+                                            <div class="absolute inset-0 bg-gradient-to-t from-charcoal/80 via-charcoal/0 to-charcoal/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                                <div class="absolute bottom-0 left-0 right-0 p-6">
+                                                    <p class="text-white font-medium">{t}</p>
+                                                </div>
+                                            </div>
+                                        })
+                                    }
                                 </div>
                             }
                         })
