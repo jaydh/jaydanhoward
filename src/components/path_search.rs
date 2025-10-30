@@ -232,9 +232,9 @@ fn manhattan_distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> i64 {
 #[cfg(not(feature = "ssr"))]
 fn distance_to_closest_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> i64 {
     let distance_left = point.x_pos;
-    let distance_right = grid_size() as i64 - point.x_pos - 1;
+    let distance_right = grid_size.get_untracked() as i64 - point.x_pos - 1;
     let distance_top = point.y_pos;
-    let distance_bottom = grid_size() as i64 - point.y_pos - 1;
+    let distance_bottom = grid_size.get_untracked() as i64 - point.y_pos - 1;
 
     *[distance_left, distance_right, distance_top, distance_bottom]
         .iter()
@@ -252,11 +252,11 @@ fn add_candidates(
 ) {
     let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
         .map(|(x, y)| {
-            grid()
+            grid.get_untracked()
                 .0
                 .get(&CoordinatePair {
-                    x_pos: current_cell().unwrap().x_pos + x,
-                    y_pos: current_cell().unwrap().y_pos + y,
+                    x_pos: current_cell.get_untracked().unwrap().x_pos + x,
+                    y_pos: current_cell.get_untracked().unwrap().y_pos + y,
                 })
                 .cloned()
         })
@@ -266,7 +266,7 @@ fn add_candidates(
                 .map(|c| {
                     c.is_passable
                         && !c.visited
-                        && !current_path_candidates().0.contains(&c.coordiantes)
+                        && !current_path_candidates.get_untracked().0.contains(&c.coordiantes)
                 })
                 .unwrap_or(false)
         })
@@ -277,27 +277,27 @@ fn add_candidates(
         CoordinatePair { x_pos: 0, y_pos: 0 },
         CoordinatePair {
             x_pos: 0,
-            y_pos: grid_size() as i64,
+            y_pos: grid_size.get_untracked() as i64,
         },
         CoordinatePair {
-            x_pos: grid_size() as i64,
+            x_pos: grid_size.get_untracked() as i64,
             y_pos: 0,
         },
         CoordinatePair {
-            x_pos: grid_size() as i64,
-            y_pos: grid_size() as i64,
+            x_pos: grid_size.get_untracked() as i64,
+            y_pos: grid_size.get_untracked() as i64,
         },
     ];
     corners.sort_by(|a, b| {
-        let distance_a = distance(&current_cell().unwrap(), a);
-        let distance_b = distance(&current_cell().unwrap(), b);
+        let distance_a = distance(&current_cell.get_untracked().unwrap(), a);
+        let distance_b = distance(&current_cell.get_untracked().unwrap(), b);
         distance_a.partial_cmp(&distance_b).unwrap()
     });
 
     set_current_path_candidates.update(|path| {
         if viable_neighbors.iter().any(|c| {
             distance(corners.first().unwrap(), c)
-                < distance(corners.first().unwrap(), &current_cell().unwrap())
+                < distance(corners.first().unwrap(), &current_cell.get_untracked().unwrap())
         }) {
             path.0.extend(viable_neighbors);
             path.0.sort_by(|a, b| {
@@ -326,11 +326,11 @@ fn add_candidates_walls(
 ) {
     let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
         .map(|(x, y)| {
-            grid()
+            grid.get_untracked()
                 .0
                 .get(&CoordinatePair {
-                    x_pos: current_cell().unwrap().x_pos + x,
-                    y_pos: current_cell().unwrap().y_pos + y,
+                    x_pos: current_cell.get_untracked().unwrap().x_pos + x,
+                    y_pos: current_cell.get_untracked().unwrap().y_pos + y,
                 })
                 .cloned()
         })
@@ -340,7 +340,7 @@ fn add_candidates_walls(
                 .map(|c| {
                     c.is_passable
                         && !c.visited
-                        && !current_path_candidates().0.contains(&c.coordiantes)
+                        && !current_path_candidates.get_untracked().0.contains(&c.coordiantes)
                 })
                 .unwrap_or(false)
         })
@@ -351,20 +351,20 @@ fn add_candidates_walls(
         CoordinatePair { x_pos: 0, y_pos: 0 },
         CoordinatePair {
             x_pos: 0,
-            y_pos: grid_size() as i64,
+            y_pos: grid_size.get_untracked() as i64,
         },
         CoordinatePair {
-            x_pos: grid_size() as i64,
+            x_pos: grid_size.get_untracked() as i64,
             y_pos: 0,
         },
         CoordinatePair {
-            x_pos: grid_size() as i64,
-            y_pos: grid_size() as i64,
+            x_pos: grid_size.get_untracked() as i64,
+            y_pos: grid_size.get_untracked() as i64,
         },
     ];
     corners.sort_by(|a, b| {
-        let distance_a = distance(&current_cell().unwrap(), a);
-        let distance_b = distance(&current_cell().unwrap(), b);
+        let distance_a = distance(&current_cell.get_untracked().unwrap(), a);
+        let distance_b = distance(&current_cell.get_untracked().unwrap(), b);
         distance_a.partial_cmp(&distance_b).unwrap()
     });
 
@@ -399,15 +399,15 @@ fn calculate_next(
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
     algorithm: ReadSignal<Algorithm>,
 ) {
-    if current_cell().is_none() {
-        set_current_cell(start_cell_coord());
+    if current_cell.get_untracked().is_none() {
+        set_current_cell(start_cell_coord.get_untracked());
         set_grid.update(|grid| {
-            let cell = grid.0.get_mut(&start_cell_coord().unwrap()).unwrap();
+            let cell = grid.0.get_mut(&start_cell_coord.get_untracked().unwrap()).unwrap();
             cell.visited = true;
             cell.parent = None;
         });
     } else {
-        match algorithm() {
+        match algorithm.get_untracked() {
             Algorithm::Wall => add_candidates_walls(
                 grid_size,
                 current_cell,
@@ -428,10 +428,10 @@ fn calculate_next(
                     .iter()
                     .filter_map(|(x, y)| {
                         let coord = CoordinatePair {
-                            x_pos: current_cell().unwrap().x_pos + x,
-                            y_pos: current_cell().unwrap().y_pos + y,
+                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
+                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
                         };
-                        grid().0.get(&coord).and_then(|c| {
+                        grid.get_untracked().0.get(&coord).and_then(|c| {
                             if c.is_passable && !c.visited {
                                 Some(coord)
                             } else {
@@ -442,12 +442,13 @@ fn calculate_next(
                     .collect::<Vec<CoordinatePair>>();
 
                 // Mark all neighbors as visited NOW and set their parent
+                let current_cell_value = current_cell.get_untracked();
                 for neighbor in &viable_neighbors {
                     set_grid.update(|grid| {
                         if let Some(cell) = grid.0.get_mut(neighbor) {
                             if !cell.visited {
                                 cell.visited = true;
-                                cell.parent = current_cell();
+                                cell.parent = current_cell_value;
                             }
                         }
                     });
@@ -465,10 +466,10 @@ fn calculate_next(
                     .iter()
                     .filter_map(|(x, y)| {
                         let coord = CoordinatePair {
-                            x_pos: current_cell().unwrap().x_pos + x,
-                            y_pos: current_cell().unwrap().y_pos + y,
+                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
+                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
                         };
-                        grid().0.get(&coord).and_then(|c| {
+                        grid.get_untracked().0.get(&coord).and_then(|c| {
                             if c.is_passable && !c.visited {
                                 Some(coord)
                             } else {
@@ -488,10 +489,10 @@ fn calculate_next(
                     .iter()
                     .filter_map(|(x, y)| {
                         let coord = CoordinatePair {
-                            x_pos: current_cell().unwrap().x_pos + x,
-                            y_pos: current_cell().unwrap().y_pos + y,
+                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
+                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
                         };
-                        grid().0.get(&coord).and_then(|c| {
+                        grid.get_untracked().0.get(&coord).and_then(|c| {
                             if c.is_passable && !c.visited {
                                 Some(coord)
                             } else {
@@ -503,7 +504,7 @@ fn calculate_next(
 
                 // Shuffle neighbors using coordinate-based pseudo-random ordering
                 // This gives random exploration with backtracking capability
-                let curr = current_cell().unwrap();
+                let curr = current_cell.get_untracked().unwrap();
                 viable_neighbors.sort_by_key(|coord| {
                     let hash = ((coord.x_pos * 73856093) ^ (coord.y_pos * 19349663) ^ (curr.x_pos * 83492791)) as usize;
                     hash
@@ -519,10 +520,10 @@ fn calculate_next(
                     .iter()
                     .filter_map(|(x, y)| {
                         let coord = CoordinatePair {
-                            x_pos: current_cell().unwrap().x_pos + x,
-                            y_pos: current_cell().unwrap().y_pos + y,
+                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
+                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
                         };
-                        grid().0.get(&coord).and_then(|c| {
+                        grid.get_untracked().0.get(&coord).and_then(|c| {
                             if c.is_passable && !c.visited {
                                 Some(coord)
                             } else {
@@ -533,23 +534,23 @@ fn calculate_next(
                     .collect::<Vec<CoordinatePair>>();
 
                 // Sort by heuristic (Manhattan distance to goal) - higher distance last so we pop best first
-                if let Some(end) = end_cell_coord() {
+                if let Some(end) = end_cell_coord.get_untracked() {
                     viable_neighbors.sort_by_key(|coord| -(manhattan_distance(coord, &end)));
                 }
 
                 set_current_path_candidates.update(|path| {
                     path.0.extend(viable_neighbors);
                     // Keep sorted by heuristic
-                    if let Some(end) = end_cell_coord() {
+                    if let Some(end) = end_cell_coord.get_untracked() {
                         path.0.sort_by_key(|coord| -(manhattan_distance(coord, &end)));
                     }
                 });
             }
         };
         // Pop next cell from queue
-        if matches!(algorithm(), Algorithm::Bfs | Algorithm::Bidirectional) {
+        if matches!(algorithm.get_untracked(), Algorithm::Bfs | Algorithm::Bidirectional) {
             // BFS and Bidirectional: pop from front (FIFO)
-            if let Some(next_visit_coord) = current_path_candidates().0.first().copied() {
+            if let Some(next_visit_coord) = current_path_candidates.get_untracked().0.first().copied() {
                 set_current_path_candidates.update(|path| {
                     if !path.0.is_empty() {
                         path.0.remove(0);
@@ -560,10 +561,10 @@ fn calculate_next(
         } else {
             // DFS, A*, Greedy, Corner, Wall, RandomWalk: pop from back (LIFO)
             loop {
-                let next_visit_coord = current_path_candidates().0.last().copied();
+                let next_visit_coord = current_path_candidates.get_untracked().0.last().copied();
 
                 if let Some(next_visit_coord) = next_visit_coord {
-                    let is_visited = grid().0.get(&next_visit_coord).map(|c| c.visited).unwrap_or(true);
+                    let is_visited = grid.get_untracked().0.get(&next_visit_coord).map(|c| c.visited).unwrap_or(true);
 
                     set_current_path_candidates.update(|path| {
                         path.0.pop();
@@ -573,7 +574,7 @@ fn calculate_next(
                         continue;
                     }
 
-                    let previous_cell = current_cell();
+                    let previous_cell = current_cell.get_untracked();
                     set_current_cell(Some(next_visit_coord));
                     set_grid.update(|grid| {
                         let cell = grid.0.get_mut(&next_visit_coord).unwrap();
@@ -833,7 +834,7 @@ fn AlgorithmSimulation(
         });
     }
 
-    // Fast simulation loop
+    // Fast simulation loop using requestAnimationFrame for smooth visual updates
     #[cfg(not(feature = "ssr"))]
     let (frame_count, set_frame_count) = signal(0);
 
@@ -842,101 +843,127 @@ fn AlgorithmSimulation(
 
     #[cfg(not(feature = "ssr"))]
     {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+
         Effect::new(move |_| {
             if !is_running() {
                 return;
             }
 
-            set_interval_with_handle(
-                move || {
-                    if !is_running() || completion_steps().is_some() {
-                        return;
-                    }
+            let window = web_sys::window().unwrap();
 
-                    // Increment step counter
-                    set_step_count.update(|c| *c += 1);
+            // Create the animation loop
+            let animate = Rc::new(RefCell::new(None::<Closure<dyn FnMut()>>));
+            let animate_clone = animate.clone();
 
-                    // Update FPS (steps per second)
-                    set_frame_count.update(|c| *c += 1);
-                    if frame_count() >= 100 {
-                        set_fps(frame_count() as f64);
-                        set_frame_count(0);
-                    }
+            let closure = Closure::wrap(Box::new(move || {
+                if !is_running.get_untracked() || completion_steps.get_untracked().is_some() {
+                    return;
+                }
 
-                    // Check if simulation is complete
-                    if current_cell() == end_cell_coord() && current_cell().is_some() {
-                        // Record completion steps
-                        set_completion_steps(Some(step_count()));
+                // Increment step counter
+                set_step_count.update(|c| *c += 1);
 
-                        // For BFS and Bidirectional BFS, backtrack the path we already found (guaranteed shortest)
-                        // For other algorithms, find the shortest path using BFS within visited cells
-                        let path = if matches!(algo_signal(), Algorithm::Bfs | Algorithm::Bidirectional) {
-                            // BFS/Bidirectional: backtrack the path (guaranteed shortest)
-                            let mut path = HashSet::new();
-                            let mut current = end_cell_coord();
+                // Update FPS (steps per second)
+                set_frame_count.update(|c| *c += 1);
+                if frame_count.get_untracked() >= 100 {
+                    set_fps(frame_count.get_untracked() as f64);
+                    set_frame_count(0);
+                }
 
-                            let mut iterations = 0;
-                            while let Some(coord) = current {
-                                if path.contains(&coord) {
-                                    break;
-                                }
-                                path.insert(coord);
-                                current = grid().0.get(&coord).and_then(|cell| cell.parent);
-                                iterations += 1;
-                                if iterations > 10000 {
-                                    break;
-                                }
+                // Check if simulation is complete
+                if current_cell.get_untracked() == end_cell_coord.get_untracked() && current_cell.get_untracked().is_some() {
+                    // Record completion steps
+                    set_completion_steps(Some(step_count.get_untracked()));
+
+                    // For BFS and Bidirectional BFS, backtrack the path we already found (guaranteed shortest)
+                    // For other algorithms, find the shortest path using BFS within visited cells
+                    let path = if matches!(algo_signal.get_untracked(), Algorithm::Bfs | Algorithm::Bidirectional) {
+                        // BFS/Bidirectional: backtrack the path (guaranteed shortest)
+                        let mut path = HashSet::new();
+                        let mut current = end_cell_coord.get_untracked();
+
+                        let mut iterations = 0;
+                        while let Some(coord) = current {
+                            if path.contains(&coord) {
+                                break;
                             }
-                            path
-                        } else {
-                            // DFS/A*/Greedy/Corner/Wall: find shortest path within visited cells only
-                            let current_grid = grid();
-                            let visited_cells: HashSet<CoordinatePair> = current_grid.0
-                                .iter()
-                                .filter(|(_, cell)| cell.visited)
-                                .map(|(coord, _)| *coord)
-                                .collect();
-
-                            find_shortest_path_in_visited(
-                                start_cell_coord().unwrap(),
-                                end_cell_coord().unwrap(),
-                                &current_grid.0,
-                                &visited_cells,
-                            )
-                        };
-
-                        set_final_path(path);
-
-                        // Record completion order
-                        let algo = algo_signal();
-                        set_completion_order.update(|order| {
-                            if !order.contains(&algo) {
-                                order.push(algo);
+                            path.insert(coord);
+                            current = grid.get_untracked().0.get(&coord).and_then(|cell| cell.parent);
+                            iterations += 1;
+                            if iterations > 10000 {
+                                break;
                             }
-                        });
+                        }
+                        path
+                    } else {
+                        // DFS/A*/Greedy/Corner/Wall: find shortest path within visited cells only
+                        let current_grid = grid.get_untracked();
+                        let visited_cells: HashSet<CoordinatePair> = current_grid.0
+                            .iter()
+                            .filter(|(_, cell)| cell.visited)
+                            .map(|(coord, _)| *coord)
+                            .collect();
 
-                        return;
-                    }
+                        find_shortest_path_in_visited(
+                            start_cell_coord.get_untracked().unwrap(),
+                            end_cell_coord.get_untracked().unwrap(),
+                            &current_grid.0,
+                            &visited_cells,
+                        )
+                    };
 
-                    // Run one step of the algorithm
-                    if current_cell() != end_cell_coord() && completion_steps().is_none() {
-                        calculate_next(
-                            grid_size,
-                            grid,
-                            set_grid,
-                            start_cell_coord,
-                            end_cell_coord,
-                            current_path_candidates,
-                            set_current_path_candidates,
-                            current_cell,
-                            set_current_cell,
-                            algo_signal,
-                        );
+                    set_final_path(path);
+
+                    // Record completion order
+                    let algo = algo_signal.get_untracked();
+                    set_completion_order.update(|order| {
+                        if !order.contains(&algo) {
+                            order.push(algo);
+                        }
+                    });
+
+                    return;
+                }
+
+                // Run one step of the algorithm
+                if current_cell.get_untracked() != end_cell_coord.get_untracked() && completion_steps.get_untracked().is_none() {
+                    calculate_next(
+                        grid_size,
+                        grid,
+                        set_grid,
+                        start_cell_coord,
+                        end_cell_coord,
+                        current_path_candidates,
+                        set_current_path_candidates,
+                        current_cell,
+                        set_current_cell,
+                        algo_signal,
+                    );
+                }
+
+                // Schedule next frame
+                if is_running.get_untracked() && completion_steps.get_untracked().is_none() {
+                    let window = web_sys::window().unwrap();
+                    if let Some(ref closure) = *animate_clone.borrow() {
+                        window
+                            .request_animation_frame(closure.as_ref().unchecked_ref())
+                            .unwrap();
                     }
-                },
-                std::time::Duration::from_millis(1),  // Fast rendering: 1ms interval
-            )
-            .ok();
+                }
+            }) as Box<dyn FnMut()>);
+
+            // Store the closure and start the loop
+            *animate.borrow_mut() = Some(closure);
+
+            if let Some(ref closure) = *animate.borrow() {
+                window
+                    .request_animation_frame(closure.as_ref().unchecked_ref())
+                    .unwrap();
+            };
         });
     }
 
