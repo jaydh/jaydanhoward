@@ -122,12 +122,33 @@ pkg_tar(
     include_runfiles = True
 )
 
+pkg_tar(
+    name = "zstd_lib_amd64",
+    symlinks = {
+        "usr/lib/x86_64-linux-gnu/libzstd.so.1": "libzstd.so.1.5.7",
+    },
+    files = {
+        "@zstd_deb_amd64//:file": "usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7",
+    },
+)
+
+pkg_tar(
+    name = "zstd_lib_arm64",
+    symlinks = {
+        "usr/lib/aarch64-linux-gnu/libzstd.so.1": "libzstd.so.1.5.7",
+    },
+    files = {
+        "@zstd_deb_arm64//:file": "usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7",
+    },
+)
+
 oci_image(
     name = "jaydanhoward_image_amd64",
     base = "@distroless_cc_debian13_linux_amd64",
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
+        ":zstd_lib_amd64",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
 )
@@ -138,6 +159,7 @@ oci_image(
     entrypoint = ["/app/jaydanhoward_bin"],
     tars = [
         ":jaydanhoward_tar",
+        ":zstd_lib_arm64",
     ],
     workdir = "/app/jaydanhoward_bin.runfiles",
 )

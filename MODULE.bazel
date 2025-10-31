@@ -16,6 +16,8 @@ http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "ht
 
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
+deb_archive = use_repo_rule("//bzl:deb_archive.bzl", "deb_archive")
+
 http_file(
     name = "tailwind_linux_x86_64",
     executable = True,
@@ -35,6 +37,34 @@ http_file(
     executable = True,
     sha256 = "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3",
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64",
+)
+
+deb_archive(
+    name = "zstd_deb_amd64",
+    build_file_content = """
+exports_files(["usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7"])
+filegroup(
+    name = "file",
+    srcs = ["usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "2f6a2aeacfc925eba8b00ac9139bc4bfccf8cacb09eb93de067074b26948eef9",
+    urls = ["http://ftp.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.7+dfsg-1_amd64.deb"],
+)
+
+deb_archive(
+    name = "zstd_deb_arm64",
+    build_file_content = """
+exports_files(["usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7"])
+filegroup(
+    name = "file",
+    srcs = ["usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "924540bd59fdbfa77a0604360efdaca54411a43daf11c7e002a3c64791b67448",
+    urls = ["http://ftp.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.7+dfsg-1_arm64.deb"],
 )
 
 http_archive(

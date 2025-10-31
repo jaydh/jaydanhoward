@@ -77,6 +77,9 @@ struct Cell {
     // None = not visited by either, Some(true) = visited from start, Some(false) = visited from end
     #[allow(dead_code)]
     visited_direction: Option<bool>,
+    // Track when cell was visited for visual fading
+    #[allow(dead_code)]
+    visit_step: Option<u64>,
 }
 
 impl fmt::Display for CoordinatePair {
@@ -143,6 +146,7 @@ fn randomize_cells(
                     visited: false,
                     parent: None,
                     visited_direction: None,
+                    visit_step: None,
                 },
             );
         }
@@ -407,6 +411,7 @@ fn calculate_next(
     current_cell: ReadSignal<Option<CoordinatePair>>,
     set_current_cell: WriteSignal<Option<CoordinatePair>>,
     algorithm: ReadSignal<Algorithm>,
+    step_count: ReadSignal<u64>,
 ) {
     if current_cell.get_untracked().is_none() {
         // For Bidirectional BFS, add both start and end to their respective queues
@@ -417,6 +422,7 @@ fn calculate_next(
                 cell.visited = true;
                 cell.parent = None;
                 cell.visited_direction = Some(true); // true = from start
+                cell.visit_step = Some(0);
             });
             set_current_path_candidates.update(|candidates| {
                 candidates.0.push(start_cell_coord.get_untracked().unwrap());
@@ -429,6 +435,7 @@ fn calculate_next(
                         cell.visited = true;
                         cell.parent = None;
                         cell.visited_direction = Some(false); // false = from end
+                        cell.visit_step = Some(0);
                     }
                 });
                 set_reverse_candidates.update(|candidates| {
@@ -442,6 +449,7 @@ fn calculate_next(
                 let cell = grid.0.get_mut(&start_cell_coord.get_untracked().unwrap()).unwrap();
                 cell.visited = true;
                 cell.parent = None;
+                cell.visit_step = Some(0);
             });
         }
     } else {
@@ -481,12 +489,14 @@ fn calculate_next(
 
                 // Mark all neighbors as visited NOW and set their parent
                 let current_cell_value = current_cell.get_untracked();
+                let current_step = step_count.get_untracked();
                 for neighbor in &viable_neighbors {
                     set_grid.update(|grid| {
                         if let Some(cell) = grid.0.get_mut(neighbor) {
                             if !cell.visited {
                                 cell.visited = true;
                                 cell.parent = current_cell_value;
+                                cell.visit_step = Some(current_step);
                             }
                         }
                     });
@@ -529,6 +539,7 @@ fn calculate_next(
 
                 // Mark all neighbors as visited from THIS cell's direction and set their parent
                 let current_cell_value = current_cell.get_untracked();
+                let current_step = step_count.get_untracked();
                 for neighbor in &viable_neighbors {
                     set_grid.update(|grid| {
                         if let Some(cell) = grid.0.get_mut(neighbor) {
@@ -536,6 +547,7 @@ fn calculate_next(
                                 cell.visited = true;
                                 cell.visited_direction = current_direction;
                                 cell.parent = current_cell_value;
+                                cell.visit_step = Some(current_step);
                             }
                         }
                     });
@@ -723,11 +735,13 @@ fn calculate_next(
                     }
 
                     let previous_cell = current_cell.get_untracked();
+                    let current_step = step_count.get_untracked();
                     set_current_cell(Some(next_visit_coord));
                     set_grid.update(|grid| {
                         let cell = grid.0.get_mut(&next_visit_coord).unwrap();
                         cell.visited = true;
                         cell.parent = previous_cell;
+                        cell.visit_step = Some(current_step);
                     });
                     break;
                 } else {
@@ -746,6 +760,7 @@ fn SearchGrid(
     #[allow(unused_variables)] end_cell_coord: ReadSignal<Option<CoordinatePair>>,
     #[allow(unused_variables)] current_cell: ReadSignal<Option<CoordinatePair>>,
     #[allow(unused_variables)] final_path: ReadSignal<HashSet<CoordinatePair>>,
+    #[allow(unused_variables)] step_count: ReadSignal<u64>,
 ) -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     use leptos::html::Canvas;
@@ -837,6 +852,7 @@ fn SearchGrid(
         let end = end_cell_coord();
         let current = current_cell();
         let path = final_path();
+        let current_step = step_count();
 
         // Draw all cells
         for x in 0..grid_sz {
@@ -850,33 +866,43 @@ fn SearchGrid(
                 let is_passable = cell.map(|c| c.is_passable).unwrap_or(false);
                 let is_visited = cell.map(|c| c.visited).unwrap_or(false);
                 let visited_direction = cell.and_then(|c| c.visited_direction);
+                let visit_step = cell.and_then(|c| c.visit_step);
                 let is_start = start.map(|c| coord == c).unwrap_or(false);
                 let is_end = end.map(|c| coord == c).unwrap_or(false);
                 let is_current = current.map(|c| coord == c).unwrap_or(false);
                 let in_final_path = path.contains(&coord);
 
+                // Calculate fade factor based on visit recency (0.0 = old, 1.0 = recent)
+                let fade_window = 50.0; // Number of steps to fade over
+                let fade_factor = if let Some(v_step) = visit_step {
+                    let steps_ago = current_step.saturating_sub(v_step) as f64;
+                    (1.0 - (steps_ago / fade_window)).max(0.3) // Minimum 30% brightness
+                } else {
+                    1.0
+                };
+
                 let color = if !is_passable {
-                    "#1f2937" // gray-800 - walls
+                    "#1f2937".to_string() // gray-800 - walls
                 } else if is_start {
-                    "#22c55e" // green-500 - start
+                    "#22c55e".to_string() // green-500 - start
                 } else if is_end {
-                    "#f59e0b" // amber-500 - end
+                    "#f59e0b".to_string() // amber-500 - end
                 } else if is_current {
-                    "#ef4444" // red-500 - current
+                    "#ef4444".to_string() // red-500 - current
                 } else if in_final_path {
-                    "#c084fc" // purple-400 - path
+                    "#c084fc".to_string() // purple-400 - path
                 } else if is_visited {
                     // For bidirectional BFS, color based on which direction visited
                     match visited_direction {
-                        Some(true) => "#86efac", // green-300 - visited from start
-                        Some(false) => "#fde047", // yellow-300 - visited from end
-                        None => "#93c5fd", // blue-300 - visited (other algorithms)
+                        Some(true) => format!("rgba(134, 239, 172, {})", fade_factor), // green-300 with fade
+                        Some(false) => format!("rgba(253, 224, 71, {})", fade_factor), // yellow-300 with fade
+                        None => format!("rgba(147, 197, 253, {})", fade_factor), // blue-300 with fade
                     }
                 } else {
-                    "#f9fafb" // gray-50 - unvisited
+                    "#f9fafb".to_string() // gray-50 - unvisited
                 };
 
-                context.set_fill_style_str(color);
+                context.set_fill_style_str(&color);
                 context.fill_rect(
                     x as f64 * cell_px,
                     y as f64 * cell_px,
@@ -1024,7 +1050,7 @@ fn AlgorithmSimulation(
                 }
 
                 // Run multiple steps per frame for better performance
-                const STEPS_PER_FRAME: u32 = 50;
+                const STEPS_PER_FRAME: u32 = 3;
 
                 for _ in 0..STEPS_PER_FRAME {
                     // Check if already complete
@@ -1138,6 +1164,7 @@ fn AlgorithmSimulation(
                             current_cell,
                             set_current_cell,
                             algo_signal,
+                            step_count,
                         );
                     }
                 }
@@ -1225,6 +1252,7 @@ fn AlgorithmSimulation(
                 end_cell_coord=end_cell_coord
                 current_cell=current_cell
                 final_path=final_path
+                step_count=step_count
             />
             <div class="text-xs text-charcoal opacity-75 font-mono min-h-[1.5rem]">
                 {move || if is_running() && fps() > 0.0 {
