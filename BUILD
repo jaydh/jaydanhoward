@@ -5,6 +5,22 @@ load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push", "oci_image
 load("@rules_rust//rust:defs.bzl", "rust_clippy")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 
+platform(
+    name = "linux_x86_64_platform",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+platform(
+    name = "linux_arm64_platform",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:arm64",
+    ],
+)
+
 selects.config_setting_group(
     name = "linux_arm64",
     match_all = ["@platforms//os:linux", "@platforms//cpu:arm64"],
@@ -115,9 +131,74 @@ rust_binary(
     ],
 )
 
+# Platform-specific binaries for OCI images
+rust_binary(
+    name = "jaydanhoward_bin_linux_amd64",
+    srcs = glob([
+        "src/**/*.rs",
+    ]),
+    crate_features = ["ssr"],
+    edition = "2021",
+    data = [
+        ":jaydanhoward_wasm",
+        "leptos.toml",
+        "//assets:static",
+        "//assets/fonts:fonts",
+        "//assets/fontawesome/css:css",
+        "//assets/fontawesome/webfonts:webfonts",
+    ],
+    rustc_env = {
+        "SERVER_FN_OVERRIDE_KEY": "bazel",
+    },
+    deps = server_deps,
+    rustc_flags = [
+        "-C", "opt-level=3",
+        "-C", "codegen-units=1"
+    ],
+)
+
+rust_binary(
+    name = "jaydanhoward_bin_linux_arm64",
+    srcs = glob([
+        "src/**/*.rs",
+    ]),
+    crate_features = ["ssr"],
+    edition = "2021",
+    data = [
+        ":jaydanhoward_wasm",
+        "leptos.toml",
+        "//assets:static",
+        "//assets/fonts:fonts",
+        "//assets/fontawesome/css:css",
+        "//assets/fontawesome/webfonts:webfonts",
+    ],
+    rustc_env = {
+        "SERVER_FN_OVERRIDE_KEY": "bazel",
+    },
+    deps = server_deps,
+    rustc_flags = [
+        "-C", "opt-level=3",
+        "-C", "codegen-units=1"
+    ],
+)
+
 pkg_tar(
     name = "jaydanhoward_tar",
     srcs = [":jaydanhoward_bin"],
+    package_dir = "/app",
+    include_runfiles = True
+)
+
+pkg_tar(
+    name = "jaydanhoward_tar_amd64",
+    srcs = [":jaydanhoward_bin_linux_amd64"],
+    package_dir = "/app",
+    include_runfiles = True
+)
+
+pkg_tar(
+    name = "jaydanhoward_tar_arm64",
+    srcs = [":jaydanhoward_bin_linux_arm64"],
     package_dir = "/app",
     include_runfiles = True
 )
@@ -145,23 +226,23 @@ pkg_tar(
 oci_image(
     name = "jaydanhoward_image_amd64",
     base = "@distroless_cc_debian13_linux_amd64",
-    entrypoint = ["/app/jaydanhoward_bin"],
+    entrypoint = ["/app/jaydanhoward_bin_linux_amd64"],
     tars = [
-        ":jaydanhoward_tar",
+        ":jaydanhoward_tar_amd64",
         ":zstd_lib_amd64",
     ],
-    workdir = "/app/jaydanhoward_bin.runfiles",
+    workdir = "/app/jaydanhoward_bin_linux_amd64.runfiles",
 )
 
 oci_image(
     name = "jaydanhoward_image_arm64",
     base = "@distroless_cc_debian13_linux_arm64_v8",
-    entrypoint = ["/app/jaydanhoward_bin"],
+    entrypoint = ["/app/jaydanhoward_bin_linux_arm64"],
     tars = [
-        ":jaydanhoward_tar",
+        ":jaydanhoward_tar_arm64",
         ":zstd_lib_arm64",
     ],
-    workdir = "/app/jaydanhoward_bin.runfiles",
+    workdir = "/app/jaydanhoward_bin_linux_arm64.runfiles",
 )
 
 oci_push(
@@ -176,6 +257,32 @@ oci_push(
     image = ":jaydanhoward_image_arm64",
     repository = "harbor.home.local/library/jaydanhoward",
     remote_tags = ["latest-arm64"]
+)
+
+# Multi-arch image manifest
+oci_image_index(
+    name = "jaydanhoward_image_index",
+    images = [
+        ":jaydanhoward_image_amd64",
+        ":jaydanhoward_image_arm64",
+    ],
+)
+
+oci_push(
+    name = "jaydanhoward_image_index_push",
+    image = ":jaydanhoward_image_index",
+    repository = "harbor.home.local/library/jaydanhoward",
+    remote_tags = ["latest"]
+)
+
+# Convenience target to build all OCI images
+filegroup(
+    name = "all_images",
+    srcs = [
+        ":jaydanhoward_image_amd64",
+        ":jaydanhoward_image_arm64",
+        ":jaydanhoward_image_index",
+    ],
 )
 
 
