@@ -213,7 +213,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "aUWYwQu8rVAyuYJsB2kKvm8pCI63p9nryZ9OMMup0z0=",
-        "usagesDigest": "HW9zrPNDAB6J4QP5+nBJNycalhqZD7XwEZwQDJCV3I4=",
+        "usagesDigest": "GLZIILqXqIkyRQcDUcNPDY4WV+4KCMREBecJIhduqzE=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -295,6 +295,46 @@
                 "@@platforms//cpu:arm64": "@distroless_cc_debian13_linux_arm64_v8"
               },
               "bzlmod_repository": "distroless_cc_debian13",
+              "reproducible": true
+            }
+          },
+          "lighthouse_base_linux_amd64": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
+            "attributes": {
+              "scheme": "https",
+              "registry": "harbor.home.local",
+              "repository": "library/lighthouse-base",
+              "identifier": "latest",
+              "platform": "linux/amd64",
+              "target_name": "lighthouse_base_linux_amd64",
+              "bazel_tags": []
+            }
+          },
+          "lighthouse_base_linux_arm64_v8": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
+            "attributes": {
+              "scheme": "https",
+              "registry": "harbor.home.local",
+              "repository": "library/lighthouse-base",
+              "identifier": "latest",
+              "platform": "linux/arm64/v8",
+              "target_name": "lighthouse_base_linux_arm64_v8",
+              "bazel_tags": []
+            }
+          },
+          "lighthouse_base": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_alias",
+            "attributes": {
+              "target_name": "lighthouse_base",
+              "scheme": "https",
+              "registry": "harbor.home.local",
+              "repository": "library/lighthouse-base",
+              "identifier": "latest",
+              "platforms": {
+                "@@platforms//cpu:x86_64": "@lighthouse_base_linux_amd64",
+                "@@platforms//cpu:arm64": "@lighthouse_base_linux_arm64_v8"
+              },
+              "bzlmod_repository": "lighthouse_base",
               "reproducible": true
             }
           },
@@ -651,7 +691,10 @@
             "distroless_base_linux_arm64_v8",
             "distroless_cc_debian13",
             "distroless_cc_debian13_linux_amd64",
-            "distroless_cc_debian13_linux_arm64_v8"
+            "distroless_cc_debian13_linux_arm64_v8",
+            "lighthouse_base",
+            "lighthouse_base_linux_amd64",
+            "lighthouse_base_linux_arm64_v8"
           ],
           "explicitRootModuleDirectDevDeps": [],
           "useAllRepos": "NO",
