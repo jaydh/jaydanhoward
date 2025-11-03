@@ -114,14 +114,20 @@ fn Grid(
 ) -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     use leptos::html::Canvas;
+
     #[cfg(not(feature = "ssr"))]
-    use wasm_bindgen::JsCast;
+    use std::rc::Rc;
+    #[cfg(not(feature = "ssr"))]
+    use std::cell::RefCell;
 
     #[cfg(not(feature = "ssr"))]
     let canvas_ref = NodeRef::<Canvas>::new();
 
     #[cfg(not(feature = "ssr"))]
     let (resize_trigger, set_resize_trigger) = signal(0);
+
+    #[cfg(not(feature = "ssr"))]
+    let render_pending = Rc::new(RefCell::new(false));
 
     // Set up window resize listener
     #[cfg(not(feature = "ssr"))]
@@ -136,14 +142,25 @@ fn Grid(
         });
     }
 
+    // Optimized rendering with requestAnimationFrame batching
     #[cfg(not(feature = "ssr"))]
     Effect::new(move |_| {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+
         // Depend on resize_trigger to re-run on window resize
         let _ = resize_trigger();
+        let _ = cells(); // Track cells changes
 
         let Some(canvas) = canvas_ref.get() else {
             return;
         };
+
+        // Prevent multiple pending renders
+        if *render_pending.borrow() {
+            return;
+        }
+        *render_pending.borrow_mut() = true;
 
         let canvas_element: &web_sys::HtmlCanvasElement = canvas.as_ref();
         let parent = canvas_element.parent_element().unwrap();
@@ -167,38 +184,37 @@ fn Grid(
         canvas.set_width(canvas_size);
         canvas.set_height(canvas_size);
 
-        let context = canvas
-            .get_context("2d")
-            .unwrap()
-            .unwrap()
-            .unchecked_into::<web_sys::CanvasRenderingContext2d>();
+        // Use requestAnimationFrame to batch rendering
+        let canvas_clone = canvas.clone();
+        let cells_snapshot = cells.get_untracked().0.clone();
+        let render_pending_clone = render_pending.clone();
 
-        // Clear canvas
-        context.set_fill_style_str("#FFFFFF");
-        context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
+        let closure = Closure::once(Box::new(move || {
+            let context = canvas_clone
+                .get_context("2d")
+                .unwrap()
+                .unwrap()
+                .unchecked_into::<web_sys::CanvasRenderingContext2d>();
 
-        // Draw grid lines (only if cells are large enough)
-        if cell_px >= 5.0 {
-            context.set_stroke_style_str("#E5E7EB");
-            context.set_line_width(1.0);
-            for i in 0..=grid {
-                let pos = i as f64 * cell_px;
-                context.begin_path();
-                context.move_to(pos, 0.0);
-                context.line_to(pos, canvas_size as f64);
-                context.stroke();
-                context.begin_path();
-                context.move_to(0.0, pos);
-                context.line_to(canvas_size as f64, pos);
-                context.stroke();
+            // Clear canvas
+            context.set_fill_style_str("#FFFFFF");
+            context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
+
+            // Draw alive cells - batch with beginPath/fill for better performance
+            context.set_fill_style_str("#3B82F6");
+            context.begin_path();
+            for &(x, y) in cells_snapshot.iter() {
+                context.rect(x as f64 * cell_px, y as f64 * cell_px, cell_px, cell_px);
             }
-        }
+            context.fill();
 
-        // Draw alive cells
-        context.set_fill_style_str("#3B82F6");
-        for &(x, y) in cells().0.iter() {
-            context.fill_rect(x as f64 * cell_px, y as f64 * cell_px, cell_px, cell_px);
-        }
+            *render_pending_clone.borrow_mut() = false;
+        }) as Box<dyn FnOnce()>);
+
+        window
+            .request_animation_frame(closure.as_ref().unchecked_ref())
+            .unwrap();
+        closure.forget();
     });
 
     #[cfg(not(feature = "ssr"))]
