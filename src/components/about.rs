@@ -60,7 +60,7 @@ pub fn About() -> impl IntoView {
                 "About"
             </h1>
             <MeSection />
-            <div class="w-full">
+            <div class="max-w-3xl">
                 <Lighthouse />
             </div>
         </div>
