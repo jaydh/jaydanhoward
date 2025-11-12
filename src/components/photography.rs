@@ -62,32 +62,34 @@ pub fn Photography() -> impl IntoView {
                     images_resource.get().map(|result| {
                         match result {
                             Ok(images) => view! {
-                                <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style="contain: layout style paint;">
-                                    {images
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(idx, src)| {
-                                            let src = src.clone();
-                                            view! {
-                                                <div
-                                                    class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer"
-                                                    style="contain: layout style paint;"
-                                                    on:click=move |_| set_selected_image(Some(idx))
-                                                >
-                                                    <div class="aspect-square overflow-hidden bg-border">
-                                                        <img
-                                                            src=src.clone()
-                                                            alt=src.clone()
-                                                            loading="lazy"
-                                                            decoding="async"
-                                                            class="w-full h-full object-cover"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            }
-                                        })
-                                        .collect_view()}
-                                </div>
+                                    <div class="w-full flex flex-col gap-6">
+                                        <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style="contain: layout style paint;">
+                                            {images
+                                                .iter()
+                                                .enumerate()
+                                                .map(|(idx, src)| {
+                                                    let src = src.clone();
+                                                    view! {
+                                                        <div
+                                                            class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer transition-transform hover:scale-[1.02]"
+                                                            style="contain: layout style paint;"
+                                                            on:click=move |_| set_selected_image(Some(idx))
+                                                        >
+                                                            <div class="aspect-square overflow-hidden bg-border">
+                                                                <img
+                                                                    src=src.clone()
+                                                                    alt=src.clone()
+                                                                    loading="lazy"
+                                                                    decoding="async"
+                                                                    class="w-full h-full object-cover"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    }
+                                                })
+                                                .collect_view()}
+                                        </div>
+                                    </div>
                                 // Preview Modal
                                 {move || {
                                     images_resource.get().and_then(|result| {
@@ -99,13 +101,13 @@ pub fn Photography() -> impl IntoView {
                                                         class="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/90 backdrop-blur-sm animate-in fade-in duration-200"
                                                         on:click=move |_| set_selected_image(None)
                                                     >
-                                                        <div class="relative max-w-7xl max-h-screen p-4 md:p-8">
+                                                        <div
+                                                            class="relative max-w-7xl max-h-screen p-4 md:p-8"
+                                                            on:click=move |e| e.stop_propagation()
+                                                        >
                                                             <button
                                                                 class="absolute top-2 right-2 md:top-4 md:right-4 text-white/80 hover:text-white text-4xl font-light leading-none z-10 w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-all"
-                                                                on:click=move |e| {
-                                                                    e.stop_propagation();
-                                                                    set_selected_image(None);
-                                                                }
+                                                                on:click=move |_| set_selected_image(None)
                                                             >
                                                                 "×"
                                                             </button>
@@ -113,7 +115,6 @@ pub fn Photography() -> impl IntoView {
                                                                 src=src.clone()
                                                                 alt=src.clone()
                                                                 class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-                                                                on:click=move |e| e.stop_propagation()
                                                             />
                                                         </div>
                                                     </div>
