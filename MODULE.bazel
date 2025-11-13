@@ -113,16 +113,5 @@ oci.pull(
     tag = "latest",
 )
 
-# Lighthouse base image (needs to be built first with Dockerfile.base)
-oci.pull(
-    name = "lighthouse_base",
-    image = "harbor.home.local/library/lighthouse-base",
-    platforms = [
-        "linux/amd64",
-        "linux/arm64/v8",
-    ],
-    tag = "latest",
-)
-
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8", "lighthouse_base")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8")
 

@@ -1,6 +1,8 @@
 #![recursion_limit = "256"]
 
 mod components;
+#[cfg(feature = "ssr")]
+mod middleware;
 mod prometheus_client;
 mod routes;
 mod startup;

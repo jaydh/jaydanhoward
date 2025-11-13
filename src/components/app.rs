@@ -11,14 +11,7 @@ use leptos_router::path;
 #[component]
 fn Stylesheets() -> impl IntoView {
     view! {
-        <Link rel="preload" href="/assets/style.css" as_="style" />
-        <Link rel="preload" href="/assets/fontawesome/css/fontawesome.min.css" as_="style" />
-        <Link rel="preload" href="/assets/fontawesome/css/brands.min.css" as_="style" />
-        <Link rel="preload" href="/assets/fontawesome/css/solid.min.css" as_="style" />
         <Stylesheet id="app-styles" href="/assets/style.css" />
-        <Stylesheet id="fa" href="/assets/fontawesome/css/fontawesome.min.css" />
-        <Stylesheet id="fa-brands" href="/assets/fontawesome/css/brands.min.css" />
-        <Stylesheet id="fa-solid" href="/assets/fontawesome/css/solid.min.css" />
     }
 }
 

@@ -122,40 +122,51 @@ jobs:
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_index_push
   harbor-lighthouse-image:
     name: Build Lighthouse Image
-    runs-on: arc-runner-set-k8s
+    runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [clippy]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Pull QEMU image manually
+        run: docker pull tonistiigi/binfmt:latest
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Bazel Build
-        run: |
-          bazel --bazelrc=.bazelrc.ci build //lighthouse:lighthouse_image
+      - name: Build Image
+        run: docker build -t harbor.home.local/library/lighthouse:latest .
+        working-directory: lighthouse
   harbor-lighthouse-image-push:
     if: github.event_name == 'push'
     name: Push Lighthouse Image
-    runs-on: arc-runner-set-k8s
+    runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-lighthouse-image]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Pull QEMU image manually
+        run: docker pull tonistiigi/binfmt:latest
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Bazel Push
-        run: |
-          bazel --bazelrc=.bazelrc.ci run //lighthouse:lighthouse_image_push
+      - name: Build Image
+        run: docker build -t harbor.home.local/library/lighthouse:latest .
+        working-directory: lighthouse
+      - name: Push Image
+        run: docker push harbor.home.local/library/lighthouse:latest
+        working-directory: lighthouse

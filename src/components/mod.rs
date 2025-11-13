@@ -3,6 +3,7 @@ mod app;
 mod beliefs;
 mod cluster_stats;
 mod dev;
+mod icons;
 mod life;
 mod link;
 mod nav;
