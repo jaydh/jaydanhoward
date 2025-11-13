@@ -1,3 +1,4 @@
+use crate::components::icons::Icon;
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
 use std::collections::HashSet;
@@ -542,10 +543,10 @@ pub fn LifeGame(
                                     "↻"
                                 </button>
                                 <button
-                                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200"
+                                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
                                     on:click=move |_| set_show_settings.update(|v| *v = !*v)
                                 >
-                                    <i class="fas fa-cog"></i>
+                                    <Icon name="cog" class="w-4 h-4" />
                                 </button>
                             }
                         }
@@ -562,8 +563,8 @@ pub fn LifeGame(
                                 >
                                     "↻"
                                 </button>
-                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal">
-                                    <i class="fas fa-cog"></i>
+                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal flex items-center justify-center">
+                                    <Icon name="cog" class="w-4 h-4" />
                                 </button>
                             }
                         }

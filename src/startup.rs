@@ -1,6 +1,7 @@
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
     use crate::components::App;
+    use crate::middleware::cache_control::CacheControl;
     use crate::routes::{health_check, robots_txt, upload_lighthouse_report};
     use crate::telemtry::{get_subscriber, init_subscriber};
     use actix_files::Files;
@@ -56,6 +57,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                 }
             })
             .service(Files::new("/", main_path.to_string_lossy().as_ref()))
+            .wrap(CacheControl)
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?

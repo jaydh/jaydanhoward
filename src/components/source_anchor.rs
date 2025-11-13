@@ -1,3 +1,4 @@
+use crate::components::icons::Icon;
 use leptos::prelude::*;
 
 #[component]
@@ -11,7 +12,7 @@ pub fn SourceAnchor(href: &'static str) -> impl IntoView {
                 rel="noreferrer"
                 aria-label="source_anchor"
             >
-                <i class="fas fa-code"></i>
+                <Icon name="code" class="w-5 h-5" />
             </a>
             <span class="absolute bottom-full mb-2 right-0 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100 bg-surface border border-border text-charcoal px-3 py-2 rounded-lg shadow-minimal-lg whitespace-nowrap text-sm">
                 View Source Code
