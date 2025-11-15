@@ -5,7 +5,7 @@ use leptos::prelude::*;
 pub fn Lighthouse() -> impl IntoView {
     view! {
         <div class="flex flex-col gap-6 h-full min-h-[50vh]">
-            <div class="text-base leading-loose text-charcoal opacity-90">
+            <div class="text-base leading-loose text-charcoal">
                 "Here is a programmatically generated lighthouse report "
                 <a
                     class="text-accent hover:underline transition-colors duration-200"

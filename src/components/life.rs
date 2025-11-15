@@ -531,6 +531,7 @@ pub fn LifeGame(
                                     style:border-color="#3B82F6"
                                     style:color="#3B82F6"
                                     on:click=move |_| toggle_simulation()
+                                    aria-label=move || if is_running() { "Pause simulation" } else { "Play simulation" }
                                 >
                                     {move || if is_running() { "▌▌" } else { "▶" }}
                                 </button>
@@ -539,12 +540,14 @@ pub fn LifeGame(
                                     style:border-color="#3B82F6"
                                     style:color="#3B82F6"
                                     on:click=move |_| reset()
+                                    aria-label="Reset simulation"
                                 >
                                     "↻"
                                 </button>
                                 <button
                                     class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
                                     on:click=move |_| set_show_settings.update(|v| *v = !*v)
+                                    aria-label="Open settings"
                                 >
                                     <Icon name="cog" class="w-4 h-4" />
                                 </button>
@@ -553,24 +556,25 @@ pub fn LifeGame(
                         #[cfg(feature = "ssr")]
                         {
                             view! {
-                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal">
+                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal" aria-label="Play simulation">
                                     "▶"
                                 </button>
                                 <button
                                     class="px-4 py-1.5 text-sm rounded border"
                                     style:border-color="#3B82F6"
                                     style:color="#3B82F6"
+                                    aria-label="Reset simulation"
                                 >
                                     "↻"
                                 </button>
-                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal flex items-center justify-center">
+                                <button class="px-4 py-1.5 text-sm rounded border border-border text-charcoal flex items-center justify-center" aria-label="Open settings">
                                     <Icon name="cog" class="w-4 h-4" />
                                 </button>
                             }
                         }
                     }
                 </div>
-                <span class="text-sm text-charcoal opacity-75">
+                <span class="text-sm text-charcoal-light">
                     {alive_cells} " cells"
                 </span>
             </div>
@@ -581,8 +585,9 @@ pub fn LifeGame(
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-lg font-medium text-charcoal">"Settings"</h3>
                             <button
-                                class="text-charcoal opacity-50 hover:opacity-100 transition-opacity"
+                                class="text-charcoal-lighter hover:text-charcoal transition-colors"
                                 on:click=move |_| set_show_settings.set(false)
+                                aria-label="Close settings"
                             >
                                 "✕"
                             </button>
@@ -645,7 +650,7 @@ pub fn LifeGame(
                             />
                         </div>
 
-                        <div class="flex items-center gap-4 pt-2 text-sm text-charcoal opacity-75">
+                        <div class="flex items-center gap-4 pt-2 text-sm text-charcoal-light">
                             <a
                                 class="text-accent hover:underline transition-colors duration-200"
                                 href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"

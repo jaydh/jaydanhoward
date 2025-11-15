@@ -7,7 +7,7 @@ pub fn Work() -> impl IntoView {
         <div class="max-w-7xl mx-auto px-8 py-16 w-full flex flex-col gap-16">
             <section class="flex flex-col gap-6">
                 <h2 class="text-2xl font-bold text-charcoal">Projects</h2>
-                <div class="flex flex-col gap-4 text-base leading-loose text-charcoal opacity-90">
+                <div class="flex flex-col gap-4 text-base leading-loose text-charcoal">
                     <p>
                         <a href="/work/life" class="text-accent hover:underline transition-colors duration-200 font-medium">
                             "Conway's Game of Life"
