@@ -4,14 +4,35 @@ use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
 use leptos::prelude::*;
-use leptos_meta::{provide_meta_context, Html, Link, Stylesheet, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Style, Title};
 use leptos_router::components::*;
 use leptos_router::path;
 
+#[cfg(feature = "ssr")]
+fn get_inlined_css() -> String {
+    use runfiles::{rlocation, Runfiles};
+    use std::fs;
+
+    let r = Runfiles::create().expect("Must run using bazel with runfiles");
+    let css_path = rlocation!(r, "_main/assets/style.css").expect("Failed to locate style.css");
+    fs::read_to_string(css_path).expect("Failed to read style.css")
+}
+
 #[component]
 fn Stylesheets() -> impl IntoView {
-    view! {
-        <Stylesheet id="app-styles" href="/assets/style.css" />
+    #[cfg(feature = "ssr")]
+    {
+        let css_content = get_inlined_css();
+        view! {
+            <Style id="app-styles">{css_content}</Style>
+        }
+    }
+
+    #[cfg(not(feature = "ssr"))]
+    {
+        view! {
+            <Style id="app-styles"></Style>
+        }
     }
 }
 

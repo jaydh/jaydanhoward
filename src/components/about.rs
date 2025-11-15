@@ -7,7 +7,7 @@ use leptos::prelude::*;
 #[component]
 pub fn MeSection() -> impl IntoView {
     view! {
-        <div class="max-w-3xl flex flex-col gap-6 text-base leading-loose text-charcoal opacity-90">
+        <div class="max-w-3xl flex flex-col gap-6 text-base leading-loose text-charcoal">
             <p>
                 "You're currently talking to some old computers and raspberry pis in my closet. This site runs on a self-hosted "
                 <a href="https://kubernetes.io/" target="_blank" class="text-accent hover:underline transition-colors duration-200">

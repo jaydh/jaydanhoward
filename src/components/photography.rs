@@ -55,7 +55,7 @@ pub fn Photography() -> impl IntoView {
             </h1>
             <Suspense fallback=move || view! {
                 <div class="w-full flex justify-center items-center py-20">
-                    <p class="text-charcoal opacity-75">"Loading images..."</p>
+                    <p class="text-charcoal-light">"Loading images..."</p>
                 </div>
             }>
                 {move || {
@@ -106,8 +106,9 @@ pub fn Photography() -> impl IntoView {
                                                             on:click=move |e| e.stop_propagation()
                                                         >
                                                             <button
-                                                                class="absolute top-2 right-2 md:top-4 md:right-4 text-white/80 hover:text-white text-4xl font-light leading-none z-10 w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-all"
+                                                                class="absolute top-2 right-2 md:top-4 md:right-4 text-white/90 hover:text-white text-4xl font-light leading-none z-10 w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-all"
                                                                 on:click=move |_| set_selected_image(None)
+                                                                aria-label="Close image"
                                                             >
                                                                 "×"
                                                             </button>

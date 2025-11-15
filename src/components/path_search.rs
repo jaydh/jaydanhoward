@@ -1071,7 +1071,7 @@ fn AlgorithmSimulation(
                 {move || {
                     completion_steps().map(|steps| {
                         view! {
-                            <span class="text-xs text-charcoal opacity-75 font-mono">
+                            <span class="text-xs text-charcoal-light font-mono">
                                 {format!("{} steps", steps)}
                             </span>
                         }
@@ -1087,7 +1087,7 @@ fn AlgorithmSimulation(
                 final_path=final_path
                 step_count=step_count
             />
-            <div class="text-xs text-charcoal opacity-75 font-mono min-h-[1.5rem]">
+            <div class="text-xs text-charcoal-light font-mono min-h-[1.5rem]">
                 {move || if is_running() && fps() > 0.0 {
                     format!("{:.0} steps/s", fps())
                 } else {
@@ -1218,6 +1218,7 @@ pub fn PathSearch() -> impl IntoView {
                     style:border-color="#3B82F6"
                     style:color="#3B82F6"
                     on:click=toggle_simulation
+                    aria-label=move || if is_running() { "Pause simulation" } else { "Play simulation" }
                 >
                     {move || if is_running() { "▌▌" } else { "▶" }}
                 </button>
@@ -1226,12 +1227,14 @@ pub fn PathSearch() -> impl IntoView {
                     style:border-color="#3B82F6"
                     style:color="#3B82F6"
                     on:click=randomize
+                    aria-label="Randomize grid"
                 >
                     "↻"
                 </button>
                 <button
                     class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
                     on:click=move |_| set_show_settings.update(|v| *v = !*v)
+                    aria-label="Open settings"
                 >
                     <Icon name="cog" class="w-4 h-4" />
                 </button>
@@ -1243,8 +1246,9 @@ pub fn PathSearch() -> impl IntoView {
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-lg font-medium text-charcoal">"Settings"</h3>
                             <button
-                                class="text-charcoal opacity-50 hover:opacity-100 transition-opacity"
+                                class="text-charcoal-lighter hover:text-charcoal transition-colors"
                                 on:click=move |_| set_show_settings.set(false)
+                                aria-label="Close settings"
                             >
                                 "✕"
                             </button>
@@ -1290,7 +1294,7 @@ pub fn PathSearch() -> impl IntoView {
                 </div>
             </Show>
 
-            <div class="text-sm text-charcoal opacity-75 max-w-4xl mx-auto mb-8">
+            <div class="text-sm text-charcoal-light max-w-4xl mx-auto mb-8">
                 "Pathfinding algorithms racing to find the shortest route from start (green) to end (yellow)."
             </div>
 
@@ -1298,7 +1302,7 @@ pub fn PathSearch() -> impl IntoView {
             <div class="w-full flex flex-col gap-6 mb-12">
                 <div class="flex flex-col gap-2 items-center">
                     <h2 class="text-2xl font-bold text-charcoal">"Blind Search"</h2>
-                    <p class="text-sm text-charcoal opacity-75 max-w-2xl text-center">
+                    <p class="text-sm text-charcoal-light max-w-2xl text-center">
                         "Explores without knowing the destination location"
                     </p>
                 </div>
@@ -1365,7 +1369,7 @@ pub fn PathSearch() -> impl IntoView {
             <div class="w-full flex flex-col gap-6">
                 <div class="flex flex-col gap-2 items-center">
                     <h2 class="text-2xl font-bold text-charcoal">"Informed Search"</h2>
-                    <p class="text-sm text-charcoal opacity-75 max-w-2xl text-center">
+                    <p class="text-sm text-charcoal-light max-w-2xl text-center">
                         "Uses heuristics or knowledge of the destination to guide exploration more efficiently"
                     </p>
                 </div>
