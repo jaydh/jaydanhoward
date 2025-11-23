@@ -58,7 +58,7 @@ crates_repository(
             version = "0.6",
         ),
         "actix-web": crate.spec(
-            version = "4.8",
+            version = "4",
             features = [
                 "macros",
                 "rustls-0_23",
@@ -104,16 +104,29 @@ crates_repository(
             version = "0.8.5",
         ),
         "reqwest": crate.spec(
-            version = "0.12.9",
+            version = "0.12",
+            default_features = False,
             features = [
-                "http2", 
-                "rustls-tls", 
-                "json", 
-                "gzip", 
-                "cookies", 
-                "multipart", 
-                "stream"
+                "http2",
+                "rustls-tls",
+                "rustls-tls-native-roots",
+                "json",
+                "gzip",
+                "cookies",
+                "multipart",
+                "stream",
+                "charset",
+                "macos-system-configuration"
             ]
+        ),
+        "ring": crate.spec(
+            version = "0.17.12",
+        ),
+        "rustls": crate.spec(
+            version = "0.23",
+        ),
+        "scraper": crate.spec(
+            version = "0.20.0",
         ),
         "serde": crate.spec(
             version = "1.0.183",
@@ -144,7 +157,7 @@ crates_repository(
             version = "0.1.1",
         ),
        "tracing-subscriber": crate.spec(
-            version = "0.3",
+            version = "0.3.20",
             features = ["registry", "env-filter"]
         ),
     },
@@ -245,3 +258,49 @@ server_crates()
 register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")
 register_toolchains("@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm32_toolchain")
 register_toolchains("@rules_rust//rust/private/dummy_cc_toolchain:dummy_cc_wasm64_toolchain")
+
+# Cargo audit binaries for security scanning
+http_archive(
+    name = "cargo_audit_linux_x86_64",
+    build_file_content = """
+exports_files(["cargo-audit"])
+filegroup(
+    name = "binary",
+    srcs = ["cargo-audit"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "1afe6f3dba2e3d81dfb8db34be37ae9647480b132cd719357276ae643ebf962a",
+    strip_prefix = "cargo-audit-x86_64-unknown-linux-musl-v0.21.0",
+    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.21.0/cargo-audit-x86_64-unknown-linux-musl-v0.21.0.tgz"],
+)
+
+http_archive(
+    name = "cargo_audit_linux_arm64",
+    build_file_content = """
+exports_files(["cargo-audit"])
+filegroup(
+    name = "binary",
+    srcs = ["cargo-audit"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "9e4ee9c0aa5af18ecf5c0e4d5aa4ed8a8fb5ec9a86fe25f05d2e964e6a22fc26",
+    strip_prefix = "cargo-audit-aarch64-unknown-linux-musl-v0.21.0",
+    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.21.0/cargo-audit-aarch64-unknown-linux-musl-v0.21.0.tgz"],
+)
+
+http_archive(
+    name = "cargo_audit_macos_x86_64",
+    build_file_content = """
+exports_files(["cargo-audit"])
+filegroup(
+    name = "binary",
+    srcs = ["cargo-audit"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "87e0a4aece55917ebe02b73e7c69fe83c4d995b8fc435820f24bd92a9c2c1fb8",
+    strip_prefix = "cargo-audit-x86_64-apple-darwin-v0.21.0",
+    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.21.0/cargo-audit-x86_64-apple-darwin-v0.21.0.tgz"],
+)

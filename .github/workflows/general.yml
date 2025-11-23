@@ -10,6 +10,18 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 jobs:
+  security-audit:
+    name: Security Audit
+    runs-on: arc-runner-set-k8s
+    container: ${{ vars.RUNNER_IMAGE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run security audit
+        run: |
+          bazel --bazelrc=.bazelrc.ci test //:security_audit
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s
@@ -26,7 +38,7 @@ jobs:
     name: Build JDH Image - x86_64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [clippy]
+    needs: [clippy, security-audit]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -62,7 +74,7 @@ jobs:
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
   harbor-image-arm64:
-    needs: [clippy]
+    needs: [clippy, security-audit]
     name: Build JDH Image - arm64
     runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
@@ -124,7 +136,7 @@ jobs:
     name: Build Lighthouse Image
     runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [clippy]
+    needs: [clippy, security-audit]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
