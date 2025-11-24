@@ -9,6 +9,10 @@ pub enum LighthouseError {
     DisabledError(),
 }
 
+// Maximum file upload size: 10MB
+#[cfg(feature = "ssr")]
+const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
+
 #[cfg(feature = "ssr")]
 use {
     actix_multipart::Multipart,
@@ -22,18 +26,42 @@ use {
 
 #[cfg(feature = "ssr")]
 fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
-    // The header value, if present, must be a valid UTF8 string
-    let header_value = headers.get("Authorization").unwrap().to_str().unwrap();
-    let base64encoded_credentials = header_value.strip_prefix("Basic ").unwrap();
+    // Get Authorization header
+    let header_value = headers
+        .get("Authorization")
+        .ok_or(LighthouseError::InvalidCredentials())?;
+
+    // Convert to string
+    let header_str = header_value
+        .to_str()
+        .map_err(|_| LighthouseError::InvalidCredentials())?;
+
+    // Strip "Basic " prefix
+    let base64encoded_credentials = header_str
+        .strip_prefix("Basic ")
+        .ok_or(LighthouseError::InvalidCredentials())?;
+
+    // Decode base64
     let decoded_credentials = base64::engine::general_purpose::STANDARD
         .decode(base64encoded_credentials)
-        .unwrap();
-    let decoded_credentials = String::from_utf8(decoded_credentials).unwrap();
+        .map_err(|_| LighthouseError::InvalidCredentials())?;
 
+    // Convert to UTF-8 string
+    let decoded_credentials = String::from_utf8(decoded_credentials)
+        .map_err(|_| LighthouseError::InvalidCredentials())?;
+
+    // Split on ':' to get username and password
     let mut credentials = decoded_credentials.splitn(2, ':');
-    let username = credentials.next().unwrap().to_string();
-    let password = credentials.next().unwrap().to_string();
+    let username = credentials
+        .next()
+        .ok_or(LighthouseError::InvalidCredentials())?
+        .to_string();
+    let password = credentials
+        .next()
+        .ok_or(LighthouseError::InvalidCredentials())?
+        .to_string();
 
+    // Validate credentials
     match std::env::var("LIGHTHOUSE_UPDATE_TOKEN") {
         Ok(val) => {
             if username != "jay" || password != val {
@@ -76,6 +104,14 @@ pub async fn upload_lighthouse_report(
         let mut field = item?;
         while let Some(chunk) = field.next().await {
             let chunk = chunk?;
+
+            // Check if adding this chunk would exceed the max file size
+            if file_contents.len() + chunk.len() > MAX_FILE_SIZE {
+                log::warn!("Upload rejected: file size exceeds {} bytes", MAX_FILE_SIZE);
+                return Ok(HttpResponse::PayloadTooLarge()
+                    .body("File size exceeds maximum allowed size of 10MB"));
+            }
+
             file_contents.extend_from_slice(&chunk);
         }
     }

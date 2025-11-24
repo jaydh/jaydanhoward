@@ -3,39 +3,61 @@ use leptos::prelude::*;
 
 #[server]
 pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
-    let response = reqwest::get("https://caddy.jaydanhoward.com/data/")
-        .await
-        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+    use scraper::{Html, Selector};
 
-    let html = response.text()
-        .await
-        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+    // Create a client with a 10-second timeout to prevent hanging requests
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| {
+            tracing::error!("Failed to build HTTP client: {}", e);
+            ServerFnError::ServerError("Failed to initialize client".to_string())
+        })?;
 
-    // Parse HTML to extract image URLs
-    // Caddy directory listing shows links like: <a href="./filename.webp">
+    let response = client
+        .get("https://caddy.jaydanhoward.com/data/")
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch images from caddy: {}", e);
+            ServerFnError::ServerError("Failed to fetch images".to_string())
+        })?;
+
+    let html_content = response.text()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to parse response from caddy: {}", e);
+            ServerFnError::ServerError("Failed to parse response".to_string())
+        })?;
+
+    // Parse HTML using scraper for safe, robust parsing
+    let document = Html::parse_document(&html_content);
+
+    // Select all anchor tags
+    let selector = Selector::parse("a").map_err(|e| {
+        tracing::error!("Failed to create CSS selector: {}", e);
+        ServerFnError::ServerError("Failed to parse HTML".to_string())
+    })?;
+
     let mut images = Vec::new();
-    for line in html.lines() {
-        if line.contains("href=\"") && (line.contains(".webp") || line.contains(".jpg") || line.contains(".png")) {
-            if let Some(start) = line.find("href=\"") {
-                let start = start + 6; // length of "href=\""
-                if let Some(end) = line[start..].find("\"") {
-                    let path = &line[start..start + end];
-                    // Only include image files
-                    if path.ends_with(".webp") || path.ends_with(".jpg") || path.ends_with(".png") {
-                        // Strip leading ./ if present
-                        let clean_path = if path.starts_with("./") {
-                            path.strip_prefix("./").unwrap()
-                        } else {
-                            path
-                        };
-                        let full_url = format!("https://caddy.jaydanhoward.com/data/{}", clean_path);
-                        images.push(full_url);
-                    }
+
+    for element in document.select(&selector) {
+        if let Some(href) = element.value().attr("href") {
+            // Only include image files
+            if href.ends_with(".webp") || href.ends_with(".jpg") || href.ends_with(".png") {
+                // Strip leading ./ if present
+                let clean_path = href.strip_prefix("./").unwrap_or(href);
+
+                // Validate that the path doesn't contain directory traversal attempts
+                if !clean_path.contains("..") && !clean_path.starts_with('/') {
+                    let full_url = format!("https://caddy.jaydanhoward.com/data/{}", clean_path);
+                    images.push(full_url);
                 }
             }
         }
     }
 
+    tracing::info!("Successfully fetched {} images from caddy", images.len());
     Ok(images)
 }
 
@@ -125,9 +147,9 @@ pub fn Photography() -> impl IntoView {
                                     })
                                 }}
                             }.into_any(),
-                            Err(e) => view! {
+                            Err(_) => view! {
                                 <div class="w-full flex justify-center items-center py-20">
-                                    <p class="text-red-500">"Error loading images: " {e.to_string()}</p>
+                                    <p class="text-red-500">"Unable to load images. Please try again later."</p>
                                 </div>
                             }.into_any(),
                         }
