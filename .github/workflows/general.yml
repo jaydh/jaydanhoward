@@ -89,20 +89,9 @@ jobs:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Check Build Environment
-        run: |
-          echo "=== Build Environment Architecture ==="
-          uname -m
       - name: Bazel Build
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
-      - name: Verify Binary Architecture
-        run: |
-          echo "=== Binary Architecture ==="
-          file bazel-bin/jaydanhoward_bin_linux_arm64 || true
-          readelf -h bazel-bin/jaydanhoward_bin_linux_arm64 | grep -E "(Class|Machine)" || true
-          echo "=== Checking Rust Toolchain Used ==="
-          find bazel-out -name "rustc" -type f 2>/dev/null | head -1 | xargs file || echo "Could not find rustc in bazel-out"
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [harbor-image-arm64]
