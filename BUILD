@@ -54,6 +54,7 @@ server_deps = [
     "@server_crates//:leptos_router",
     "@server_crates//:rand",
     "@server_crates//:reqwest",
+    "@server_crates//:scraper",
     "@server_crates//:serde",
     "@server_crates//:serde-aux",
     "@server_crates//:thiserror",
@@ -292,6 +293,22 @@ rust_clippy(
     deps = [
         ":jaydanhoward_bin",
     ],
+)
+
+# Security audit using cargo-audit
+sh_test(
+    name = "security_audit",
+    srcs = ["//scripts:security_audit.sh"],
+    data = [
+        "Cargo.server.lock",
+        "Cargo.wasm.lock",
+    ] + select({
+        ":linux_x86_64": ["@cargo_audit_linux_x86_64//:binary"],
+        ":linux_arm64": ["@cargo_audit_linux_arm64//:binary"],
+        ":macos_arm64": ["@cargo_audit_macos_x86_64//:binary"],
+        "//conditions:default": ["@cargo_audit_macos_x86_64//:binary"],
+    }),
+    tags = ["security", "no-sandbox", "external"],
 )
 
 exports_files(["tailwind.config.js"])
