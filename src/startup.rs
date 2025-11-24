@@ -2,6 +2,8 @@
 pub async fn run() -> Result<(), std::io::Error> {
     use crate::components::App;
     use crate::middleware::cache_control::CacheControl;
+    use crate::middleware::rate_limit::RateLimiter;
+    use crate::middleware::security_headers::SecurityHeaders;
     use crate::routes::{health_check, robots_txt, upload_lighthouse_report};
     use crate::telemtry::{get_subscriber, init_subscriber};
     use actix_files::Files;
@@ -10,6 +12,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     use leptos_actix::{generate_route_list, LeptosRoutes};
     use leptos_meta::MetaTags;
     use runfiles::{rlocation, Runfiles};
+    use std::time::Duration;
     use tracing::log;
 
     let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
@@ -29,8 +32,16 @@ pub async fn run() -> Result<(), std::io::Error> {
     HttpServer::new(move || {
         let routes = generate_route_list(App);
 
+        // Rate limiter for authentication endpoints: 5 requests per minute
+        let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
+
         actix_web::App::new()
-            .route("/api/lighthouse", web::post().to(upload_lighthouse_report))
+            .route(
+                "/api/lighthouse",
+                web::post()
+                    .to(upload_lighthouse_report)
+                    .wrap(auth_rate_limiter),
+            )
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             .route("/health_check", web::get().to(health_check))
             .route("/robots.txt", web::get().to(robots_txt))
@@ -58,6 +69,7 @@ pub async fn run() -> Result<(), std::io::Error> {
             })
             .service(Files::new("/", main_path.to_string_lossy().as_ref()))
             .wrap(CacheControl)
+            .wrap(SecurityHeaders)
             .wrap(actix_web::middleware::Compress::default())
     })
     .bind(&addr)?
