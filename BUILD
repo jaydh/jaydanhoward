@@ -233,8 +233,6 @@ oci_image(
         ":zstd_lib_amd64",
     ],
     workdir = "/app/jaydanhoward_bin_linux_amd64.runfiles",
-    architecture = "amd64",
-    os = "linux",
 )
 
 oci_image(
@@ -246,9 +244,6 @@ oci_image(
         ":zstd_lib_arm64",
     ],
     workdir = "/app/jaydanhoward_bin_linux_arm64.runfiles",
-    architecture = "arm64",
-    os = "linux",
-    variant = "v8",
 )
 
 oci_push(
@@ -269,8 +264,8 @@ oci_push(
 oci_image_index(
     name = "jaydanhoward_image_index",
     images = [
-        ":jaydanhoward_image_amd64",
         ":jaydanhoward_image_arm64",
+        ":jaydanhoward_image_amd64",
     ],
 )
 
