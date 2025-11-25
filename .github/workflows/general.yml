@@ -115,7 +115,7 @@ jobs:
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
-    runs-on: arc-runner-set-k8s
+    runs-on: arc-runner-set
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:

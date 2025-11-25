@@ -52,15 +52,16 @@ where
             // Content Security Policy - Restricts resource loading to prevent XSS
             // Note: This is a strict policy. Adjust 'unsafe-inline' and 'unsafe-eval' based on your needs.
             // For Leptos hydration, we need 'unsafe-inline' for styles and scripts
+            // Cloudflare Insights is allowed for analytics
             headers.insert(
                 actix_web::http::header::CONTENT_SECURITY_POLICY,
                 actix_web::http::header::HeaderValue::from_static(
                     "default-src 'self'; \
-                     script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; \
+                     script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; \
                      style-src 'self' 'unsafe-inline'; \
                      img-src 'self' https://caddy.jaydanhoward.com data:; \
                      font-src 'self'; \
-                     connect-src 'self'; \
+                     connect-src 'self' https://cloudflareinsights.com; \
                      frame-ancestors 'none'; \
                      base-uri 'self'; \
                      form-action 'self';"
