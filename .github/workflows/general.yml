@@ -119,19 +119,18 @@ jobs:
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Push Multi-Arch Manifest
+      - name: Create and Push Multi-Arch Manifest
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_index_push
+          docker manifest create harbor.home.local/library/jaydanhoward:latest \
+            --amend harbor.home.local/library/jaydanhoward:latest-amd64 \
+            --amend harbor.home.local/library/jaydanhoward:latest-arm64
+          docker manifest push harbor.home.local/library/jaydanhoward:latest
   harbor-lighthouse-image:
     name: Build Lighthouse Image
     runs-on: arc-runner-set
