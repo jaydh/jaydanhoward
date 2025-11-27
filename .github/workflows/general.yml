@@ -115,12 +115,18 @@ jobs:
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
-    runs-on: arc-runner-set
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
-    env:
-      DOCKER_HOST: tcp://localhost:2375
     steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: kubernetes
+          platforms: linux/amd64,linux/arm64
+          driver-opts: |
+            namespace=arc
+            serviceaccount=buildx-runner
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
@@ -129,61 +135,37 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Create and Push Multi-Arch Manifest
         run: |
-          docker manifest create harbor.home.local/library/jaydanhoward:latest \
-            --amend harbor.home.local/library/jaydanhoward:latest-amd64 \
-            --amend harbor.home.local/library/jaydanhoward:latest-arm64
-          docker manifest push harbor.home.local/library/jaydanhoward:latest
+          docker buildx imagetools create -t harbor.home.local/library/jaydanhoward:latest \
+            harbor.home.local/library/jaydanhoward:latest-amd64 \
+            harbor.home.local/library/jaydanhoward:latest-arm64
   harbor-lighthouse-image:
-    name: Build Lighthouse Image
-    runs-on: arc-runner-set
+    name: Build and Push Lighthouse Multi-Arch Image
+    runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [clippy, security-audit]
-    env:
-      DOCKER_HOST: tcp://localhost:2375
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Pull QEMU image manually
-        run: docker pull tonistiigi/binfmt:latest
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver: kubernetes
+          platforms: linux/amd64,linux/arm64
+          driver-opts: |
+            namespace=arc
+            serviceaccount=buildx-runner
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
           registry: harbor.home.local
           username: ${{ secrets.HARBOR_USER}}
           password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Build Image
-        run: docker build -t harbor.home.local/library/lighthouse:latest .
-        working-directory: lighthouse
-  harbor-lighthouse-image-push:
-    if: github.event_name == 'push'
-    name: Push Lighthouse Image
-    runs-on: arc-runner-set
-    container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [harbor-lighthouse-image]
-    env:
-      DOCKER_HOST: tcp://localhost:2375
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Pull QEMU image manually
-        run: docker pull tonistiigi/binfmt:latest
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to Harbor
-        uses: docker/login-action@v3
+      - name: Build and Push Multi-Arch Image
+        uses: docker/build-push-action@v5
         with:
-          registry: harbor.home.local
-          username: ${{ secrets.HARBOR_USER}}
-          password: ${{ secrets.HARBOR_TOKEN}}
-      - name: Build Image
-        run: docker build -t harbor.home.local/library/lighthouse:latest .
-        working-directory: lighthouse
-      - name: Push Image
-        run: docker push harbor.home.local/library/lighthouse:latest
-        working-directory: lighthouse
+          context: ./lighthouse
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' }}
+          tags: harbor.home.local/library/lighthouse:latest
+          cache-from: type=registry,ref=harbor.home.local/library/lighthouse:buildcache
+          cache-to: type=registry,ref=harbor.home.local/library/lighthouse:buildcache,mode=max
