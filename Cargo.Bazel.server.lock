@@ -1,5 +1,5 @@
 {
-  "checksum": "34cfab6d2d05fff7476de09d7e870d10273fd8a0c8b31e87e6d07fa8485e9ae7",
+  "checksum": "05415c7094abbfc71ec97fa92fdf7e3d0e9e3444961181f9747d043f44517388",
   "crates": {
     "actix-codec 0.5.2": {
       "name": "actix-codec",
@@ -519,7 +519,7 @@
               "target": "rand"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -659,6 +659,7 @@
         ],
         "crate_features": {
           "common": [
+            "default",
             "http",
             "unicode"
           ],
@@ -687,7 +688,7 @@
               "target": "regex_lite"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -1206,7 +1207,7 @@
               "target": "regex_lite"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -1328,6 +1329,239 @@
         "MIT"
       ],
       "license_file": "LICENSE-APACHE"
+    },
+    "actix-web-lab 0.23.0": {
+      "name": "actix-web-lab",
+      "version": "0.23.0",
+      "package_url": "https://github.com/robjtede/actix-web-lab",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/actix-web-lab/0.23.0/download",
+          "sha256": "ee75923689132fc5fb57ccc5bb98d25bb214796a29cd505844eb3b42daf11df0"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "actix_web_lab",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "actix_web_lab",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "actix-web-lab-derive",
+            "default",
+            "derive"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "actix-http 3.9.0",
+              "target": "actix_http"
+            },
+            {
+              "id": "actix-router 0.5.3",
+              "target": "actix_router"
+            },
+            {
+              "id": "actix-service 2.0.2",
+              "target": "actix_service"
+            },
+            {
+              "id": "actix-utils 3.0.1",
+              "target": "actix_utils"
+            },
+            {
+              "id": "actix-web 4.9.0",
+              "target": "actix_web"
+            },
+            {
+              "id": "ahash 0.8.11",
+              "target": "ahash"
+            },
+            {
+              "id": "arc-swap 1.7.1",
+              "target": "arc_swap"
+            },
+            {
+              "id": "bytes 1.9.0",
+              "target": "bytes"
+            },
+            {
+              "id": "bytestring 1.4.0",
+              "target": "bytestring"
+            },
+            {
+              "id": "csv 1.4.0",
+              "target": "csv"
+            },
+            {
+              "id": "derive_more 1.0.0",
+              "target": "derive_more"
+            },
+            {
+              "id": "form_urlencoded 1.2.1",
+              "target": "form_urlencoded"
+            },
+            {
+              "id": "futures-core 0.3.31",
+              "target": "futures_core"
+            },
+            {
+              "id": "futures-util 0.3.31",
+              "target": "futures_util"
+            },
+            {
+              "id": "http 0.2.12",
+              "target": "http"
+            },
+            {
+              "id": "impl-more 0.1.9",
+              "target": "impl_more"
+            },
+            {
+              "id": "itertools 0.13.0",
+              "target": "itertools"
+            },
+            {
+              "id": "local-channel 0.1.5",
+              "target": "local_channel"
+            },
+            {
+              "id": "mediatype 0.19.20",
+              "target": "mediatype"
+            },
+            {
+              "id": "mime 0.3.17",
+              "target": "mime"
+            },
+            {
+              "id": "pin-project-lite 0.2.16",
+              "target": "pin_project_lite"
+            },
+            {
+              "id": "regex 1.11.1",
+              "target": "regex"
+            },
+            {
+              "id": "serde 1.0.228",
+              "target": "serde"
+            },
+            {
+              "id": "serde_html_form 0.2.8",
+              "target": "serde_html_form"
+            },
+            {
+              "id": "serde_json 1.0.134",
+              "target": "serde_json"
+            },
+            {
+              "id": "serde_path_to_error 0.1.20",
+              "target": "serde_path_to_error"
+            },
+            {
+              "id": "tokio 1.45.1",
+              "target": "tokio"
+            },
+            {
+              "id": "tokio-stream 0.1.17",
+              "target": "tokio_stream"
+            },
+            {
+              "id": "tracing 0.1.41",
+              "target": "tracing"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "proc_macro_deps": {
+          "common": [
+            {
+              "id": "actix-web-lab-derive 0.23.0",
+              "target": "actix_web_lab_derive"
+            }
+          ],
+          "selects": {}
+        },
+        "version": "0.23.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "actix-web-lab-derive 0.23.0": {
+      "name": "actix-web-lab-derive",
+      "version": "0.23.0",
+      "package_url": "https://github.com/robjtede/actix-web-lab",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/actix-web-lab-derive/0.23.0/download",
+          "sha256": "4c221da13534b9352f3f79fcbbd6095f6d8aee63bdf1da8a73d36f9eeea17d5a"
+        }
+      },
+      "targets": [
+        {
+          "ProcMacro": {
+            "crate_name": "actix_web_lab_derive",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "actix_web_lab_derive",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "proc-macro2 1.0.92",
+              "target": "proc_macro2"
+            },
+            {
+              "id": "quote 1.0.37",
+              "target": "quote"
+            },
+            {
+              "id": "syn 2.0.91",
+              "target": "syn"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.23.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": null
     },
     "actix-ws 0.3.0": {
       "name": "actix-ws",
@@ -1996,6 +2230,45 @@
         "data_glob": [
           "**"
         ]
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "arc-swap 1.7.1": {
+      "name": "arc-swap",
+      "version": "1.7.1",
+      "package_url": "https://github.com/vorner/arc-swap",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/arc-swap/1.7.1/download",
+          "sha256": "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "arc_swap",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "arc_swap",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2018",
+        "version": "1.7.1"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -2948,7 +3221,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -3912,7 +4185,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -4105,7 +4378,7 @@
               "target": "ini"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -4190,7 +4463,7 @@
               "target": "pathdiff"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -4939,7 +5212,7 @@
               "target": "publicsuffix"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -4965,7 +5238,7 @@
               "target": "document_features"
             },
             {
-              "id": "serde_derive 1.0.216",
+              "id": "serde_derive 1.0.228",
               "target": "serde_derive"
             }
           ],
@@ -5474,6 +5747,120 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "csv 1.4.0": {
+      "name": "csv",
+      "version": "1.4.0",
+      "package_url": "https://github.com/BurntSushi/rust-csv",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/csv/1.4.0/download",
+          "sha256": "52cd9d68cf7efc6ddfaaee42e7288d3a99d613d4b50f76ce9827ae0c6e14f938"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "csv",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "csv",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "csv-core 0.1.13",
+              "target": "csv_core"
+            },
+            {
+              "id": "itoa 1.0.14",
+              "target": "itoa"
+            },
+            {
+              "id": "ryu 1.0.18",
+              "target": "ryu"
+            },
+            {
+              "id": "serde_core 1.0.228",
+              "target": "serde_core"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "1.4.0"
+      },
+      "license": "Unlicense/MIT",
+      "license_ids": [
+        "MIT",
+        "Unlicense"
+      ],
+      "license_file": "LICENSE-MIT"
+    },
+    "csv-core 0.1.13": {
+      "name": "csv-core",
+      "version": "0.1.13",
+      "package_url": "https://github.com/BurntSushi/rust-csv",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/csv-core/0.1.13/download",
+          "sha256": "704a3c26996a80471189265814dbc2c257598b96b8a7feae2d31ace646bb9782"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "csv_core",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "csv_core",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "memchr 2.7.4",
+              "target": "memchr"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2018",
+        "version": "0.1.13"
+      },
+      "license": "Unlicense/MIT",
+      "license_ids": [
+        "MIT",
+        "Unlicense"
+      ],
+      "license_file": "LICENSE-MIT"
+    },
     "darling 0.20.10": {
       "name": "darling",
       "version": "0.20.10",
@@ -5935,6 +6322,129 @@
       ],
       "license_file": "LICENSE"
     },
+    "derive_more 1.0.0": {
+      "name": "derive_more",
+      "version": "1.0.0",
+      "package_url": "https://github.com/JelteF/derive_more",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/derive_more/1.0.0/download",
+          "sha256": "4a9b99b9cbbe49445b21764dc0625032a89b145a2642e67603e1c936f5458d05"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "derive_more",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "derive_more",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "display",
+            "error",
+            "std"
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "proc_macro_deps": {
+          "common": [
+            {
+              "id": "derive_more-impl 1.0.0",
+              "target": "derive_more_impl"
+            }
+          ],
+          "selects": {}
+        },
+        "version": "1.0.0"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
+    "derive_more-impl 1.0.0": {
+      "name": "derive_more-impl",
+      "version": "1.0.0",
+      "package_url": "https://github.com/JelteF/derive_more",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/derive_more-impl/1.0.0/download",
+          "sha256": "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
+        }
+      },
+      "targets": [
+        {
+          "ProcMacro": {
+            "crate_name": "derive_more_impl",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "derive_more_impl",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "display",
+            "error"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "proc-macro2 1.0.92",
+              "target": "proc_macro2"
+            },
+            {
+              "id": "quote 1.0.37",
+              "target": "quote"
+            },
+            {
+              "id": "syn 2.0.91",
+              "target": "syn"
+            },
+            {
+              "id": "unicode-xid 0.2.6",
+              "target": "unicode_xid"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "1.0.0"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
     "digest 0.10.7": {
       "name": "digest",
       "version": "0.10.7",
@@ -6036,6 +6546,10 @@
               "target": "actix_web"
             },
             {
+              "id": "actix-web-lab 0.23.0",
+              "target": "actix_web_lab"
+            },
+            {
               "id": "anyhow 1.0.95",
               "target": "anyhow"
             },
@@ -6100,7 +6614,7 @@
               "target": "rustls"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -6118,6 +6632,10 @@
             {
               "id": "tokio 1.45.1",
               "target": "tokio"
+            },
+            {
+              "id": "tokio-stream 0.1.17",
+              "target": "tokio_stream"
             },
             {
               "id": "tracing 0.1.41",
@@ -8190,7 +8708,7 @@
               "target": "pin_project"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -8268,7 +8786,7 @@
               "target": "js_sys"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -9194,7 +9712,7 @@
               "target": "pin_project_lite"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -10829,6 +11347,62 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "itertools 0.13.0": {
+      "name": "itertools",
+      "version": "0.13.0",
+      "package_url": "https://github.com/rust-itertools/itertools",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/itertools/0.13.0/download",
+          "sha256": "413ee7dfc52ee1a4949ceeb7dbc8a33f2d6c088194d9f922fb8318faf1f01186"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "itertools",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "itertools",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "use_alloc",
+            "use_std"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "either 1.13.0",
+              "target": "either"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2018",
+        "version": "0.13.0"
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
     "itertools 0.14.0": {
       "name": "itertools",
       "version": "0.14.0",
@@ -11069,7 +11643,7 @@
               "target": "pest"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -11298,7 +11872,7 @@
               "target": "send_wrapper"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -11547,7 +12121,7 @@
               "target": "regex"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -11708,7 +12282,7 @@
               "target": "rstml"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -12321,7 +12895,7 @@
               "target": "send_wrapper"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -13076,6 +13650,44 @@
         },
         "edition": "2018",
         "version": "0.2.0"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
+    "mediatype 0.19.20": {
+      "name": "mediatype",
+      "version": "0.19.20",
+      "package_url": "https://github.com/picoHz/mediatype",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/mediatype/0.19.20/download",
+          "sha256": "33746aadcb41349ec291e7f2f0a3aa6834d1d7c58066fb4b01f68efc4c4b7631"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "mediatype",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "mediatype",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "edition": "2021",
+        "version": "0.19.20"
       },
       "license": "MIT",
       "license_ids": [
@@ -13915,7 +14527,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -16649,7 +17261,7 @@
               "target": "send_wrapper"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -17236,7 +17848,7 @@
               "target": "mime_guess"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -19290,7 +19902,7 @@
               "target": "bitflags"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -19300,7 +19912,7 @@
         "proc_macro_deps": {
           "common": [
             {
-              "id": "serde_derive 1.0.216",
+              "id": "serde_derive 1.0.228",
               "target": "serde_derive"
             }
           ],
@@ -21537,14 +22149,14 @@
       ],
       "license_file": "LICENSE-APACHE.txt"
     },
-    "serde 1.0.216": {
+    "serde 1.0.228": {
       "name": "serde",
-      "version": "1.0.216",
+      "version": "1.0.228",
       "package_url": "https://github.com/serde-rs/serde",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/serde/1.0.216/download",
-          "sha256": "0b9781016e935a97e8beecf0c933758c97a5520d32930e460142b4cd80c6338e"
+          "url": "https://static.crates.io/crates/serde/1.0.228/download",
+          "sha256": "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e"
         }
       },
       "targets": [
@@ -21591,23 +22203,27 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "build_script_build"
+            },
+            {
+              "id": "serde_core 1.0.228",
+              "target": "serde_core"
             }
           ],
           "selects": {}
         },
-        "edition": "2018",
+        "edition": "2021",
         "proc_macro_deps": {
           "common": [
             {
-              "id": "serde_derive 1.0.216",
+              "id": "serde_derive 1.0.228",
               "target": "serde_derive"
             }
           ],
           "selects": {}
         },
-        "version": "1.0.216"
+        "version": "1.0.228"
       },
       "build_script_attrs": {
         "compile_data_glob": [
@@ -21667,7 +22283,7 @@
               "target": "chrono"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -21686,14 +22302,103 @@
       ],
       "license_file": "LICENSE"
     },
-    "serde_derive 1.0.216": {
-      "name": "serde_derive",
-      "version": "1.0.216",
+    "serde_core 1.0.228": {
+      "name": "serde_core",
+      "version": "1.0.228",
       "package_url": "https://github.com/serde-rs/serde",
       "repository": {
         "Http": {
-          "url": "https://static.crates.io/crates/serde_derive/1.0.216/download",
-          "sha256": "46f859dbbf73865c6627ed570e78961cd3ac92407a2d117204c49232485da55e"
+          "url": "https://static.crates.io/crates/serde_core/1.0.228/download",
+          "sha256": "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "serde_core",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        },
+        {
+          "BuildScript": {
+            "crate_name": "build_script_build",
+            "crate_root": "build.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "serde_core",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "alloc",
+            "default",
+            "rc",
+            "result",
+            "std"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "serde_core 1.0.228",
+              "target": "build_script_build"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "proc_macro_deps": {
+          "common": [],
+          "selects": {
+            "cfg(any())": [
+              {
+                "id": "serde_derive 1.0.228",
+                "target": "serde_derive"
+              }
+            ]
+          }
+        },
+        "version": "1.0.228"
+      },
+      "build_script_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "data_glob": [
+          "**"
+        ]
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "serde_derive 1.0.228": {
+      "name": "serde_derive",
+      "version": "1.0.228",
+      "package_url": "https://github.com/serde-rs/serde",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/serde_derive/1.0.228/download",
+          "sha256": "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79"
         }
       },
       "targets": [
@@ -21738,8 +22443,8 @@
           ],
           "selects": {}
         },
-        "edition": "2015",
-        "version": "1.0.216"
+        "edition": "2021",
+        "version": "1.0.228"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -21747,6 +22452,76 @@
         "MIT"
       ],
       "license_file": "LICENSE-APACHE"
+    },
+    "serde_html_form 0.2.8": {
+      "name": "serde_html_form",
+      "version": "0.2.8",
+      "package_url": "https://github.com/jplatte/serde_html_form",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/serde_html_form/0.2.8/download",
+          "sha256": "b2f2d7ff8a2140333718bb329f5c40fc5f0865b84c426183ce14c97d2ab8154f"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "serde_html_form",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "serde_html_form",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "ryu"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "form_urlencoded 1.2.1",
+              "target": "form_urlencoded"
+            },
+            {
+              "id": "indexmap 2.7.0",
+              "target": "indexmap"
+            },
+            {
+              "id": "itoa 1.0.14",
+              "target": "itoa"
+            },
+            {
+              "id": "ryu 1.0.18",
+              "target": "ryu"
+            },
+            {
+              "id": "serde_core 1.0.228",
+              "target": "serde_core"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.2.8"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
     },
     "serde_json 1.0.134": {
       "name": "serde_json",
@@ -21811,7 +22586,7 @@
               "target": "ryu"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -21831,6 +22606,65 @@
         "data_glob": [
           "**"
         ]
+      },
+      "license": "MIT OR Apache-2.0",
+      "license_ids": [
+        "Apache-2.0",
+        "MIT"
+      ],
+      "license_file": "LICENSE-APACHE"
+    },
+    "serde_path_to_error 0.1.20": {
+      "name": "serde_path_to_error",
+      "version": "0.1.20",
+      "package_url": "https://github.com/dtolnay/path-to-error",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/serde_path_to_error/0.1.20/download",
+          "sha256": "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "serde_path_to_error",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "serde_path_to_error",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "deps": {
+          "common": [
+            {
+              "id": "itoa 1.0.14",
+              "target": "itoa"
+            },
+            {
+              "id": "serde_core 1.0.228",
+              "target": "serde_core"
+            }
+          ],
+          "selects": {
+            "cfg(any())": [
+              {
+                "id": "serde 1.0.228",
+                "target": "serde"
+              }
+            ]
+          }
+        },
+        "edition": "2021",
+        "version": "0.1.20"
       },
       "license": "MIT OR Apache-2.0",
       "license_ids": [
@@ -21871,7 +22705,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -21929,7 +22763,7 @@
               "target": "percent_encoding"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -21987,7 +22821,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -22047,7 +22881,7 @@
               "target": "ryu"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -22177,7 +23011,7 @@
               "target": "send_wrapper"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -25586,6 +26420,68 @@
       ],
       "license_file": "LICENSE-APACHE"
     },
+    "tokio-stream 0.1.17": {
+      "name": "tokio-stream",
+      "version": "0.1.17",
+      "package_url": "https://github.com/tokio-rs/tokio",
+      "repository": {
+        "Http": {
+          "url": "https://static.crates.io/crates/tokio-stream/0.1.17/download",
+          "sha256": "eca58d7bba4a75707817a2c44174253f9236b2d5fbd055602e9d5c07c139a047"
+        }
+      },
+      "targets": [
+        {
+          "Library": {
+            "crate_name": "tokio_stream",
+            "crate_root": "src/lib.rs",
+            "srcs": {
+              "allow_empty": true,
+              "include": [
+                "**/*.rs"
+              ]
+            }
+          }
+        }
+      ],
+      "library_target_name": "tokio_stream",
+      "common_attrs": {
+        "compile_data_glob": [
+          "**"
+        ],
+        "crate_features": {
+          "common": [
+            "default",
+            "time"
+          ],
+          "selects": {}
+        },
+        "deps": {
+          "common": [
+            {
+              "id": "futures-core 0.3.31",
+              "target": "futures_core"
+            },
+            {
+              "id": "pin-project-lite 0.2.16",
+              "target": "pin_project_lite"
+            },
+            {
+              "id": "tokio 1.45.1",
+              "target": "tokio"
+            }
+          ],
+          "selects": {}
+        },
+        "edition": "2021",
+        "version": "0.1.17"
+      },
+      "license": "MIT",
+      "license_ids": [
+        "MIT"
+      ],
+      "license_file": "LICENSE"
+    },
     "tokio-util 0.7.13": {
       "name": "tokio-util",
       "version": "0.7.13",
@@ -25697,7 +26593,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -25763,7 +26659,7 @@
         "deps": {
           "common": [
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             }
           ],
@@ -25823,7 +26719,7 @@
               "target": "indexmap"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -26141,7 +27037,7 @@
               "target": "log"
             },
             {
-              "id": "serde 1.0.216",
+              "id": "serde 1.0.228",
               "target": "serde"
             },
             {
@@ -30832,6 +31728,7 @@
       "x86_64-unknown-linux-gnu",
       "x86_64-unknown-nixos-gnu"
     ],
+    "cfg(any())": [],
     "cfg(any(target_arch = \"aarch64\", target_arch = \"x86\", target_arch = \"x86_64\"))": [
       "aarch64-apple-darwin",
       "aarch64-apple-ios",
@@ -31189,6 +32086,7 @@
     "actix-files 0.6.6",
     "actix-multipart 0.6.2",
     "actix-web 4.9.0",
+    "actix-web-lab 0.23.0",
     "anyhow 1.0.95",
     "base64 0.22.1",
     "cfg-if 1.0.0",
@@ -31205,11 +32103,12 @@
     "reqwest 0.12.9",
     "ring 0.17.14",
     "rustls 0.23.20",
-    "serde 1.0.216",
+    "serde 1.0.228",
     "serde-aux 4.5.0",
     "serde_json 1.0.134",
     "thiserror 1.0.69",
     "tokio 1.45.1",
+    "tokio-stream 0.1.17",
     "tracing 0.1.41",
     "tracing-actix-web 0.7.15",
     "tracing-bunyan-formatter 0.3.10",

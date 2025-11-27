@@ -64,6 +64,9 @@ crates_repository(
                 "rustls-0_23",
             ],
         ),
+        "actix-web-lab": crate.spec(
+            version = "0.23",
+        ),
         "base64": crate.spec(
             version = "0.22.1",
         ),
@@ -139,7 +142,11 @@ crates_repository(
         ),
        "tokio": crate.spec(
             version = "1",
-            features = ["macros", "rt-multi-thread"]
+            features = ["macros", "rt-multi-thread", "time"]
+        ),
+       "tokio-stream": crate.spec(
+            version = "0.1",
+            features = ["time"]
         ),
        "tracing": crate.spec(
             version = "0.1.19",

@@ -17,8 +17,8 @@ pub struct PrometheusResult {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PrometheusMetric {
-    metric: std::collections::HashMap<String, String>,
-    value: (f64, String),
+    pub metric: std::collections::HashMap<String, String>,
+    pub value: (f64, String),
 }
 
 #[cfg(feature = "ssr")]
