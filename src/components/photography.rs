@@ -46,9 +46,10 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         }
 
         let name = &file.name;
+        let name_lower = name.to_lowercase();
 
-        // Only include image and video files
-        if name.ends_with(".webp") || name.ends_with(".jpg") || name.ends_with(".png") || name.ends_with(".mp4") {
+        // Only include image and video files (case-insensitive)
+        if name_lower.ends_with(".webp") || name_lower.ends_with(".jpg") || name_lower.ends_with(".png") || name_lower.ends_with(".mp4") {
             // Validate that the path doesn't contain directory traversal attempts
             if !name.contains("..") && !name.starts_with('/') {
                 let full_url = format!("https://caddy.jaydanhoward.com/data/{}", name);
@@ -99,7 +100,7 @@ pub fn Photography() -> impl IntoView {
                                                         >
                                                             <div class="aspect-square overflow-hidden bg-border">
                                                                 {
-                                                                    if src.ends_with(".mp4") {
+                                                                    if src.to_lowercase().ends_with(".mp4") {
                                                                         view! {
                                                                             <video
                                                                                 src=src.clone()
@@ -152,7 +153,7 @@ pub fn Photography() -> impl IntoView {
                                                                 "×"
                                                             </button>
                                                             {
-                                                                if src.ends_with(".mp4") {
+                                                                if src.to_lowercase().ends_with(".mp4") {
                                                                     view! {
                                                                         <video
                                                                             src=src.clone()
