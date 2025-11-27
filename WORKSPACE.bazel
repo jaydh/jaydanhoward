@@ -125,9 +125,6 @@ crates_repository(
         "rustls": crate.spec(
             version = "0.23",
         ),
-        "scraper": crate.spec(
-            version = "0.20.0",
-        ),
         "serde": crate.spec(
             version = "1.0.183",
         ),
