@@ -3,7 +3,13 @@ use leptos::prelude::*;
 
 #[server]
 pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
-    use scraper::{Html, Selector};
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct FileItem {
+        name: String,
+        is_dir: bool,
+    }
 
     // Create a client with a 10-second timeout to prevent hanging requests
     let client = reqwest::Client::builder()
@@ -16,49 +22,43 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
 
     let response = client
         .get("https://caddy.jaydanhoward.com/data/")
+        .header("Accept", "application/json")
         .send()
         .await
         .map_err(|e| {
-            tracing::error!("Failed to fetch images from caddy: {}", e);
-            ServerFnError::ServerError("Failed to fetch images".to_string())
+            tracing::error!("Failed to fetch files from caddy: {}", e);
+            ServerFnError::ServerError("Failed to fetch files".to_string())
         })?;
 
-    let html_content = response.text()
+    let files: Vec<FileItem> = response.json()
         .await
         .map_err(|e| {
-            tracing::error!("Failed to parse response from caddy: {}", e);
+            tracing::error!("Failed to parse JSON response from caddy: {}", e);
             ServerFnError::ServerError("Failed to parse response".to_string())
         })?;
 
-    // Parse HTML using scraper for safe, robust parsing
-    let document = Html::parse_document(&html_content);
+    let mut media_files = Vec::new();
 
-    // Select all anchor tags
-    let selector = Selector::parse("a").map_err(|e| {
-        tracing::error!("Failed to create CSS selector: {}", e);
-        ServerFnError::ServerError("Failed to parse HTML".to_string())
-    })?;
+    for file in files {
+        // Skip directories
+        if file.is_dir {
+            continue;
+        }
 
-    let mut images = Vec::new();
+        let name = &file.name;
 
-    for element in document.select(&selector) {
-        if let Some(href) = element.value().attr("href") {
-            // Only include image and video files
-            if href.ends_with(".webp") || href.ends_with(".jpg") || href.ends_with(".png") || href.ends_with(".mp4") {
-                // Strip leading ./ if present
-                let clean_path = href.strip_prefix("./").unwrap_or(href);
-
-                // Validate that the path doesn't contain directory traversal attempts
-                if !clean_path.contains("..") && !clean_path.starts_with('/') {
-                    let full_url = format!("https://caddy.jaydanhoward.com/data/{}", clean_path);
-                    images.push(full_url);
-                }
+        // Only include image and video files
+        if name.ends_with(".webp") || name.ends_with(".jpg") || name.ends_with(".png") || name.ends_with(".mp4") {
+            // Validate that the path doesn't contain directory traversal attempts
+            if !name.contains("..") && !name.starts_with('/') {
+                let full_url = format!("https://caddy.jaydanhoward.com/data/{}", name);
+                media_files.push(full_url);
             }
         }
     }
 
-    tracing::info!("Successfully fetched {} images from caddy", images.len());
-    Ok(images)
+    tracing::info!("Successfully fetched {} media files from caddy", media_files.len());
+    Ok(media_files)
 }
 
 #[component]
