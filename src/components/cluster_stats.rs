@@ -12,6 +12,7 @@ pub struct ClusterMetrics {
     pub disk_total_gb: f64,
     pub pod_count: u32,
     pub node_count: u32,
+    pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
 }
@@ -77,6 +78,11 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         "count(kube_node_info)"
     ).await? as u32;
 
+    // Healthy node count (nodes in Ready state)
+    let healthy_node_count = parse_prometheus_value(
+        "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
+    ).await? as u32;
+
     // Network metrics (convert bytes/sec to Mbps)
     let network_rx = parse_prometheus_value(
         "sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000 / 1000"
@@ -94,6 +100,7 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         disk_total_gb: disk_total,
         pod_count,
         node_count,
+        healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
     })
@@ -175,39 +182,96 @@ pub async fn get_node_metrics() -> Result<Vec<NodeMetric>, ServerFnError<String>
     Ok(nodes.into_values().collect())
 }
 
-#[component]
-fn MetricCard(
-    title: &'static str,
-    value: String,
-    subtitle: String,
-    #[prop(default = None)] percentage: Option<f64>,
-) -> impl IntoView {
-    view! {
-        <div class="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-            <h3 class="text-sm font-medium text-gray-500 uppercase tracking-wide">{title}</h3>
-            <div class="mt-2">
-                <p class="text-3xl font-bold text-charcoal">{value}</p>
-                <p class="text-sm text-gray-600 mt-1">{subtitle}</p>
-            </div>
-            {percentage.map(|pct| {
-                let bar_width = format!("{}%", pct);
-                let color_class = if pct > 90.0 {
-                    "bg-red-500"
-                } else if pct > 75.0 {
-                    "bg-yellow-500"
-                } else {
-                    "bg-green-500"
-                };
-                view! {
-                    <div class="mt-3">
-                        <div class="w-full bg-gray-200 rounded-full h-2">
-                            <div class={format!("h-2 rounded-full {}", color_class)} style={format!("width: {}", bar_width)}></div>
-                        </div>
-                    </div>
-                }
-            })}
-        </div>
-    }
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HistoricalMetrics {
+    pub cpu_history: Vec<f64>,
+    pub memory_history: Vec<f64>,
+    pub disk_history: Vec<f64>,
+    pub network_rx_history: Vec<f64>,
+    pub network_tx_history: Vec<f64>,
+}
+
+#[server(GetHistoricalMetrics, "/api")]
+pub async fn get_historical_metrics() -> Result<HistoricalMetrics, ServerFnError<String>> {
+    use crate::prometheus_client::query_prometheus_range;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| ServerFnError::ServerError(format!("Time error: {}", e)))?
+        .as_secs() as i64;
+
+    let twenty_four_hours_ago = now - (24 * 3600);
+    let step = "10m"; // 10 minute intervals for 24 hours = 144 points
+
+    // Query historical CPU usage
+    let cpu_data = query_prometheus_range(
+        "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m])) / sum(machine_cpu_cores) * 100",
+        twenty_four_hours_ago,
+        now,
+        step,
+    ).await.map_err(|e| ServerFnError::ServerError(format!("CPU query failed: {}", e)))?;
+
+    // Query historical memory usage
+    let memory_data = query_prometheus_range(
+        "sum(container_memory_working_set_bytes{container!=\"\"}) / sum(machine_memory_bytes) * 100",
+        twenty_four_hours_ago,
+        now,
+        step,
+    ).await.map_err(|e| ServerFnError::ServerError(format!("Memory query failed: {}", e)))?;
+
+    // Query historical disk usage
+    let disk_data = query_prometheus_range(
+        "sum(kubelet_volume_stats_used_bytes) / sum(kubelet_volume_stats_capacity_bytes) * 100",
+        twenty_four_hours_ago,
+        now,
+        step,
+    ).await.map_err(|e| ServerFnError::ServerError(format!("Disk query failed: {}", e)))?;
+
+    // Query historical network RX
+    let network_rx_data = query_prometheus_range(
+        "sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000 / 1000",
+        twenty_four_hours_ago,
+        now,
+        step,
+    ).await.map_err(|e| ServerFnError::ServerError(format!("Network RX query failed: {}", e)))?;
+
+    // Query historical network TX
+    let network_tx_data = query_prometheus_range(
+        "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000",
+        twenty_four_hours_ago,
+        now,
+        step,
+    ).await.map_err(|e| ServerFnError::ServerError(format!("Network TX query failed: {}", e)))?;
+
+    // Extract values from responses
+    let cpu_history: Vec<f64> = cpu_data.data.result.first()
+        .map(|m| m.values.iter().map(|(_, v)| v.parse().unwrap_or(0.0)).collect())
+        .unwrap_or_default();
+
+    let memory_history: Vec<f64> = memory_data.data.result.first()
+        .map(|m| m.values.iter().map(|(_, v)| v.parse().unwrap_or(0.0)).collect())
+        .unwrap_or_default();
+
+    let disk_history: Vec<f64> = disk_data.data.result.first()
+        .map(|m| m.values.iter().map(|(_, v)| v.parse().unwrap_or(0.0)).collect())
+        .unwrap_or_default();
+
+    let network_rx_history: Vec<f64> = network_rx_data.data.result.first()
+        .map(|m| m.values.iter().map(|(_, v)| v.parse().unwrap_or(0.0)).collect())
+        .unwrap_or_default();
+
+    let network_tx_history: Vec<f64> = network_tx_data.data.result.first()
+        .map(|m| m.values.iter().map(|(_, v)| v.parse().unwrap_or(0.0)).collect())
+        .unwrap_or_default();
+
+    Ok(HistoricalMetrics {
+        cpu_history,
+        memory_history,
+        disk_history,
+        network_rx_history,
+        network_tx_history,
+    })
 }
 
 #[component]
@@ -255,12 +319,63 @@ pub struct MetricsUpdate {
 
 #[component]
 pub fn ClusterStats() -> impl IntoView {
+    use std::collections::VecDeque;
+
     let (cluster_metrics, set_cluster_metrics) = signal(None::<ClusterMetrics>);
     let (node_metrics, set_node_metrics) = signal(Vec::<NodeMetric>::new());
+
+    // Historical data for charts
+    // Dual-window approach: 144 historical points (24 hours at 10-min intervals) + rolling real-time updates
+    // When live metrics arrive, they append to history; old points are dropped once we exceed capacity
+
+    // Note: setters are used in closures below, but Rust can't see through the .forget() pattern
+    #[allow(unused_variables)]
+    let (cpu_history, set_cpu_history) = signal(VecDeque::<f64>::with_capacity(144));
+    #[allow(unused_variables)]
+    let (memory_history, set_memory_history) = signal(VecDeque::<f64>::with_capacity(144));
+    #[allow(unused_variables)]
+    let (disk_history, set_disk_history) = signal(VecDeque::<f64>::with_capacity(144));
+    #[allow(unused_variables)]
+    let (network_rx_history, set_network_rx_history) = signal(VecDeque::<f64>::with_capacity(144));
+    #[allow(unused_variables)]
+    let (network_tx_history, set_network_tx_history) = signal(VecDeque::<f64>::with_capacity(144));
+
     // Note: set_error is used in closures below, but Rust can't see through
     // the .forget() pattern required for WASM event handlers
     #[allow(unused_variables)]
     let (error, set_error) = signal(None::<String>);
+
+    // Fetch historical data on mount
+    Effect::new(move |_| {
+        leptos::task::spawn_local(async move {
+            match get_historical_metrics().await {
+                Ok(historical) => {
+                    // Populate historical data
+                    set_cpu_history.update(|h| {
+                        *h = historical.cpu_history.into_iter().collect();
+                    });
+                    set_memory_history.update(|h| {
+                        *h = historical.memory_history.into_iter().collect();
+                    });
+                    set_disk_history.update(|h| {
+                        *h = historical.disk_history.into_iter().collect();
+                    });
+                    set_network_rx_history.update(|h| {
+                        *h = historical.network_rx_history.into_iter().collect();
+                    });
+                    set_network_tx_history.update(|h| {
+                        *h = historical.network_tx_history.into_iter().collect();
+                    });
+                }
+                Err(e) => {
+                    #[cfg(feature = "ssr")]
+                    tracing::error!("Failed to fetch historical metrics: {:?}", e);
+                    #[cfg(not(feature = "ssr"))]
+                    web_sys::console::error_1(&format!("Failed to fetch historical metrics: {:?}", e).into());
+                }
+            }
+        });
+    });
 
     // Set up SSE connection on client side only
     #[cfg(not(feature = "ssr"))]
@@ -276,8 +391,33 @@ pub fn ClusterStats() -> impl IntoView {
                 if let Some(data) = e.data().as_string() {
                     match serde_json::from_str::<MetricsUpdate>(&data) {
                         Ok(update) => {
-                            if let Some(cluster) = update.cluster {
-                                set_cluster_metrics.set(Some(cluster));
+                            if let Some(cluster) = update.cluster.clone() {
+                                // Update current metrics
+                                set_cluster_metrics.set(Some(cluster.clone()));
+
+                                // Update historical data (store every data point, limit to 144 points total)
+                                set_cpu_history.update(|h| {
+                                    if h.len() >= 144 { h.pop_front(); }
+                                    h.push_back(cluster.cpu_usage_percent);
+                                });
+                                set_memory_history.update(|h| {
+                                    if h.len() >= 144 { h.pop_front(); }
+                                    let mem_pct = (cluster.memory_usage_gb / cluster.memory_total_gb * 100.0).min(100.0);
+                                    h.push_back(mem_pct);
+                                });
+                                set_disk_history.update(|h| {
+                                    if h.len() >= 144 { h.pop_front(); }
+                                    let disk_pct = (cluster.disk_usage_gb / cluster.disk_total_gb * 100.0).min(100.0);
+                                    h.push_back(disk_pct);
+                                });
+                                set_network_rx_history.update(|h| {
+                                    if h.len() >= 144 { h.pop_front(); }
+                                    h.push_back(cluster.network_rx_mbps);
+                                });
+                                set_network_tx_history.update(|h| {
+                                    if h.len() >= 144 { h.pop_front(); }
+                                    h.push_back(cluster.network_tx_mbps);
+                                });
                             }
                             set_node_metrics.set(update.nodes);
                             set_error.set(None);
@@ -351,47 +491,48 @@ pub fn ClusterStats() -> impl IntoView {
             }}
 
             {move || {
-                if let Some(m) = cluster_metrics.get() {
-                    let cpu_pct = m.cpu_usage_percent;
-                    let mem_pct = (m.memory_usage_gb / m.memory_total_gb * 100.0).min(100.0);
-                    let disk_pct = (m.disk_usage_gb / m.disk_total_gb * 100.0).min(100.0);
+                if let Some(cluster) = cluster_metrics.get() {
+                    let cpu_hist = cpu_history.get().iter().copied().collect::<Vec<_>>();
+                    let mem_hist = memory_history.get().iter().copied().collect::<Vec<_>>();
+                    let disk_hist = disk_history.get().iter().copied().collect::<Vec<_>>();
+                    let rx_hist = network_rx_history.get().iter().copied().collect::<Vec<_>>();
+                    let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
 
                     view! {
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                            <MetricCard
-                                title="CPU"
-                                value=format!("{:.1}%", cpu_pct)
-                                subtitle=format!("{:.1} cores total", m.cpu_total_cores)
-                                percentage=Some(cpu_pct)
+                        <div class="grid grid-cols-2 gap-4 mb-6">
+                            <div class="bg-white p-4 rounded-lg shadow text-center">
+                                <div class="text-3xl font-bold text-blue-600">{cluster.pod_count}</div>
+                                <div class="text-sm text-gray-600">"Pods Running"</div>
+                            </div>
+                            <div class="bg-white p-4 rounded-lg shadow text-center">
+                                <div class="text-3xl font-bold text-green-600">
+                                    {cluster.healthy_node_count} "/" {cluster.node_count}
+                                </div>
+                                <div class="text-sm text-gray-600">"Healthy Nodes"</div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                            <LineChart
+                                data=cpu_hist
+                                title="CPU Usage".to_string()
+                                color="#ef4444".to_string()
                             />
-                            <MetricCard
-                                title="Memory"
-                                value=format!("{:.1} GB", m.memory_usage_gb)
-                                subtitle=format!("{:.1} GB total", m.memory_total_gb)
-                                percentage=Some(mem_pct)
+                            <LineChart
+                                data=mem_hist
+                                title="Memory Usage".to_string()
+                                color="#3b82f6".to_string()
                             />
-                            <MetricCard
-                                title="Storage"
-                                value=format!("{:.1} GB", m.disk_usage_gb)
-                                subtitle=format!("{:.1} GB total", m.disk_total_gb)
-                                percentage=Some(disk_pct)
-                            />
-                            <MetricCard
-                                title="Pods"
-                                value=format!("{}", m.pod_count)
-                                subtitle=format!("{} nodes", m.node_count)
+                            <LineChart
+                                data=disk_hist
+                                title="Storage Usage".to_string()
+                                color="#8b5cf6".to_string()
                             />
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <MetricCard
-                                title="Network In"
-                                value=format!("{:.2} Mbps", m.network_rx_mbps)
-                                subtitle="Average over 5m".to_string()
-                            />
-                            <MetricCard
-                                title="Network Out"
-                                value=format!("{:.2} Mbps", m.network_tx_mbps)
-                                subtitle="Average over 5m".to_string()
+                        <div class="grid grid-cols-1 gap-4 mb-6">
+                            <StackedAreaChart
+                                data_rx=rx_hist
+                                data_tx=tx_hist
+                                title="Network Traffic".to_string()
                             />
                         </div>
                     }.into_any()
@@ -423,6 +564,150 @@ pub fn ClusterStats() -> impl IntoView {
                     view! { <div></div> }.into_any()
                 }
             }}
+        </div>
+    }
+}
+
+#[component]
+fn LineChart(
+    data: Vec<f64>,
+    title: String,
+    color: String,
+    #[prop(default = "%".to_string())] unit: String,
+) -> impl IntoView {
+    let max_val = data.iter().cloned().fold(0.0f64, f64::max).max(1.0);
+    let min_val = data.iter().cloned().fold(100.0f64, f64::min).min(0.0);
+    let range = (max_val - min_val).max(1.0);
+
+    let points: Vec<(f64, f64)> = data
+        .iter()
+        .enumerate()
+        .map(|(i, &val)| {
+            let x = (i as f64 / (data.len() - 1).max(1) as f64) * 100.0;
+            let y = 100.0 - ((val - min_val) / range * 100.0);
+            (x, y)
+        })
+        .collect();
+
+    let path_data = if !points.is_empty() {
+        let mut d = format!("M {} {}", points[0].0, points[0].1);
+        for (x, y) in points.iter().skip(1) {
+            d.push_str(&format!(" L {} {}", x, y));
+        }
+        d
+    } else {
+        String::new()
+    };
+
+    let current_val = data.last().copied().unwrap_or(0.0);
+
+    view! {
+        <div class="bg-white p-4 rounded-lg shadow">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-sm font-semibold text-gray-700">{title}</h3>
+                <span class="text-lg font-bold" style=format!("color: {}", color)>
+                    {format!("{:.1}{}", current_val, unit)}
+                </span>
+            </div>
+            <svg viewBox="0 0 100 40" class="w-full h-16">
+                <path
+                    d={path_data}
+                    fill="none"
+                    stroke={color.clone()}
+                    stroke-width="2"
+                    stroke-linejoin="round"
+                    stroke-linecap="round"
+                />
+            </svg>
+        </div>
+    }
+}
+
+#[component]
+fn StackedAreaChart(
+    data_rx: Vec<f64>,
+    data_tx: Vec<f64>,
+    title: String,
+) -> impl IntoView {
+    let max_val = data_rx.iter().chain(data_tx.iter())
+        .cloned()
+        .fold(0.0f64, f64::max)
+        .max(1.0);
+
+    let points_rx: Vec<(f64, f64)> = data_rx
+        .iter()
+        .enumerate()
+        .map(|(i, &val)| {
+            let x = (i as f64 / (data_rx.len() - 1).max(1) as f64) * 100.0;
+            let y = 100.0 - (val / max_val * 100.0);
+            (x, y)
+        })
+        .collect();
+
+    let points_tx: Vec<(f64, f64)> = data_tx
+        .iter()
+        .enumerate()
+        .map(|(i, &val)| {
+            let x = (i as f64 / (data_tx.len() - 1).max(1) as f64) * 100.0;
+            let y = 100.0 - (val / max_val * 100.0);
+            (x, y)
+        })
+        .collect();
+
+    let path_rx = if !points_rx.is_empty() {
+        let mut d = format!("M {} {}", points_rx[0].0, points_rx[0].1);
+        for (x, y) in points_rx.iter().skip(1) {
+            d.push_str(&format!(" L {} {}", x, y));
+        }
+        d.push_str(" L 100 100 L 0 100 Z");
+        d
+    } else {
+        String::new()
+    };
+
+    let path_tx = if !points_tx.is_empty() {
+        let mut d = format!("M {} {}", points_tx[0].0, points_tx[0].1);
+        for (x, y) in points_tx.iter().skip(1) {
+            d.push_str(&format!(" L {} {}", x, y));
+        }
+        d.push_str(" L 100 100 L 0 100 Z");
+        d
+    } else {
+        String::new()
+    };
+
+    let current_rx = data_rx.last().copied().unwrap_or(0.0);
+    let current_tx = data_tx.last().copied().unwrap_or(0.0);
+
+    view! {
+        <div class="bg-white p-4 rounded-lg shadow">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="text-sm font-semibold text-gray-700">{title}</h3>
+                <div class="text-right text-xs">
+                    <div class="text-blue-600 font-semibold">
+                        "↓ " {format!("{:.1} Mbps", current_rx)}
+                    </div>
+                    <div class="text-amber-500 font-semibold">
+                        "↑ " {format!("{:.1} Mbps", current_tx)}
+                    </div>
+                </div>
+            </div>
+            <svg viewBox="0 0 100 40" class="w-full h-16">
+                <path
+                    d={path_tx}
+                    fill="#f59e0b"
+                    fill-opacity="0.4"
+                />
+                <path
+                    d={path_rx}
+                    fill="#3b82f6"
+                    fill-opacity="0.6"
+                />
+            </svg>
+            <div class="flex justify-between text-xs mt-1">
+                <span class="text-blue-600">"● RX"</span>
+                <span class="text-amber-500">"● TX"</span>
+            </div>
         </div>
     }
 }

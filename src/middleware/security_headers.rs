@@ -60,6 +60,7 @@ where
                      script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; \
                      style-src 'self' 'unsafe-inline'; \
                      img-src 'self' https://caddy.jaydanhoward.com data:; \
+                     media-src 'self' https://caddy.jaydanhoward.com; \
                      font-src 'self'; \
                      connect-src 'self' https://cloudflareinsights.com; \
                      frame-ancestors 'none'; \

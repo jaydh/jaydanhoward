@@ -17,6 +17,7 @@ pub struct ClusterMetrics {
     pub disk_total_gb: f64,
     pub pod_count: u32,
     pub node_count: u32,
+    pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
 }
@@ -80,6 +81,11 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "count(kube_node_info)"
     ).await? as u32;
 
+    // Healthy node count (nodes in Ready state)
+    let healthy_node_count = parse_prometheus_value(
+        "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
+    ).await? as u32;
+
     // Network metrics (convert bytes/sec to Mbps)
     let network_rx = parse_prometheus_value(
         "sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000 / 1000"
@@ -97,6 +103,7 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         disk_total_gb: disk_total,
         pod_count,
         node_count,
+        healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
     })
