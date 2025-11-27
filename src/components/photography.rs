@@ -43,8 +43,8 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
 
     for element in document.select(&selector) {
         if let Some(href) = element.value().attr("href") {
-            // Only include image files
-            if href.ends_with(".webp") || href.ends_with(".jpg") || href.ends_with(".png") {
+            // Only include image and video files
+            if href.ends_with(".webp") || href.ends_with(".jpg") || href.ends_with(".png") || href.ends_with(".mp4") {
                 // Strip leading ./ if present
                 let clean_path = href.strip_prefix("./").unwrap_or(href);
 
@@ -98,13 +98,30 @@ pub fn Photography() -> impl IntoView {
                                                             on:click=move |_| set_selected_image(Some(idx))
                                                         >
                                                             <div class="aspect-square overflow-hidden bg-border">
-                                                                <img
-                                                                    src=src.clone()
-                                                                    alt=src.clone()
-                                                                    loading="lazy"
-                                                                    decoding="async"
-                                                                    class="w-full h-full object-cover"
-                                                                />
+                                                                {
+                                                                    if src.ends_with(".mp4") {
+                                                                        view! {
+                                                                            <video
+                                                                                src=src.clone()
+                                                                                muted=true
+                                                                                loop=true
+                                                                                playsinline=true
+                                                                                autoplay=true
+                                                                                class="w-full h-full object-cover"
+                                                                            />
+                                                                        }.into_any()
+                                                                    } else {
+                                                                        view! {
+                                                                            <img
+                                                                                src=src.clone()
+                                                                                alt=src.clone()
+                                                                                loading="lazy"
+                                                                                decoding="async"
+                                                                                class="w-full h-full object-cover"
+                                                                            />
+                                                                        }.into_any()
+                                                                    }
+                                                                }
                                                             </div>
                                                         </div>
                                                     }
@@ -130,15 +147,32 @@ pub fn Photography() -> impl IntoView {
                                                             <button
                                                                 class="absolute top-2 right-2 md:top-4 md:right-4 text-white/90 hover:text-white text-4xl font-light leading-none z-10 w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-all"
                                                                 on:click=move |_| set_selected_image(None)
-                                                                aria-label="Close image"
+                                                                aria-label="Close preview"
                                                             >
                                                                 "×"
                                                             </button>
-                                                            <img
-                                                                src=src.clone()
-                                                                alt=src.clone()
-                                                                class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
-                                                            />
+                                                            {
+                                                                if src.ends_with(".mp4") {
+                                                                    view! {
+                                                                        <video
+                                                                            src=src.clone()
+                                                                            controls=true
+                                                                            loop=true
+                                                                            playsinline=true
+                                                                            autoplay=true
+                                                                            class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                                                                        />
+                                                                    }.into_any()
+                                                                } else {
+                                                                    view! {
+                                                                        <img
+                                                                            src=src.clone()
+                                                                            alt=src.clone()
+                                                                            class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                                                                        />
+                                                                    }.into_any()
+                                                                }
+                                                            }
                                                         </div>
                                                     </div>
                                                 }
