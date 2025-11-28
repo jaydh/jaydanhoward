@@ -63,6 +63,7 @@ where
                      media-src 'self' https://caddy.jaydanhoward.com; \
                      font-src 'self'; \
                      connect-src 'self' https://cloudflareinsights.com; \
+                     frame-src 'self'; \
                      frame-ancestors 'none'; \
                      base-uri 'self'; \
                      form-action 'self';"
