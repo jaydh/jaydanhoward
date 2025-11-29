@@ -92,8 +92,8 @@ fn VirtualizedMediaItem(
                 }) as Box<dyn Fn(js_sys::Array)>);
 
                 // Create intersection observer with rootMargin to load images slightly before they're visible
-                let mut options = web_sys::IntersectionObserverInit::new();
-                options.root_margin("50px");
+                let options = web_sys::IntersectionObserverInit::new();
+                options.set_root_margin("50px");
 
                 if let Ok(observer) = web_sys::IntersectionObserver::new_with_options(
                     callback.as_ref().unchecked_ref(),
@@ -115,7 +115,7 @@ fn VirtualizedMediaItem(
     view! {
         <div
             node_ref=node_ref
-            class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer transition-transform hover:scale-[1.02]"
+            class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:ring-2 hover:ring-primary/50"
             style="contain: layout style paint;"
             on:click=move |_| on_click.run(idx)
         >
@@ -224,22 +224,139 @@ pub fn Photography() -> impl IntoView {
                                     {move || {
                                         selected_image().and_then(|idx| {
                                             images_for_modal.get(idx).map(|src| {
+                                                let total = images_for_modal.len();
+                                                let has_prev = idx > 0;
+                                                let has_next = idx < total - 1;
+
+                                                let go_prev = move |_| {
+                                                    if idx > 0 {
+                                                        set_selected_image.set(Some(idx - 1));
+                                                    }
+                                                };
+
+                                                let go_next = move |_| {
+                                                    if idx < total - 1 {
+                                                        set_selected_image.set(Some(idx + 1));
+                                                    }
+                                                };
+
+                                                // Keyboard controls and swipe gestures
+                                                #[cfg(feature = "hydrate")]
+                                                {
+                                                    use wasm_bindgen::closure::Closure;
+                                                    use wasm_bindgen::JsCast;
+                                                    use std::cell::RefCell;
+                                                    use std::rc::Rc;
+
+                                                    Effect::new(move |_| {
+                                                        let window = web_sys::window().expect("window");
+
+                                                        // Keyboard controls
+                                                        let keyboard_closure = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+                                                            match event.key().as_str() {
+                                                                "Escape" => set_selected_image.set(None),
+                                                                "ArrowLeft" if has_prev => set_selected_image.set(Some(idx - 1)),
+                                                                "ArrowRight" if has_next => set_selected_image.set(Some(idx + 1)),
+                                                                _ => {}
+                                                            }
+                                                        }) as Box<dyn Fn(web_sys::KeyboardEvent)>);
+
+                                                        let _ = window.add_event_listener_with_callback(
+                                                            "keydown",
+                                                            keyboard_closure.as_ref().unchecked_ref()
+                                                        );
+
+                                                        keyboard_closure.forget();
+
+                                                        // Touch/swipe gestures
+                                                        let touch_start_x = Rc::new(RefCell::new(0.0));
+                                                        let touch_start_x_clone = touch_start_x.clone();
+
+                                                        let touchstart_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
+                                                            if let Some(touch) = event.touches().get(0) {
+                                                                *touch_start_x_clone.borrow_mut() = touch.client_x() as f64;
+                                                            }
+                                                        }) as Box<dyn Fn(web_sys::TouchEvent)>);
+
+                                                        let touchend_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
+                                                            if let Some(touch) = event.changed_touches().get(0) {
+                                                                let touch_end_x = touch.client_x() as f64;
+                                                                let touch_start = *touch_start_x.borrow();
+                                                                let diff = touch_end_x - touch_start;
+
+                                                                // Swipe threshold of 50px
+                                                                if diff.abs() > 50.0 {
+                                                                    if diff > 0.0 && has_prev {
+                                                                        // Swipe right - go to previous
+                                                                        set_selected_image.set(Some(idx - 1));
+                                                                    } else if diff < 0.0 && has_next {
+                                                                        // Swipe left - go to next
+                                                                        set_selected_image.set(Some(idx + 1));
+                                                                    }
+                                                                }
+                                                            }
+                                                        }) as Box<dyn Fn(web_sys::TouchEvent)>);
+
+                                                        let _ = window.add_event_listener_with_callback(
+                                                            "touchstart",
+                                                            touchstart_closure.as_ref().unchecked_ref()
+                                                        );
+
+                                                        let _ = window.add_event_listener_with_callback(
+                                                            "touchend",
+                                                            touchend_closure.as_ref().unchecked_ref()
+                                                        );
+
+                                                        touchstart_closure.forget();
+                                                        touchend_closure.forget();
+                                                    });
+                                                }
+
                                                 view! {
                                                     <div
-                                                        class="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/90 backdrop-blur-sm animate-in fade-in duration-200"
-                                                        on:click=move |_| set_selected_image(None)
+                                                        class="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/95 backdrop-blur-md animate-in fade-in duration-300"
+                                                        on:click=move |_| set_selected_image.set(None)
                                                     >
+                                                        // Close button
+                                                        <button
+                                                            class="absolute top-4 right-4 text-white/80 hover:text-white text-5xl font-light leading-none z-10 w-14 h-14 flex items-center justify-center rounded-full hover:bg-white/10 transition-all hover:scale-110"
+                                                            on:click=move |_| set_selected_image.set(None)
+                                                            aria-label="Close preview"
+                                                        >
+                                                            "×"
+                                                        </button>
+
+                                                        // Image counter
+                                                        <div class="absolute top-4 left-4 text-white/80 text-sm font-medium bg-charcoal/50 px-3 py-1.5 rounded-full backdrop-blur-sm z-10">
+                                                            {format!("{} / {}", idx + 1, total)}
+                                                        </div>
+
+                                                        // Previous button
+                                                        {has_prev.then(|| view! {
+                                                            <button
+                                                                class="absolute left-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white text-5xl font-light z-10 w-14 h-14 flex items-center justify-center rounded-full bg-charcoal/50 hover:bg-charcoal/70 backdrop-blur-sm transition-all hover:scale-110"
+                                                                on:click=move |e| { e.stop_propagation(); go_prev(e); }
+                                                                aria-label="Previous image"
+                                                            >
+                                                                "‹"
+                                                            </button>
+                                                        })}
+
+                                                        // Next button
+                                                        {has_next.then(|| view! {
+                                                            <button
+                                                                class="absolute right-4 top-1/2 -translate-y-1/2 text-white/80 hover:text-white text-5xl font-light z-10 w-14 h-14 flex items-center justify-center rounded-full bg-charcoal/50 hover:bg-charcoal/70 backdrop-blur-sm transition-all hover:scale-110"
+                                                                on:click=move |e| { e.stop_propagation(); go_next(e); }
+                                                                aria-label="Next image"
+                                                            >
+                                                                "›"
+                                                            </button>
+                                                        })}
+
                                                         <div
-                                                            class="relative max-w-7xl max-h-screen p-4 md:p-8"
+                                                            class="relative max-w-7xl max-h-screen p-4 md:p-8 animate-in zoom-in-95 duration-300"
                                                             on:click=move |e| e.stop_propagation()
                                                         >
-                                                            <button
-                                                                class="absolute top-2 right-2 md:top-4 md:right-4 text-white/90 hover:text-white text-4xl font-light leading-none z-10 w-12 h-12 flex items-center justify-center rounded-full hover:bg-white/10 transition-all"
-                                                                on:click=move |_| set_selected_image(None)
-                                                                aria-label="Close preview"
-                                                            >
-                                                                "×"
-                                                            </button>
                                                             {
                                                                 if src.to_lowercase().ends_with(".mp4") {
                                                                     view! {
