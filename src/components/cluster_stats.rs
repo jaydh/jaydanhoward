@@ -60,12 +60,12 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         "sum(machine_memory_bytes) / 1024 / 1024 / 1024"
     ).await?;
 
-    // Disk metrics (convert bytes to GB)
+    // Disk metrics from Rook Ceph (convert bytes to GB)
     let disk_used = parse_prometheus_value(
-        "sum(kubelet_volume_stats_used_bytes) / 1024 / 1024 / 1024"
+        "ceph_cluster_total_used_bytes / 1024 / 1024 / 1024"
     ).await?;
     let disk_total = parse_prometheus_value(
-        "sum(kubelet_volume_stats_capacity_bytes) / 1024 / 1024 / 1024"
+        "ceph_cluster_total_bytes / 1024 / 1024 / 1024"
     ).await?;
 
     // Pod count
@@ -220,9 +220,9 @@ pub async fn get_historical_metrics() -> Result<HistoricalMetrics, ServerFnError
         step,
     ).await.map_err(|e| ServerFnError::ServerError(format!("Memory query failed: {}", e)))?;
 
-    // Query historical disk usage
+    // Query historical disk usage from Rook Ceph
     let disk_data = query_prometheus_range(
-        "sum(kubelet_volume_stats_used_bytes) / sum(kubelet_volume_stats_capacity_bytes) * 100",
+        "ceph_cluster_total_used_bytes / ceph_cluster_total_bytes * 100",
         twenty_four_hours_ago,
         now,
         step,
@@ -324,6 +324,11 @@ pub fn ClusterStats() -> impl IntoView {
     let (cluster_metrics, set_cluster_metrics) = signal(None::<ClusterMetrics>);
     let (node_metrics, set_node_metrics) = signal(Vec::<NodeMetric>::new());
 
+    // Note: set_last_refresh is used in the WASM-only closure below,
+    // but Rust can't see through the .forget() pattern
+    #[allow(unused_variables)]
+    let (last_refresh, set_last_refresh) = signal(None::<String>);
+
     // Historical data for charts
     // Dual-window approach: 144 historical points (24 hours at 10-min intervals) + rolling real-time updates
     // When live metrics arrive, they append to history; old points are dropped once we exceed capacity
@@ -398,6 +403,18 @@ pub fn ClusterStats() -> impl IntoView {
                             if let Some(cluster) = update.cluster.clone() {
                                 // Update current metrics
                                 set_cluster_metrics.set(Some(cluster.clone()));
+
+                                // Update last refresh time
+                                #[cfg(not(feature = "ssr"))]
+                                {
+                                    let now = js_sys::Date::new_0();
+                                    let time_str = format!("{:02}:{:02}:{:02}",
+                                        now.get_hours(),
+                                        now.get_minutes(),
+                                        now.get_seconds()
+                                    );
+                                    set_last_refresh.set(Some(time_str));
+                                }
 
                                 // Update historical data (store every data point, limit to 144 points total)
                                 set_cpu_history.update(|h| {
@@ -489,10 +506,23 @@ pub fn ClusterStats() -> impl IntoView {
 
     view! {
         <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 rounded-xl mb-8">
-            <h2 class="text-2xl font-bold text-charcoal mb-6 text-center">
-                "Homelab Cluster Metrics"
-                <span class="text-xs ml-2 text-green-600">"● Live"</span>
-            </h2>
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-bold text-charcoal">
+                    "Homelab Cluster Metrics"
+                    <span class="text-xs ml-2 text-green-600">"● Live"</span>
+                </h2>
+                {move || {
+                    if let Some(time) = last_refresh.get() {
+                        view! {
+                            <p class="text-xs text-gray-500 mt-1">
+                                "Last updated: " {time}
+                            </p>
+                        }.into_any()
+                    } else {
+                        view! { <div></div> }.into_any()
+                    }
+                }}
+            </div>
 
             {move || {
                 if let Some(err) = error.get() {
@@ -625,16 +655,26 @@ fn LineChart(
                     {format!("{:.1}{}", current_val, unit)}
                 </span>
             </div>
-            <svg viewBox="0 0 100 40" class="w-full h-16">
+            <svg viewBox="0 0 100 40" class="w-full h-16" preserveAspectRatio="none">
+                // Grid lines for reference
+                <line x1="0" y1="40" x2="100" y2="40" stroke="#e5e7eb" stroke-width="0.5" />
+
                 <path
                     d={path_data}
                     fill="none"
                     stroke={color.clone()}
-                    stroke-width="2"
+                    stroke-width="0.5"
                     stroke-linejoin="round"
                     stroke-linecap="round"
+                    vector-effect="non-scaling-stroke"
                 />
             </svg>
+            // Time axis labels
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+                <span>"-24h"</span>
+                <span>"-12h"</span>
+                <span>"Now"</span>
+            </div>
         </div>
     }
 }
@@ -708,7 +748,7 @@ fn StackedAreaChart(
                     </div>
                 </div>
             </div>
-            <svg viewBox="0 0 100 40" class="w-full h-16">
+            <svg viewBox="0 0 100 40" class="w-full h-16" preserveAspectRatio="none">
                 <path
                     d={path_tx}
                     fill="#f59e0b"
@@ -721,8 +761,15 @@ fn StackedAreaChart(
                 />
             </svg>
             <div class="flex justify-between text-xs mt-1">
-                <span class="text-blue-600">"● RX"</span>
-                <span class="text-amber-500">"● TX"</span>
+                <div class="flex gap-3">
+                    <span class="text-blue-600">"● RX"</span>
+                    <span class="text-amber-500">"● TX"</span>
+                </div>
+                <div class="flex gap-3 text-gray-400">
+                    <span>"-24h"</span>
+                    <span>"-12h"</span>
+                    <span>"Now"</span>
+                </div>
             </div>
         </div>
     }
