@@ -50,14 +50,19 @@ where
             let mut res = fut.await?;
 
             // Determine cache duration based on file extension
-            let cache_header = if path.ends_with(".wasm")
-                || path.ends_with(".js")
-                || path.ends_with(".woff2")
+            let cache_header = if path.ends_with(".wasm") || path.ends_with(".js") {
+                // WASM/JS files: short cache with revalidation to prevent stale deployments
+                // Cloudflare will still cache but will revalidate with origin
+                "public, max-age=300, must-revalidate"
+            } else if path.ends_with(".woff2")
                 || path.ends_with(".woff")
                 || path.ends_with(".ttf")
                 || path.ends_with(".eot")
                 || path.ends_with(".otf")
-                || path.ends_with(".webp")
+            {
+                // Font files are stable, can cache longer
+                "public, max-age=31536000, immutable"
+            } else if path.ends_with(".webp")
                 || path.ends_with(".png")
                 || path.ends_with(".jpg")
                 || path.ends_with(".jpeg")
@@ -65,8 +70,8 @@ where
                 || path.ends_with(".svg")
                 || path.ends_with(".ico")
             {
-                // Immutable assets (1 year)
-                "public, max-age=31536000, immutable"
+                // Images: 1 week cache with revalidation
+                "public, max-age=604800, must-revalidate"
             } else if path.ends_with(".css") {
                 // CSS with moderate cache (1 week) and revalidation
                 "public, max-age=604800, must-revalidate"
