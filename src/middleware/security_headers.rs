@@ -64,7 +64,7 @@ where
                      font-src 'self'; \
                      connect-src 'self' https://cloudflareinsights.com; \
                      frame-src 'self'; \
-                     frame-ancestors 'none'; \
+                     frame-ancestors 'self'; \
                      base-uri 'self'; \
                      form-action 'self';"
                 ),
@@ -73,7 +73,7 @@ where
             // X-Frame-Options - Prevents clickjacking by disallowing embedding in iframes
             headers.insert(
                 actix_web::http::header::X_FRAME_OPTIONS,
-                actix_web::http::header::HeaderValue::from_static("DENY"),
+                actix_web::http::header::HeaderValue::from_static("SAMEORIGIN"),
             );
 
             // X-Content-Type-Options - Prevents MIME type sniffing
