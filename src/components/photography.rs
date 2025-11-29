@@ -68,9 +68,11 @@ fn VirtualizedMediaItem(
     src: String,
     idx: usize,
     on_click: Callback<usize>,
+    #[prop(default = false)] is_priority: bool,
 ) -> impl IntoView {
     let node_ref = NodeRef::<leptos::html::Div>::new();
     let (is_visible, _set_is_visible) = signal(false);
+    let (is_loaded, set_is_loaded) = signal(false);
 
     // Set up Intersection Observer on the client side only
     #[cfg(feature = "hydrate")]
@@ -89,10 +91,13 @@ fn VirtualizedMediaItem(
                     }
                 }) as Box<dyn Fn(js_sys::Array)>);
 
-                // Create intersection observer
-                // Note: Using default observer without rootMargin to avoid needing extra web-sys features
-                if let Ok(observer) = web_sys::IntersectionObserver::new(
+                // Create intersection observer with rootMargin to load images slightly before they're visible
+                let mut options = web_sys::IntersectionObserverInit::new();
+                options.root_margin("50px");
+
+                if let Ok(observer) = web_sys::IntersectionObserver::new_with_options(
                     callback.as_ref().unchecked_ref(),
+                    &options,
                 ) {
                     observer.observe(&element);
 
@@ -114,7 +119,7 @@ fn VirtualizedMediaItem(
             style="contain: layout style paint;"
             on:click=move |_| on_click.run(idx)
         >
-            <div class="aspect-square overflow-hidden bg-border">
+            <div class="aspect-square overflow-hidden bg-gradient-to-br from-border to-charcoal/5">
                 {move || {
                     // Only render media when visible (or always on server for SSR)
                     #[cfg(feature = "ssr")]
@@ -132,7 +137,10 @@ fn VirtualizedMediaItem(
                                     loop=true
                                     playsinline=true
                                     autoplay=is_visible.get()
-                                    class="w-full h-full object-cover"
+                                    class="w-full h-full object-cover transition-opacity duration-300"
+                                    class:opacity-0=move || !is_loaded.get()
+                                    class:opacity-100=move || is_loaded.get()
+                                    on:loadeddata=move |_| set_is_loaded.set(true)
                                 />
                             }.into_any()
                         } else {
@@ -140,16 +148,22 @@ fn VirtualizedMediaItem(
                                 <img
                                     src=src_clone.clone()
                                     alt=src_clone.clone()
-                                    loading="lazy"
+                                    loading=if is_priority { "eager" } else { "lazy" }
                                     decoding="async"
-                                    class="w-full h-full object-cover"
+                                    fetchpriority=if is_priority { "high" } else { "auto" }
+                                    class="w-full h-full object-cover transition-opacity duration-300"
+                                    class:opacity-0=move || !is_loaded.get()
+                                    class:opacity-100=move || is_loaded.get()
+                                    on:load=move |_| set_is_loaded.set(true)
                                 />
                             }.into_any()
                         }
                     } else {
-                        // Placeholder when not visible
+                        // Enhanced skeleton loader when not visible
                         view! {
-                            <div class="w-full h-full bg-border animate-pulse" />
+                            <div class="w-full h-full relative overflow-hidden bg-gradient-to-br from-border via-charcoal/5 to-border">
+                                <div class="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                            </div>
                         }.into_any()
                     }
                 }}
@@ -192,11 +206,14 @@ pub fn Photography() -> impl IntoView {
                                                 .enumerate()
                                                 .map(|(idx, src)| {
                                                     let src = src.clone();
+                                                    // Mark first 6 images as priority (2 rows on desktop)
+                                                    let is_priority = idx < 6;
                                                     view! {
                                                         <VirtualizedMediaItem
                                                             src=src
                                                             idx=idx
                                                             on_click=on_click
+                                                            is_priority=is_priority
                                                         />
                                                     }
                                                 })

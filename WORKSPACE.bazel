@@ -238,6 +238,7 @@ crates_repository(
                   "HtmlDocument",
                   "IntersectionObserver",
                   "IntersectionObserverEntry",
+                  "IntersectionObserverInit",
                   "MediaQueryList",
                   "MessageEvent",
                   "MouseEvent",

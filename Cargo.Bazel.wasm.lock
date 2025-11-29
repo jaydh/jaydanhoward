@@ -1,5 +1,5 @@
 {
-  "checksum": "5f50bdab1c111e2d236afc370a4d04fc45413a5505efcd9d5a48221b9316b56f",
+  "checksum": "e9d28ef19c78ddc1f04fb3f394b6ec1a6482bc9208d9bd20156c2e303356ebf6",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -13091,6 +13091,7 @@
             "InputEvent",
             "IntersectionObserver",
             "IntersectionObserverEntry",
+            "IntersectionObserverInit",
             "KeyboardEvent",
             "Location",
             "MediaQueryList",
