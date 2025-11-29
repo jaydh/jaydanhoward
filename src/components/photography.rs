@@ -62,6 +62,102 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
     Ok(media_files)
 }
 
+// Virtualized media item component that only renders when visible
+#[component]
+fn VirtualizedMediaItem(
+    src: String,
+    idx: usize,
+    on_click: Callback<usize>,
+) -> impl IntoView {
+    let node_ref = NodeRef::<leptos::html::Div>::new();
+    let (is_visible, _set_is_visible) = signal(false);
+
+    // Set up Intersection Observer on the client side only
+    #[cfg(feature = "hydrate")]
+    {
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+
+        Effect::new(move |_| {
+            if let Some(element) = node_ref.get() {
+                let set_is_visible = _set_is_visible.clone();
+
+                // Create callback for intersection observer
+                let callback = Closure::wrap(Box::new(move |entries: js_sys::Array| {
+                    if let Some(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>().ok() {
+                        set_is_visible.set(entry.is_intersecting());
+                    }
+                }) as Box<dyn Fn(js_sys::Array)>);
+
+                // Create intersection observer
+                // Note: Using default observer without rootMargin to avoid needing extra web-sys features
+                if let Ok(observer) = web_sys::IntersectionObserver::new(
+                    callback.as_ref().unchecked_ref(),
+                ) {
+                    observer.observe(&element);
+
+                    // Leak the callback to keep it alive (it will be cleaned up when the page unloads)
+                    // This is necessary because Closure is not Send/Sync
+                    callback.forget();
+                }
+            }
+        });
+    }
+
+    let src_clone = src.clone();
+    let is_video = src.to_lowercase().ends_with(".mp4");
+
+    view! {
+        <div
+            node_ref=node_ref
+            class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer transition-transform hover:scale-[1.02]"
+            style="contain: layout style paint;"
+            on:click=move |_| on_click.run(idx)
+        >
+            <div class="aspect-square overflow-hidden bg-border">
+                {move || {
+                    // Only render media when visible (or always on server for SSR)
+                    #[cfg(feature = "ssr")]
+                    let should_render = true;
+
+                    #[cfg(feature = "hydrate")]
+                    let should_render = is_visible.get();
+
+                    if should_render {
+                        if is_video {
+                            view! {
+                                <video
+                                    src=src_clone.clone()
+                                    muted=true
+                                    loop=true
+                                    playsinline=true
+                                    autoplay=is_visible.get()
+                                    class="w-full h-full object-cover"
+                                />
+                            }.into_any()
+                        } else {
+                            view! {
+                                <img
+                                    src=src_clone.clone()
+                                    alt=src_clone.clone()
+                                    loading="lazy"
+                                    decoding="async"
+                                    class="w-full h-full object-cover"
+                                />
+                            }.into_any()
+                        }
+                    } else {
+                        // Placeholder when not visible
+                        view! {
+                            <div class="w-full h-full bg-border animate-pulse" />
+                        }.into_any()
+                    }
+                }}
+            </div>
+        </div>
+    }
+}
+
 #[component]
 pub fn Photography() -> impl IntoView {
     // Fetch images from server
@@ -84,7 +180,11 @@ pub fn Photography() -> impl IntoView {
                 {move || {
                     images_resource.get().map(|result| {
                         match result {
-                            Ok(images) => view! {
+                            Ok(images) => {
+                                let images_for_modal = images.clone();
+                                let on_click = Callback::new(move |idx| set_selected_image.set(Some(idx)));
+
+                                view! {
                                     <div class="w-full flex flex-col gap-6">
                                         <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style="contain: layout style paint;">
                                             {images
@@ -93,49 +193,20 @@ pub fn Photography() -> impl IntoView {
                                                 .map(|(idx, src)| {
                                                     let src = src.clone();
                                                     view! {
-                                                        <div
-                                                            class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer transition-transform hover:scale-[1.02]"
-                                                            style="contain: layout style paint;"
-                                                            on:click=move |_| set_selected_image(Some(idx))
-                                                        >
-                                                            <div class="aspect-square overflow-hidden bg-border">
-                                                                {
-                                                                    if src.to_lowercase().ends_with(".mp4") {
-                                                                        view! {
-                                                                            <video
-                                                                                src=src.clone()
-                                                                                muted=true
-                                                                                loop=true
-                                                                                playsinline=true
-                                                                                autoplay=true
-                                                                                class="w-full h-full object-cover"
-                                                                            />
-                                                                        }.into_any()
-                                                                    } else {
-                                                                        view! {
-                                                                            <img
-                                                                                src=src.clone()
-                                                                                alt=src.clone()
-                                                                                loading="lazy"
-                                                                                decoding="async"
-                                                                                class="w-full h-full object-cover"
-                                                                            />
-                                                                        }.into_any()
-                                                                    }
-                                                                }
-                                                            </div>
-                                                        </div>
+                                                        <VirtualizedMediaItem
+                                                            src=src
+                                                            idx=idx
+                                                            on_click=on_click
+                                                        />
                                                     }
                                                 })
                                                 .collect_view()}
                                         </div>
                                     </div>
-                                // Preview Modal
-                                {move || {
-                                    images_resource.get().and_then(|result| {
-                                        result.ok().and_then(|images| {
-                                            selected_image().map(|idx| {
-                                                let src = &images[idx];
+                                    // Preview Modal
+                                    {move || {
+                                        selected_image().and_then(|idx| {
+                                            images_for_modal.get(idx).map(|src| {
                                                 view! {
                                                     <div
                                                         class="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/90 backdrop-blur-sm animate-in fade-in duration-200"
@@ -179,9 +250,9 @@ pub fn Photography() -> impl IntoView {
                                                 }
                                             })
                                         })
-                                    })
-                                }}
-                            }.into_any(),
+                                    }}
+                                }.into_any()
+                            },
                             Err(_) => view! {
                                 <div class="w-full flex justify-center items-center py-20">
                                     <p class="text-red-500">"Unable to load images. Please try again later."</p>
