@@ -72,6 +72,8 @@ fn VirtualizedMediaItem(
 ) -> impl IntoView {
     let node_ref = NodeRef::<leptos::html::Div>::new();
     let (is_visible, _set_is_visible) = signal(false);
+    #[cfg(feature = "hydrate")]
+    let (has_been_visible, set_has_been_visible) = signal(false);
     let (is_loaded, set_is_loaded) = signal(false);
 
     // Set up Intersection Observer on the client side only
@@ -83,11 +85,50 @@ fn VirtualizedMediaItem(
         Effect::new(move |_| {
             if let Some(element) = node_ref.get() {
                 let set_is_visible = _set_is_visible.clone();
+                let set_has_been_visible = set_has_been_visible.clone();
+
+                // Track timeout ID for delayed unmounting
+                use std::cell::RefCell;
+                use std::rc::Rc;
+                let timeout_id: Rc<RefCell<Option<i32>>> = Rc::new(RefCell::new(None));
+                let timeout_id_clone = timeout_id.clone();
 
                 // Create callback for intersection observer
                 let callback = Closure::wrap(Box::new(move |entries: js_sys::Array| {
                     if let Some(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>().ok() {
-                        set_is_visible.set(entry.is_intersecting());
+                        let is_intersecting = entry.is_intersecting();
+                        set_is_visible.set(is_intersecting);
+
+                        if is_intersecting {
+                            // Item is visible - load it and cancel any pending unload
+                            set_has_been_visible.set(true);
+
+                            // Clear timeout if exists
+                            if let Some(id) = timeout_id_clone.borrow_mut().take() {
+                                if let Some(window) = web_sys::window() {
+                                    window.clear_timeout_with_handle(id);
+                                }
+                            }
+                        } else {
+                            // Item scrolled out of view - schedule unload after 30 seconds
+                            let set_has_been_visible = set_has_been_visible.clone();
+                            let timeout_id_inner = timeout_id_clone.clone();
+
+                            let unload_callback = Closure::once(Box::new(move || {
+                                set_has_been_visible.set(false);
+                                *timeout_id_inner.borrow_mut() = None;
+                            }) as Box<dyn FnOnce()>);
+
+                            if let Some(window) = web_sys::window() {
+                                if let Ok(id) = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                                    unload_callback.as_ref().unchecked_ref(),
+                                    30000, // 30 seconds
+                                ) {
+                                    *timeout_id_clone.borrow_mut() = Some(id);
+                                }
+                                unload_callback.forget();
+                            }
+                        }
                     }
                 }) as Box<dyn Fn(js_sys::Array)>);
 
@@ -121,12 +162,12 @@ fn VirtualizedMediaItem(
         >
             <div class="aspect-square overflow-hidden bg-gradient-to-br from-border to-charcoal/5">
                 {move || {
-                    // Only render media when visible (or always on server for SSR)
+                    // Lazy load + delayed unload: load when visible, keep for 30s after scrolling out
                     #[cfg(feature = "ssr")]
                     let should_render = true;
 
                     #[cfg(feature = "hydrate")]
-                    let should_render = is_visible.get();
+                    let should_render = has_been_visible.get();
 
                     if should_render {
                         if is_video {
@@ -136,12 +177,21 @@ fn VirtualizedMediaItem(
                                     muted=true
                                     loop=true
                                     playsinline=true
+                                    preload="none"
                                     autoplay=is_visible.get()
                                     class="w-full h-full object-cover transition-opacity duration-300"
                                     class:opacity-0=move || !is_loaded.get()
                                     class:opacity-100=move || is_loaded.get()
                                     on:loadeddata=move |_| set_is_loaded.set(true)
                                 />
+                                // Play icon overlay
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-16 h-16 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                                        <svg class="w-8 h-8 text-charcoal ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M8 5v14l11-7z"/>
+                                        </svg>
+                                    </div>
+                                </div>
                             }.into_any()
                         } else {
                             view! {
@@ -365,6 +415,7 @@ pub fn Photography() -> impl IntoView {
                                                                             controls=true
                                                                             loop=true
                                                                             playsinline=true
+                                                                            preload="none"
                                                                             autoplay=true
                                                                             class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
                                                                         />
