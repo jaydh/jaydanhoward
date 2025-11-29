@@ -177,7 +177,7 @@ fn VirtualizedMediaItem(
                                     muted=true
                                     loop=true
                                     playsinline=true
-                                    preload="none"
+                                    preload="metadata"
                                     autoplay=is_visible.get()
                                     class="w-full h-full object-cover transition-opacity duration-300"
                                     class:opacity-0=move || !is_loaded.get()
@@ -415,7 +415,7 @@ pub fn Photography() -> impl IntoView {
                                                                             controls=true
                                                                             loop=true
                                                                             playsinline=true
-                                                                            preload="none"
+                                                                            preload="metadata"
                                                                             autoplay=true
                                                                             class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
                                                                         />
