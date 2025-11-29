@@ -378,13 +378,17 @@ pub fn ClusterStats() -> impl IntoView {
     });
 
     // Set up SSE connection on client side only
+    // Defer connection to avoid blocking critical rendering path
     #[cfg(not(feature = "ssr"))]
     Effect::new(move |_| {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
         use web_sys::{EventSource, MessageEvent};
 
-        let event_source = EventSource::new("/api/metrics/stream").ok();
+        // Defer EventSource creation until after initial page paint
+        // This prevents blocking the critical rendering path
+        let callback = Closure::once(Box::new(move || {
+            let event_source = EventSource::new("/api/metrics/stream").ok();
 
         if let Some(es) = event_source.clone() {
             let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
@@ -456,6 +460,18 @@ pub fn ClusterStats() -> impl IntoView {
         } else {
             set_error.set(Some("Failed to create EventSource".to_string()));
         }
+        }) as Box<dyn FnOnce()>);
+
+        // Use setTimeout to defer connection by 100ms after initial render
+        // This allows the page to complete its critical rendering path first
+        let window = web_sys::window().expect("no global `window` exists");
+        window
+            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                callback.as_ref().unchecked_ref(),
+                100,
+            )
+            .expect("should register `setTimeout`");
+        callback.forget();
     });
 
     // Fallback: fetch initial data on SSR
