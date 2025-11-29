@@ -63,12 +63,12 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "sum(machine_memory_bytes) / 1024 / 1024 / 1024"
     ).await?;
 
-    // Disk metrics (convert bytes to GB)
+    // Disk metrics from Rook Ceph (convert bytes to GB)
     let disk_used = parse_prometheus_value(
-        "sum(kubelet_volume_stats_used_bytes) / 1024 / 1024 / 1024"
+        "ceph_cluster_total_used_bytes / 1024 / 1024 / 1024"
     ).await?;
     let disk_total = parse_prometheus_value(
-        "sum(kubelet_volume_stats_capacity_bytes) / 1024 / 1024 / 1024"
+        "ceph_cluster_total_bytes / 1024 / 1024 / 1024"
     ).await?;
 
     // Pod count
