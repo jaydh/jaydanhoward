@@ -67,6 +67,8 @@ pub fn App() -> impl IntoView {
     view! {
         <Stylesheets />
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
+        <Link rel="preconnect" href="https://caddy.jaydanhoward.com" />
+        <Link rel="dns-prefetch" href="https://caddy.jaydanhoward.com" />
         <Title text="Jay Dan Howard" />
         <main>
             <Html {..} />
