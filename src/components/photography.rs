@@ -21,7 +21,7 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         })?;
 
     let response = client
-        .get("https://caddy.jaydanhoward.com/data/")
+        .get("https://caddy.jaydanhoward.com")
         .header("Accept", "application/json")
         .send()
         .await
@@ -30,12 +30,10 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
             ServerFnError::ServerError("Failed to fetch files".to_string())
         })?;
 
-    let files: Vec<FileItem> = response.json()
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to parse JSON response from caddy: {}", e);
-            ServerFnError::ServerError("Failed to parse response".to_string())
-        })?;
+    let files: Vec<FileItem> = response.json().await.map_err(|e| {
+        tracing::error!("Failed to parse JSON response from caddy: {}", e);
+        ServerFnError::ServerError("Failed to parse response".to_string())
+    })?;
 
     let mut media_files = Vec::new();
 
@@ -49,16 +47,23 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         let name_lower = name.to_lowercase();
 
         // Only include image and video files (case-insensitive)
-        if name_lower.ends_with(".webp") || name_lower.ends_with(".jpg") || name_lower.ends_with(".png") || name_lower.ends_with(".mp4") {
+        if name_lower.ends_with(".webp")
+            || name_lower.ends_with(".jpg")
+            || name_lower.ends_with(".png")
+            || name_lower.ends_with(".mp4")
+        {
             // Validate that the path doesn't contain directory traversal attempts
             if !name.contains("..") && !name.starts_with('/') {
-                let full_url = format!("https://caddy.jaydanhoward.com/data/{}", name);
+                let full_url = format!("https://caddy.jaydanhoward.com/{}", name);
                 media_files.push(full_url);
             }
         }
     }
 
-    tracing::info!("Successfully fetched {} media files from caddy", media_files.len());
+    tracing::info!(
+        "Successfully fetched {} media files from caddy",
+        media_files.len()
+    );
     Ok(media_files)
 }
 
@@ -95,7 +100,11 @@ fn VirtualizedMediaItem(
 
                 // Create callback for intersection observer
                 let callback = Closure::wrap(Box::new(move |entries: js_sys::Array| {
-                    if let Some(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>().ok() {
+                    if let Some(entry) = entries
+                        .get(0)
+                        .dyn_into::<web_sys::IntersectionObserverEntry>()
+                        .ok()
+                    {
                         let is_intersecting = entry.is_intersecting();
                         set_is_visible.set(is_intersecting);
 
@@ -117,13 +126,16 @@ fn VirtualizedMediaItem(
                             let unload_callback = Closure::once(Box::new(move || {
                                 set_has_been_visible.set(false);
                                 *timeout_id_inner.borrow_mut() = None;
-                            }) as Box<dyn FnOnce()>);
+                            })
+                                as Box<dyn FnOnce()>);
 
                             if let Some(window) = web_sys::window() {
-                                if let Ok(id) = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                                    unload_callback.as_ref().unchecked_ref(),
-                                    30000, // 30 seconds
-                                ) {
+                                if let Ok(id) = window
+                                    .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                        unload_callback.as_ref().unchecked_ref(),
+                                        30000, // 30 seconds
+                                    )
+                                {
                                     *timeout_id_clone.borrow_mut() = Some(id);
                                 }
                                 unload_callback.forget();
