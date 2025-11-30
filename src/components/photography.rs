@@ -74,175 +74,69 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
     Ok(media_files)
 }
 
-// Virtualized media item component that only renders when visible
+// Simple media item component with native lazy loading
 #[component]
-fn VirtualizedMediaItem(
+fn MediaItem(
     src: String,
     idx: usize,
     on_click: Callback<usize>,
     #[prop(default = false)] is_priority: bool,
 ) -> impl IntoView {
-    let node_ref = NodeRef::<leptos::html::Div>::new();
-    let (is_visible, _set_is_visible) = signal(false);
-    #[cfg(feature = "hydrate")]
-    let (has_been_visible, set_has_been_visible) = signal(false);
     let (is_loaded, set_is_loaded) = signal(false);
-
-    // Set up Intersection Observer on the client side only
-    #[cfg(feature = "hydrate")]
-    {
-        use wasm_bindgen::closure::Closure;
-        use wasm_bindgen::JsCast;
-
-        Effect::new(move |_| {
-            if let Some(element) = node_ref.get() {
-                let set_is_visible = _set_is_visible.clone();
-                let set_has_been_visible = set_has_been_visible.clone();
-
-                // Track timeout ID for delayed unmounting
-                use std::cell::RefCell;
-                use std::rc::Rc;
-                let timeout_id: Rc<RefCell<Option<i32>>> = Rc::new(RefCell::new(None));
-                let timeout_id_clone = timeout_id.clone();
-
-                // Create callback for intersection observer
-                let callback = Closure::wrap(Box::new(move |entries: js_sys::Array| {
-                    if let Some(entry) = entries
-                        .get(0)
-                        .dyn_into::<web_sys::IntersectionObserverEntry>()
-                        .ok()
-                    {
-                        let is_intersecting = entry.is_intersecting();
-                        set_is_visible.set(is_intersecting);
-
-                        if is_intersecting {
-                            // Item is visible - load it and cancel any pending unload
-                            set_has_been_visible.set(true);
-
-                            // Clear timeout if exists
-                            if let Some(id) = timeout_id_clone.borrow_mut().take() {
-                                if let Some(window) = web_sys::window() {
-                                    window.clear_timeout_with_handle(id);
-                                }
-                            }
-                        } else {
-                            // Item scrolled out of view - schedule unload after 30 seconds
-                            let set_has_been_visible = set_has_been_visible.clone();
-                            let timeout_id_inner = timeout_id_clone.clone();
-
-                            let unload_callback = Closure::once(Box::new(move || {
-                                set_has_been_visible.set(false);
-                                *timeout_id_inner.borrow_mut() = None;
-                            })
-                                as Box<dyn FnOnce()>);
-
-                            if let Some(window) = web_sys::window() {
-                                if let Ok(id) = window
-                                    .set_timeout_with_callback_and_timeout_and_arguments_0(
-                                        unload_callback.as_ref().unchecked_ref(),
-                                        30000, // 30 seconds
-                                    )
-                                {
-                                    *timeout_id_clone.borrow_mut() = Some(id);
-                                }
-                                unload_callback.forget();
-                            }
-                        }
-                    }
-                }) as Box<dyn Fn(js_sys::Array)>);
-
-                // Create intersection observer with rootMargin to load images slightly before they're visible
-                let options = web_sys::IntersectionObserverInit::new();
-                options.set_root_margin("50px");
-
-                if let Ok(observer) = web_sys::IntersectionObserver::new_with_options(
-                    callback.as_ref().unchecked_ref(),
-                    &options,
-                ) {
-                    observer.observe(&element);
-
-                    // Leak the callback to keep it alive (it will be cleaned up when the page unloads)
-                    // This is necessary because Closure is not Send/Sync
-                    callback.forget();
-                }
-            }
-        });
-    }
-
-    let src_clone = src.clone();
     let is_video = src.to_lowercase().ends_with(".mp4");
 
     view! {
         <div
-            node_ref=node_ref
             class="group relative overflow-hidden rounded-xl shadow-minimal-lg cursor-pointer transition-all duration-300 hover:scale-[1.05] hover:shadow-2xl hover:ring-2 hover:ring-primary/50"
-            style="contain: layout style paint;"
             on:click=move |_| on_click.run(idx)
         >
             <div class="aspect-square overflow-hidden bg-gradient-to-br from-border to-charcoal/5">
-                {move || {
-                    // Lazy load + delayed unload: load when visible, keep for 30s after scrolling out
-                    #[cfg(feature = "ssr")]
-                    let should_render = true;
-
-                    #[cfg(feature = "hydrate")]
-                    let should_render = has_been_visible.get();
-
-                    if should_render {
-                        if is_video {
-                            view! {
-                                <video
-                                    src=src_clone.clone()
-                                    muted=true
-                                    loop=true
-                                    playsinline=true
-                                    preload="metadata"
-                                    autoplay=is_visible.get()
-                                    class="w-full h-full object-cover transition-opacity duration-300"
-                                    class:opacity-0=move || !is_loaded.get()
-                                    class:opacity-100=move || is_loaded.get()
-                                    on:loadeddata=move |_| set_is_loaded.set(true)
-                                />
-                                // Play icon overlay
-                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div class="w-16 h-16 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
-                                        <svg class="w-8 h-8 text-charcoal ml-1" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M8 5v14l11-7z"/>
-                                        </svg>
-                                    </div>
-                                </div>
-                            }.into_any()
-                        } else {
-                            view! {
-                                <img
-                                    src=format!("{}-medium.webp", src_clone.clone())
-                                    srcset=format!(
-                                        "{}-thumb.webp 400w, {}-medium.webp 800w, {}-full.webp 1920w",
-                                        src_clone.clone(),
-                                        src_clone.clone(),
-                                        src_clone.clone()
-                                    )
-                                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                                    alt=src_clone.clone()
-                                    loading=if is_priority { "eager" } else { "lazy" }
-                                    decoding="async"
-                                    fetchpriority=if is_priority { "high" } else { "auto" }
-                                    class="w-full h-full object-cover transition-opacity duration-300"
-                                    class:opacity-0=move || !is_loaded.get()
-                                    class:opacity-100=move || is_loaded.get()
-                                    on:load=move |_| set_is_loaded.set(true)
-                                />
-                            }.into_any()
-                        }
-                    } else {
-                        // Enhanced skeleton loader when not visible
+                {
+                    if is_video {
                         view! {
-                            <div class="w-full h-full relative overflow-hidden bg-gradient-to-br from-border via-charcoal/5 to-border">
-                                <div class="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                            <video
+                                src=src.clone()
+                                muted=true
+                                loop=true
+                                playsinline=true
+                                preload="metadata"
+                                class="w-full h-full object-cover transition-opacity duration-300"
+                                class:opacity-0=move || !is_loaded.get()
+                                class:opacity-100=move || is_loaded.get()
+                                on:loadeddata=move |_| set_is_loaded.set(true)
+                            />
+                            // Play icon overlay
+                            <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div class="w-16 h-16 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                                    <svg class="w-8 h-8 text-charcoal ml-1" fill="currentColor" viewBox="0 0 24 24">
+                                        <path d="M8 5v14l11-7z"/>
+                                    </svg>
+                                </div>
                             </div>
                         }.into_any()
+                    } else {
+                        view! {
+                            <img
+                                src=format!("{}-medium.webp", src.clone())
+                                srcset=format!(
+                                    "{}-thumb.webp 400w, {}-medium.webp 800w, {}-full.webp 1920w",
+                                    src.clone(),
+                                    src.clone(),
+                                    src.clone()
+                                )
+                                sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                alt=src.clone()
+                                loading=if is_priority { "eager" } else { "lazy" }
+                                decoding="async"
+                                fetchpriority=if is_priority { "high" } else { "auto" }
+                                class="w-full h-full object-cover transition-opacity duration-300"
+                                class:opacity-0=move || !is_loaded.get()
+                                class:opacity-100=move || is_loaded.get()
+                                on:load=move |_| set_is_loaded.set(true)
+                            />
+                        }.into_any()
                     }
-                }}
+                }
             </div>
         </div>
     }
@@ -386,7 +280,7 @@ pub fn Photography() -> impl IntoView {
 
                                 view! {
                                     <div class="w-full flex flex-col gap-6">
-                                        <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" style="contain: layout style paint;">
+                                        <div class="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             {images
                                                 .iter()
                                                 .enumerate()
@@ -395,7 +289,7 @@ pub fn Photography() -> impl IntoView {
                                                     // Mark first 6 images as priority (2 rows on desktop)
                                                     let is_priority = idx < 6;
                                                     view! {
-                                                        <VirtualizedMediaItem
+                                                        <MediaItem
                                                             src=src
                                                             idx=idx
                                                             on_click=on_click

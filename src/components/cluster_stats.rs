@@ -279,32 +279,28 @@ fn NodeCard(node: NodeMetric) -> impl IntoView {
     let mem_pct = (node.memory_usage_gb / node.memory_total_gb * 100.0).min(100.0);
 
     view! {
-        <div class="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
-            <h4 class="font-medium text-charcoal mb-2">{node.name}</h4>
-            <div class="space-y-2 text-sm">
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <span class="text-gray-600">"CPU"</span>
-                        <span class="font-medium">{format!("{:.1}%", node.cpu_usage_percent)}</span>
-                    </div>
-                    <div class="w-full bg-gray-200 rounded-full h-1.5">
-                        <div
-                            class="bg-blue-500 h-1.5 rounded-full"
-                            style={format!("width: {}%", node.cpu_usage_percent)}
-                        ></div>
-                    </div>
+        <div class="bg-white rounded-lg shadow-sm p-3 border border-gray-200">
+            <h4 class="font-medium text-sm text-charcoal mb-2">{node.name}</h4>
+            <div class="space-y-1.5 text-xs">
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-600">"CPU"</span>
+                    <span class="font-semibold">{format!("{:.1}%", node.cpu_usage_percent)}</span>
                 </div>
-                <div>
-                    <div class="flex justify-between mb-1">
-                        <span class="text-gray-600">"Memory"</span>
-                        <span class="font-medium">{format!("{:.1} / {:.1} GB", node.memory_usage_gb, node.memory_total_gb)}</span>
-                    </div>
-                    <div class="w-full bg-gray-200 rounded-full h-1.5">
-                        <div
-                            class="bg-purple-500 h-1.5 rounded-full"
-                            style={format!("width: {}%", mem_pct)}
-                        ></div>
-                    </div>
+                <div class="w-full bg-gray-200 rounded-full h-1">
+                    <div
+                        class="bg-blue-500 h-1 rounded-full transition-all"
+                        style={format!("width: {}%", node.cpu_usage_percent)}
+                    ></div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-gray-600">"Mem"</span>
+                    <span class="font-semibold">{format!("{:.1}G", node.memory_usage_gb)}</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-1">
+                    <div
+                        class="bg-purple-500 h-1 rounded-full transition-all"
+                        style={format!("width: {}%", mem_pct)}
+                    ></div>
                 </div>
             </div>
         </div>
@@ -350,27 +346,31 @@ pub fn ClusterStats() -> impl IntoView {
     #[allow(unused_variables)]
     let (error, set_error) = signal(None::<String>);
 
+    // Helper macro to update history with max capacity
+    macro_rules! update_history {
+        ($setter:expr, $value:expr) => {
+            $setter.update(|h| {
+                if h.len() >= 144 { h.pop_front(); }
+                h.push_back($value);
+            });
+        };
+        ($setter:expr, $values:expr, init) => {
+            $setter.update(|h| {
+                *h = $values.into_iter().collect();
+            });
+        };
+    }
+
     // Fetch historical data on mount
     Effect::new(move |_| {
         leptos::task::spawn_local(async move {
             match get_historical_metrics().await {
                 Ok(historical) => {
-                    // Populate historical data
-                    set_cpu_history.update(|h| {
-                        *h = historical.cpu_history.into_iter().collect();
-                    });
-                    set_memory_history.update(|h| {
-                        *h = historical.memory_history.into_iter().collect();
-                    });
-                    set_disk_history.update(|h| {
-                        *h = historical.disk_history.into_iter().collect();
-                    });
-                    set_network_rx_history.update(|h| {
-                        *h = historical.network_rx_history.into_iter().collect();
-                    });
-                    set_network_tx_history.update(|h| {
-                        *h = historical.network_tx_history.into_iter().collect();
-                    });
+                    update_history!(set_cpu_history, historical.cpu_history, init);
+                    update_history!(set_memory_history, historical.memory_history, init);
+                    update_history!(set_disk_history, historical.disk_history, init);
+                    update_history!(set_network_rx_history, historical.network_rx_history, init);
+                    update_history!(set_network_tx_history, historical.network_tx_history, init);
                 }
                 Err(e) => {
                     #[cfg(feature = "ssr")]
@@ -383,17 +383,13 @@ pub fn ClusterStats() -> impl IntoView {
     });
 
     // Set up SSE connection on client side only
-    // Defer connection to avoid blocking critical rendering path
     #[cfg(not(feature = "ssr"))]
     Effect::new(move |_| {
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
         use web_sys::{EventSource, MessageEvent};
 
-        // Defer EventSource creation until after initial page paint
-        // This prevents blocking the critical rendering path
-        let callback = Closure::once(Box::new(move || {
-            let event_source = EventSource::new("/api/metrics/stream").ok();
+        let event_source = EventSource::new("/api/metrics/stream").ok();
 
         if let Some(es) = event_source.clone() {
             let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
@@ -417,28 +413,11 @@ pub fn ClusterStats() -> impl IntoView {
                                 }
 
                                 // Update historical data (store every data point, limit to 144 points total)
-                                set_cpu_history.update(|h| {
-                                    if h.len() >= 144 { h.pop_front(); }
-                                    h.push_back(cluster.cpu_usage_percent);
-                                });
-                                set_memory_history.update(|h| {
-                                    if h.len() >= 144 { h.pop_front(); }
-                                    let mem_pct = (cluster.memory_usage_gb / cluster.memory_total_gb * 100.0).min(100.0);
-                                    h.push_back(mem_pct);
-                                });
-                                set_disk_history.update(|h| {
-                                    if h.len() >= 144 { h.pop_front(); }
-                                    let disk_pct = (cluster.disk_usage_gb / cluster.disk_total_gb * 100.0).min(100.0);
-                                    h.push_back(disk_pct);
-                                });
-                                set_network_rx_history.update(|h| {
-                                    if h.len() >= 144 { h.pop_front(); }
-                                    h.push_back(cluster.network_rx_mbps);
-                                });
-                                set_network_tx_history.update(|h| {
-                                    if h.len() >= 144 { h.pop_front(); }
-                                    h.push_back(cluster.network_tx_mbps);
-                                });
+                                update_history!(set_cpu_history, cluster.cpu_usage_percent);
+                                update_history!(set_memory_history, (cluster.memory_usage_gb / cluster.memory_total_gb * 100.0).min(100.0));
+                                update_history!(set_disk_history, (cluster.disk_usage_gb / cluster.disk_total_gb * 100.0).min(100.0));
+                                update_history!(set_network_rx_history, cluster.network_rx_mbps);
+                                update_history!(set_network_tx_history, cluster.network_tx_mbps);
                             }
                             set_node_metrics.set(update.nodes);
                             set_error.set(None);
@@ -477,18 +456,6 @@ pub fn ClusterStats() -> impl IntoView {
         } else {
             set_error.set(Some("Failed to create EventSource".to_string()));
         }
-        }) as Box<dyn FnOnce()>);
-
-        // Use setTimeout to defer connection by 100ms after initial render
-        // This allows the page to complete its critical rendering path first
-        let window = web_sys::window().expect("no global `window` exists");
-        window
-            .set_timeout_with_callback_and_timeout_and_arguments_0(
-                callback.as_ref().unchecked_ref(),
-                100,
-            )
-            .expect("should register `setTimeout`");
-        callback.forget();
     });
 
     // Fallback: fetch initial data on SSR
@@ -505,35 +472,27 @@ pub fn ClusterStats() -> impl IntoView {
     });
 
     view! {
-        <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4 rounded-xl mb-8">
-            <div class="text-center mb-6">
-                <h2 class="text-2xl font-bold text-charcoal">
-                    "Homelab Cluster Metrics"
-                    <span class="text-xs ml-2 text-green-600">"● Live"</span>
+        <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-6 px-4 rounded-xl mb-8">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-xl font-bold text-charcoal">
+                    "Homelab Cluster"
                 </h2>
-                {move || {
-                    if let Some(time) = last_refresh.get() {
-                        view! {
-                            <p class="text-xs text-gray-500 mt-1">
-                                "Last updated: " {time}
-                            </p>
-                        }.into_any()
-                    } else {
-                        view! { <div></div> }.into_any()
-                    }
-                }}
+                <div class="text-right">
+                    <span class="text-xs text-green-600">"● Live"</span>
+                    {move || {
+                        last_refresh.get().map(|time| view! {
+                            <span class="text-xs text-gray-500 ml-2">{time}</span>
+                        })
+                    }}
+                </div>
             </div>
 
             {move || {
-                if let Some(err) = error.get() {
-                    view! {
-                        <div class="text-center text-red-500 p-4 mb-4">
-                            <p>"Connection error: " {err}</p>
-                        </div>
-                    }.into_any()
-                } else {
-                    view! { <div></div> }.into_any()
-                }
+                error.get().map(|err| view! {
+                    <div class="text-center text-red-500 p-4 mb-4">
+                        <p>"Connection error: " {err}</p>
+                    </div>
+                })
             }}
 
             {move || {
@@ -545,19 +504,19 @@ pub fn ClusterStats() -> impl IntoView {
                     let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
 
                     view! {
-                        <div class="grid grid-cols-2 gap-4 mb-6">
-                            <div class="bg-white p-4 rounded-lg shadow text-center">
-                                <div class="text-3xl font-bold text-blue-600">{cluster.pod_count}</div>
-                                <div class="text-sm text-gray-600">"Pods Running"</div>
+                        <div class="flex gap-6 mb-4 text-sm">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-blue-600">{cluster.pod_count}</span>
+                                <span class="text-gray-600">"pods"</span>
                             </div>
-                            <div class="bg-white p-4 rounded-lg shadow text-center">
-                                <div class="text-3xl font-bold text-green-600">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-2xl font-bold text-green-600">
                                     {cluster.healthy_node_count} "/" {cluster.node_count}
-                                </div>
-                                <div class="text-sm text-gray-600">"Healthy Nodes"</div>
+                                </span>
+                                <span class="text-gray-600">"nodes"</span>
                             </div>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                             <LineChart
                                 data=cpu_hist
                                 title="CPU Usage".to_string()
@@ -574,13 +533,11 @@ pub fn ClusterStats() -> impl IntoView {
                                 color="#8b5cf6".to_string()
                             />
                         </div>
-                        <div class="grid grid-cols-1 gap-4 mb-6">
-                            <StackedAreaChart
-                                data_rx=rx_hist
-                                data_tx=tx_hist
-                                title="Network Traffic".to_string()
-                            />
-                        </div>
+                        <StackedAreaChart
+                            data_rx=rx_hist
+                            data_tx=tx_hist
+                            title="Network".to_string()
+                        />
                     }.into_any()
                 } else {
                     view! {
@@ -590,25 +547,20 @@ pub fn ClusterStats() -> impl IntoView {
             }}
 
             {move || {
-                let nodes = node_metrics.get();
-                if !nodes.is_empty() {
-                    view! {
-                        <div>
-                            <h3 class="text-xl font-semibold text-charcoal mb-4">"Node Metrics"</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                <For
-                                    each=move || node_metrics.get()
-                                    key=|node| node.name.clone()
-                                    children=move |node| {
-                                        view! { <NodeCard node=node /> }
-                                    }
-                                />
-                            </div>
+                (!node_metrics.get().is_empty()).then(|| view! {
+                    <div class="mt-4">
+                        <h3 class="text-sm font-medium text-gray-600 mb-2">"Nodes"</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <For
+                                each=move || node_metrics.get()
+                                key=|node| node.name.clone()
+                                children=move |node| {
+                                    view! { <NodeCard node=node /> }
+                                }
+                            />
                         </div>
-                    }.into_any()
-                } else {
-                    view! { <div></div> }.into_any()
-                }
+                    </div>
+                })
             }}
         </div>
     }
@@ -648,17 +600,14 @@ fn LineChart(
     let current_val = data.last().copied().unwrap_or(0.0);
 
     view! {
-        <div class="bg-white p-4 rounded-lg shadow">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="text-sm font-semibold text-gray-700">{title}</h3>
-                <span class="text-lg font-bold" style=format!("color: {}", color)>
+        <div class="bg-white p-3 rounded-lg shadow-sm">
+            <div class="flex justify-between items-center mb-1.5">
+                <h3 class="text-xs font-medium text-gray-600">{title}</h3>
+                <span class="text-base font-bold" style=format!("color: {}", color)>
                     {format!("{:.1}{}", current_val, unit)}
                 </span>
             </div>
-            <svg viewBox="0 0 100 40" class="w-full h-16" preserveAspectRatio="none">
-                // Grid lines for reference
-                <line x1="0" y1="40" x2="100" y2="40" stroke="#e5e7eb" stroke-width="0.5" />
-
+            <svg viewBox="0 0 100 30" class="w-full h-12" preserveAspectRatio="none">
                 <path
                     d={path_data}
                     fill="none"
@@ -669,12 +618,6 @@ fn LineChart(
                     vector-effect="non-scaling-stroke"
                 />
             </svg>
-            // Time axis labels
-            <div class="flex justify-between text-xs text-gray-400 mt-1">
-                <span>"-24h"</span>
-                <span>"-12h"</span>
-                <span>"Now"</span>
-            </div>
         </div>
     }
 }
@@ -736,19 +679,16 @@ fn StackedAreaChart(
     let current_tx = data_tx.last().copied().unwrap_or(0.0);
 
     view! {
-        <div class="bg-white p-4 rounded-lg shadow">
-            <div class="flex justify-between items-center mb-2">
-                <h3 class="text-sm font-semibold text-gray-700">{title}</h3>
-                <div class="text-right text-xs">
-                    <div class="text-blue-600 font-semibold">
-                        "↓ " {format!("{:.1} Mbps", current_rx)}
-                    </div>
-                    <div class="text-amber-500 font-semibold">
-                        "↑ " {format!("{:.1} Mbps", current_tx)}
-                    </div>
+        <div class="bg-white p-3 rounded-lg shadow-sm">
+            <div class="flex justify-between items-center mb-1.5">
+                <h3 class="text-xs font-medium text-gray-600">{title}</h3>
+                <div class="flex gap-3 text-xs font-semibold">
+                    <span class="text-blue-600">"↓ " {format!("{:.1}", current_rx)}</span>
+                    <span class="text-amber-500">"↑ " {format!("{:.1}", current_tx)}</span>
+                    <span class="text-gray-500">"Mbps"</span>
                 </div>
             </div>
-            <svg viewBox="0 0 100 40" class="w-full h-16" preserveAspectRatio="none">
+            <svg viewBox="0 0 100 30" class="w-full h-12" preserveAspectRatio="none">
                 <path
                     d={path_tx}
                     fill="#f59e0b"
@@ -760,15 +700,6 @@ fn StackedAreaChart(
                     fill-opacity="0.6"
                 />
             </svg>
-            <div class="flex gap-3 text-xs mt-1">
-                <span class="text-blue-600">"● RX"</span>
-                <span class="text-amber-500">"● TX"</span>
-            </div>
-            <div class="flex justify-between text-xs text-gray-400 mt-1">
-                <span>"-24h"</span>
-                <span>"-12h"</span>
-                <span>"Now"</span>
-            </div>
         </div>
     }
 }
