@@ -46,15 +46,22 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         let name = &file.name;
         let name_lower = name.to_lowercase();
 
-        // Only include image and video files (case-insensitive)
-        if name_lower.ends_with(".webp")
-            || name_lower.ends_with(".jpg")
-            || name_lower.ends_with(".png")
-            || name_lower.ends_with(".mp4")
-        {
+        // Only include full-size images (for srcset base) and videos
+        // We'll construct thumb/medium URLs in the component
+        let base_name = if name_lower.ends_with("-full.webp") {
+            // Strip the -full.webp suffix to get base name
+            Some(name.trim_end_matches("-full.webp").trim_end_matches("-full.WEBP"))
+        } else if name_lower.ends_with(".mp4") {
+            // Videos don't have size variants
+            Some(name.as_str())
+        } else {
+            None
+        };
+
+        if let Some(base) = base_name {
             // Validate that the path doesn't contain directory traversal attempts
-            if !name.contains("..") && !name.starts_with('/') {
-                let full_url = format!("https://caddy.jaydanhoward.com/{}", name);
+            if !base.contains("..") && !base.starts_with('/') {
+                let full_url = format!("https://caddy.jaydanhoward.com/{}", base);
                 media_files.push(full_url);
             }
         }
@@ -208,7 +215,14 @@ fn VirtualizedMediaItem(
                         } else {
                             view! {
                                 <img
-                                    src=src_clone.clone()
+                                    src=format!("{}-medium.webp", src_clone.clone())
+                                    srcset=format!(
+                                        "{}-thumb.webp 400w, {}-medium.webp 800w, {}-full.webp 1920w",
+                                        src_clone.clone(),
+                                        src_clone.clone(),
+                                        src_clone.clone()
+                                    )
+                                    sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
                                     alt=src_clone.clone()
                                     loading=if is_priority { "eager" } else { "lazy" }
                                     decoding="async"
@@ -435,7 +449,7 @@ pub fn Photography() -> impl IntoView {
                                                                 } else {
                                                                     view! {
                                                                         <img
-                                                                            src=src.clone()
+                                                                            src=format!("{}-full.webp", src.clone())
                                                                             alt=src.clone()
                                                                             class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
                                                                         />
