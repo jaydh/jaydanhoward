@@ -256,6 +256,116 @@ pub fn Photography() -> impl IntoView {
     // State for preview modal
     let (selected_image, set_selected_image) = signal::<Option<usize>>(None);
 
+    // Set up keyboard and touch event listeners for modal navigation
+    #[cfg(feature = "hydrate")]
+    {
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        // Store closures so we can clean them up
+        let closures: Rc<RefCell<Option<(Closure<dyn Fn(web_sys::KeyboardEvent)>, Closure<dyn Fn(web_sys::TouchEvent)>, Closure<dyn Fn(web_sys::TouchEvent)>)>>> = Rc::new(RefCell::new(None));
+
+        Effect::new(move |_| {
+            let window = web_sys::window().expect("window");
+
+            if selected_image.get().is_some() {
+                // Modal is open - set up event listeners if not already set up
+                if closures.borrow().is_none() {
+                    let images_count_resource = images_resource.clone();
+
+                    // Keyboard navigation
+                    let set_selected_for_keyboard = set_selected_image;
+                    let selected_for_keyboard = selected_image;
+                    let keyboard_closure = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+                        if let Some(idx) = selected_for_keyboard.get() {
+                            // Get total count from resource
+                            if let Some(Ok(images)) = images_count_resource.get() {
+                                let total = images.len();
+                                match event.key().as_str() {
+                                    "Escape" => set_selected_for_keyboard.set(None),
+                                    "ArrowLeft" if idx > 0 => set_selected_for_keyboard.set(Some(idx - 1)),
+                                    "ArrowRight" if idx < total - 1 => set_selected_for_keyboard.set(Some(idx + 1)),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }) as Box<dyn Fn(web_sys::KeyboardEvent)>);
+
+                    let _ = window.add_event_listener_with_callback(
+                        "keydown",
+                        keyboard_closure.as_ref().unchecked_ref()
+                    );
+
+                    // Touch/swipe gestures
+                    let touch_start_x = Rc::new(RefCell::new(0.0));
+                    let touch_start_x_clone = touch_start_x.clone();
+
+                    let touchstart_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
+                        if let Some(touch) = event.touches().get(0) {
+                            *touch_start_x_clone.borrow_mut() = touch.client_x() as f64;
+                        }
+                    }) as Box<dyn Fn(web_sys::TouchEvent)>);
+
+                    let set_selected_for_touch = set_selected_image;
+                    let selected_for_touch = selected_image;
+                    let images_count_for_touch = images_resource.clone();
+                    let touchend_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
+                        if let Some(touch) = event.changed_touches().get(0) {
+                            let touch_end_x = touch.client_x() as f64;
+                            let touch_start = *touch_start_x.borrow();
+                            let diff = touch_end_x - touch_start;
+
+                            if diff.abs() > 50.0 {
+                                if let Some(idx) = selected_for_touch.get() {
+                                    if let Some(Ok(images)) = images_count_for_touch.get() {
+                                        let total = images.len();
+                                        if diff > 0.0 && idx > 0 {
+                                            set_selected_for_touch.set(Some(idx - 1));
+                                        } else if diff < 0.0 && idx < total - 1 {
+                                            set_selected_for_touch.set(Some(idx + 1));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }) as Box<dyn Fn(web_sys::TouchEvent)>);
+
+                    let _ = window.add_event_listener_with_callback(
+                        "touchstart",
+                        touchstart_closure.as_ref().unchecked_ref()
+                    );
+
+                    let _ = window.add_event_listener_with_callback(
+                        "touchend",
+                        touchend_closure.as_ref().unchecked_ref()
+                    );
+
+                    *closures.borrow_mut() = Some((keyboard_closure, touchstart_closure, touchend_closure));
+                }
+            } else {
+                // Modal is closed - clean up event listeners
+                if let Some((keyboard_closure, touchstart_closure, touchend_closure)) = closures.borrow_mut().take() {
+                    let window = web_sys::window().expect("window");
+                    let _ = window.remove_event_listener_with_callback(
+                        "keydown",
+                        keyboard_closure.as_ref().unchecked_ref()
+                    );
+                    let _ = window.remove_event_listener_with_callback(
+                        "touchstart",
+                        touchstart_closure.as_ref().unchecked_ref()
+                    );
+                    let _ = window.remove_event_listener_with_callback(
+                        "touchend",
+                        touchend_closure.as_ref().unchecked_ref()
+                    );
+                    // Closures are dropped here, cleaning up memory
+                }
+            }
+        });
+    }
+
     view! {
         <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
@@ -315,78 +425,6 @@ pub fn Photography() -> impl IntoView {
                                                         set_selected_image.set(Some(idx + 1));
                                                     }
                                                 };
-
-                                                // Keyboard controls and swipe gestures
-                                                #[cfg(feature = "hydrate")]
-                                                {
-                                                    use wasm_bindgen::closure::Closure;
-                                                    use wasm_bindgen::JsCast;
-                                                    use std::cell::RefCell;
-                                                    use std::rc::Rc;
-
-                                                    Effect::new(move |_| {
-                                                        let window = web_sys::window().expect("window");
-
-                                                        // Keyboard controls
-                                                        let keyboard_closure = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-                                                            match event.key().as_str() {
-                                                                "Escape" => set_selected_image.set(None),
-                                                                "ArrowLeft" if has_prev => set_selected_image.set(Some(idx - 1)),
-                                                                "ArrowRight" if has_next => set_selected_image.set(Some(idx + 1)),
-                                                                _ => {}
-                                                            }
-                                                        }) as Box<dyn Fn(web_sys::KeyboardEvent)>);
-
-                                                        let _ = window.add_event_listener_with_callback(
-                                                            "keydown",
-                                                            keyboard_closure.as_ref().unchecked_ref()
-                                                        );
-
-                                                        keyboard_closure.forget();
-
-                                                        // Touch/swipe gestures
-                                                        let touch_start_x = Rc::new(RefCell::new(0.0));
-                                                        let touch_start_x_clone = touch_start_x.clone();
-
-                                                        let touchstart_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
-                                                            if let Some(touch) = event.touches().get(0) {
-                                                                *touch_start_x_clone.borrow_mut() = touch.client_x() as f64;
-                                                            }
-                                                        }) as Box<dyn Fn(web_sys::TouchEvent)>);
-
-                                                        let touchend_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
-                                                            if let Some(touch) = event.changed_touches().get(0) {
-                                                                let touch_end_x = touch.client_x() as f64;
-                                                                let touch_start = *touch_start_x.borrow();
-                                                                let diff = touch_end_x - touch_start;
-
-                                                                // Swipe threshold of 50px
-                                                                if diff.abs() > 50.0 {
-                                                                    if diff > 0.0 && has_prev {
-                                                                        // Swipe right - go to previous
-                                                                        set_selected_image.set(Some(idx - 1));
-                                                                    } else if diff < 0.0 && has_next {
-                                                                        // Swipe left - go to next
-                                                                        set_selected_image.set(Some(idx + 1));
-                                                                    }
-                                                                }
-                                                            }
-                                                        }) as Box<dyn Fn(web_sys::TouchEvent)>);
-
-                                                        let _ = window.add_event_listener_with_callback(
-                                                            "touchstart",
-                                                            touchstart_closure.as_ref().unchecked_ref()
-                                                        );
-
-                                                        let _ = window.add_event_listener_with_callback(
-                                                            "touchend",
-                                                            touchend_closure.as_ref().unchecked_ref()
-                                                        );
-
-                                                        touchstart_closure.forget();
-                                                        touchend_closure.forget();
-                                                    });
-                                                }
 
                                                 view! {
                                                     <div
