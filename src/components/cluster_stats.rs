@@ -760,16 +760,14 @@ fn StackedAreaChart(
                     fill-opacity="0.6"
                 />
             </svg>
-            <div class="flex justify-between text-xs mt-1">
-                <div class="flex gap-3">
-                    <span class="text-blue-600">"● RX"</span>
-                    <span class="text-amber-500">"● TX"</span>
-                </div>
-                <div class="flex gap-3 text-gray-400">
-                    <span>"-24h"</span>
-                    <span>"-12h"</span>
-                    <span>"Now"</span>
-                </div>
+            <div class="flex gap-3 text-xs mt-1">
+                <span class="text-blue-600">"● RX"</span>
+                <span class="text-amber-500">"● TX"</span>
+            </div>
+            <div class="flex justify-between text-xs text-gray-400 mt-1">
+                <span>"-24h"</span>
+                <span>"-12h"</span>
+                <span>"Now"</span>
             </div>
         </div>
     }
