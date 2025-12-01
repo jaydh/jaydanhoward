@@ -42,6 +42,11 @@ load("@rules_rust_wasm_bindgen//:repositories.bzl", "rust_wasm_bindgen_dependenc
 
 rust_wasm_bindgen_dependencies()
 
+# Load rust-analyzer dependencies for LSP support
+load("@rules_rust//tools/rust_analyzer:deps.bzl", "rust_analyzer_dependencies")
+
+rust_analyzer_dependencies()
+
 load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository", "render_config")
 crates_repository(
     name = "server_crates",

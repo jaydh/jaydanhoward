@@ -50,7 +50,10 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         // We'll construct thumb/medium URLs in the component
         let base_name = if name_lower.ends_with("-full.webp") {
             // Strip the -full.webp suffix to get base name
-            Some(name.trim_end_matches("-full.webp").trim_end_matches("-full.WEBP"))
+            Some(
+                name.trim_end_matches("-full.webp")
+                    .trim_end_matches("-full.WEBP"),
+            )
         } else if name_lower.ends_with(".mp4") {
             // Videos don't have size variants
             Some(name.as_str())
@@ -95,7 +98,7 @@ fn MediaItem(
                     if is_video {
                         view! {
                             <video
-                                src=src.clone()
+                                src=src.()
                                 muted=true
                                 loop=true
                                 playsinline=true
@@ -153,13 +156,21 @@ pub fn Photography() -> impl IntoView {
     // Set up keyboard and touch event listeners for modal navigation
     #[cfg(feature = "hydrate")]
     {
-        use wasm_bindgen::closure::Closure;
-        use wasm_bindgen::JsCast;
         use std::cell::RefCell;
         use std::rc::Rc;
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
 
         // Store closures so we can clean them up
-        let closures: Rc<RefCell<Option<(Closure<dyn Fn(web_sys::KeyboardEvent)>, Closure<dyn Fn(web_sys::TouchEvent)>, Closure<dyn Fn(web_sys::TouchEvent)>)>>> = Rc::new(RefCell::new(None));
+        let closures: Rc<
+            RefCell<
+                Option<(
+                    Closure<dyn Fn(web_sys::KeyboardEvent)>,
+                    Closure<dyn Fn(web_sys::TouchEvent)>,
+                    Closure<dyn Fn(web_sys::TouchEvent)>,
+                )>,
+            >,
+        > = Rc::new(RefCell::new(None));
 
         Effect::new(move |_| {
             let window = web_sys::window().expect("window");
@@ -172,87 +183,100 @@ pub fn Photography() -> impl IntoView {
                     // Keyboard navigation
                     let set_selected_for_keyboard = set_selected_image;
                     let selected_for_keyboard = selected_image;
-                    let keyboard_closure = Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
-                        if let Some(idx) = selected_for_keyboard.get() {
-                            // Get total count from resource
-                            if let Some(Ok(images)) = images_count_resource.get() {
-                                let total = images.len();
-                                match event.key().as_str() {
-                                    "Escape" => set_selected_for_keyboard.set(None),
-                                    "ArrowLeft" if idx > 0 => set_selected_for_keyboard.set(Some(idx - 1)),
-                                    "ArrowRight" if idx < total - 1 => set_selected_for_keyboard.set(Some(idx + 1)),
-                                    _ => {}
+                    let keyboard_closure =
+                        Closure::wrap(Box::new(move |event: web_sys::KeyboardEvent| {
+                            if let Some(idx) = selected_for_keyboard.get() {
+                                // Get total count from resource
+                                if let Some(Ok(images)) = images_count_resource.get() {
+                                    let total = images.len();
+                                    match event.key().as_str() {
+                                        "Escape" => set_selected_for_keyboard.set(None),
+                                        "ArrowLeft" if idx > 0 => {
+                                            set_selected_for_keyboard.set(Some(idx - 1))
+                                        }
+                                        "ArrowRight" if idx < total - 1 => {
+                                            set_selected_for_keyboard.set(Some(idx + 1))
+                                        }
+                                        _ => {}
+                                    }
                                 }
                             }
-                        }
-                    }) as Box<dyn Fn(web_sys::KeyboardEvent)>);
+                        })
+                            as Box<dyn Fn(web_sys::KeyboardEvent)>);
 
                     let _ = window.add_event_listener_with_callback(
                         "keydown",
-                        keyboard_closure.as_ref().unchecked_ref()
+                        keyboard_closure.as_ref().unchecked_ref(),
                     );
 
                     // Touch/swipe gestures
                     let touch_start_x = Rc::new(RefCell::new(0.0));
                     let touch_start_x_clone = touch_start_x.clone();
 
-                    let touchstart_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
-                        if let Some(touch) = event.touches().get(0) {
-                            *touch_start_x_clone.borrow_mut() = touch.client_x() as f64;
-                        }
-                    }) as Box<dyn Fn(web_sys::TouchEvent)>);
+                    let touchstart_closure =
+                        Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
+                            if let Some(touch) = event.touches().get(0) {
+                                *touch_start_x_clone.borrow_mut() = touch.client_x() as f64;
+                            }
+                        })
+                            as Box<dyn Fn(web_sys::TouchEvent)>);
 
                     let set_selected_for_touch = set_selected_image;
                     let selected_for_touch = selected_image;
                     let images_count_for_touch = images_resource.clone();
-                    let touchend_closure = Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
-                        if let Some(touch) = event.changed_touches().get(0) {
-                            let touch_end_x = touch.client_x() as f64;
-                            let touch_start = *touch_start_x.borrow();
-                            let diff = touch_end_x - touch_start;
+                    let touchend_closure =
+                        Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
+                            if let Some(touch) = event.changed_touches().get(0) {
+                                let touch_end_x = touch.client_x() as f64;
+                                let touch_start = *touch_start_x.borrow();
+                                let diff = touch_end_x - touch_start;
 
-                            if diff.abs() > 50.0 {
-                                if let Some(idx) = selected_for_touch.get() {
-                                    if let Some(Ok(images)) = images_count_for_touch.get() {
-                                        let total = images.len();
-                                        if diff > 0.0 && idx > 0 {
-                                            set_selected_for_touch.set(Some(idx - 1));
-                                        } else if diff < 0.0 && idx < total - 1 {
-                                            set_selected_for_touch.set(Some(idx + 1));
+                                if diff.abs() > 50.0 {
+                                    if let Some(idx) = selected_for_touch.get() {
+                                        if let Some(Ok(images)) = images_count_for_touch.get() {
+                                            let total = images.len();
+                                            if diff > 0.0 && idx > 0 {
+                                                set_selected_for_touch.set(Some(idx - 1));
+                                            } else if diff < 0.0 && idx < total - 1 {
+                                                set_selected_for_touch.set(Some(idx + 1));
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                    }) as Box<dyn Fn(web_sys::TouchEvent)>);
+                        })
+                            as Box<dyn Fn(web_sys::TouchEvent)>);
 
                     let _ = window.add_event_listener_with_callback(
                         "touchstart",
-                        touchstart_closure.as_ref().unchecked_ref()
+                        touchstart_closure.as_ref().unchecked_ref(),
                     );
 
                     let _ = window.add_event_listener_with_callback(
                         "touchend",
-                        touchend_closure.as_ref().unchecked_ref()
+                        touchend_closure.as_ref().unchecked_ref(),
                     );
 
-                    *closures.borrow_mut() = Some((keyboard_closure, touchstart_closure, touchend_closure));
+                    *closures.borrow_mut() =
+                        Some((keyboard_closure, touchstart_closure, touchend_closure));
                 }
             } else {
                 // Modal is closed - clean up event listeners
-                if let Some((keyboard_closure, touchstart_closure, touchend_closure)) = closures.borrow_mut().take() {
+                if let Some((keyboard_closure, touchstart_closure, touchend_closure)) =
+                    closures.borrow_mut().take()
+                {
                     let window = web_sys::window().expect("window");
                     let _ = window.remove_event_listener_with_callback(
                         "keydown",
-                        keyboard_closure.as_ref().unchecked_ref()
+                        keyboard_closure.as_ref().unchecked_ref(),
                     );
                     let _ = window.remove_event_listener_with_callback(
                         "touchstart",
-                        touchstart_closure.as_ref().unchecked_ref()
+                        touchstart_closure.as_ref().unchecked_ref(),
                     );
                     let _ = window.remove_event_listener_with_callback(
                         "touchend",
-                        touchend_closure.as_ref().unchecked_ref()
+                        touchend_closure.as_ref().unchecked_ref(),
                     );
                     // Closures are dropped here, cleaning up memory
                 }
