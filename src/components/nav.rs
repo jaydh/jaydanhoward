@@ -5,7 +5,7 @@ use leptos::prelude::*;
 pub fn Nav() -> impl IntoView {
     let routes = vec![("#about", "About", "about"), ("#life", "Game of Life", "life"), ("#path", "Pathfinding", "path"), ("#photography", "Photography", "photography")];
     #[allow(unused_variables)]
-    let (active_section, set_active_section) = signal("about".to_string());
+    let (active_section, set_active_section) = signal(String::new());
 
     let contact_links = vec![
         (
@@ -51,7 +51,7 @@ pub fn Nav() -> impl IntoView {
 
                     // Check each section and find which one is most visible
                     let section_ids = vec!["about", "life", "path", "photography"];
-                    let mut best_section = "about".to_string();
+                    let mut best_section = String::new();
                     let mut min_distance = f64::MAX;
 
                     for section_id in section_ids {

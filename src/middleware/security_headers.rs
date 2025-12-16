@@ -52,16 +52,19 @@ where
             // Content Security Policy - Restricts resource loading to prevent XSS
             // Note: This is a strict policy. Adjust 'unsafe-inline' and 'unsafe-eval' based on your needs.
             // For Leptos hydration, we need 'unsafe-inline' for styles and scripts
+            // Cloudflare Insights is allowed for analytics
             headers.insert(
                 actix_web::http::header::CONTENT_SECURITY_POLICY,
                 actix_web::http::header::HeaderValue::from_static(
                     "default-src 'self'; \
-                     script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; \
+                     script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; \
                      style-src 'self' 'unsafe-inline'; \
                      img-src 'self' https://caddy.jaydanhoward.com data:; \
+                     media-src 'self' https://caddy.jaydanhoward.com; \
                      font-src 'self'; \
-                     connect-src 'self'; \
-                     frame-ancestors 'none'; \
+                     connect-src 'self' https://cloudflareinsights.com; \
+                     frame-src 'self'; \
+                     frame-ancestors 'self'; \
                      base-uri 'self'; \
                      form-action 'self';"
                 ),
@@ -70,7 +73,7 @@ where
             // X-Frame-Options - Prevents clickjacking by disallowing embedding in iframes
             headers.insert(
                 actix_web::http::header::X_FRAME_OPTIONS,
-                actix_web::http::header::HeaderValue::from_static("DENY"),
+                actix_web::http::header::HeaderValue::from_static("SAMEORIGIN"),
             );
 
             // X-Content-Type-Options - Prevents MIME type sniffing

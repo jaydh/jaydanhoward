@@ -17,8 +17,27 @@ pub struct PrometheusResult {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PrometheusMetric {
-    metric: std::collections::HashMap<String, String>,
-    value: (f64, String),
+    pub metric: std::collections::HashMap<String, String>,
+    pub value: (f64, String),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PrometheusRangeData {
+    pub status: String,
+    pub data: PrometheusRangeResult,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PrometheusRangeResult {
+    pub result_type: String,
+    pub result: Vec<PrometheusRangeMetric>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct PrometheusRangeMetric {
+    pub metric: std::collections::HashMap<String, String>,
+    pub values: Vec<(f64, String)>,
 }
 
 #[cfg(feature = "ssr")]
@@ -35,6 +54,35 @@ pub async fn query_prometheus(query: &str) -> Result<PrometheusData, anyhow::Err
                 .send()
                 .await?
                 .json::<PrometheusData>()
+                .await?;
+            Ok(response)
+        }
+        Err(_) => Err(anyhow!("Prometheus URL not defined")),
+    }
+}
+
+#[cfg(feature = "ssr")]
+#[allow(dead_code)]
+pub async fn query_prometheus_range(
+    query: &str,
+    start: i64,
+    end: i64,
+    step: &str,
+) -> Result<PrometheusRangeData, anyhow::Error> {
+    use reqwest::Client;
+    let client = Client::new();
+    match std::env::var("PROMETHEUS_URL") {
+        Ok(base_url) => {
+            let url = format!(
+                "{}/api/v1/query_range?query={}&start={}&end={}&step={}",
+                base_url, query, start, end, step
+            );
+
+            let response = client
+                .get(&url)
+                .send()
+                .await?
+                .json::<PrometheusRangeData>()
                 .await?;
             Ok(response)
         }

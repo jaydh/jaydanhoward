@@ -42,6 +42,11 @@ load("@rules_rust_wasm_bindgen//:repositories.bzl", "rust_wasm_bindgen_dependenc
 
 rust_wasm_bindgen_dependencies()
 
+# Load rust-analyzer dependencies for LSP support
+load("@rules_rust//tools/rust_analyzer:deps.bzl", "rust_analyzer_dependencies")
+
+rust_analyzer_dependencies()
+
 load("@rules_rust//crate_universe:defs.bzl", "crate", "crates_repository", "render_config")
 crates_repository(
     name = "server_crates",
@@ -63,6 +68,9 @@ crates_repository(
                 "macros",
                 "rustls-0_23",
             ],
+        ),
+        "actix-web-lab": crate.spec(
+            version = "0.23",
         ),
         "base64": crate.spec(
             version = "0.22.1",
@@ -125,9 +133,6 @@ crates_repository(
         "rustls": crate.spec(
             version = "0.23",
         ),
-        "scraper": crate.spec(
-            version = "0.20.0",
-        ),
         "serde": crate.spec(
             version = "1.0.183",
         ),
@@ -142,7 +147,11 @@ crates_repository(
         ),
        "tokio": crate.spec(
             version = "1",
-            features = ["macros", "rt-multi-thread"]
+            features = ["macros", "rt-multi-thread", "time"]
+        ),
+       "tokio-stream": crate.spec(
+            version = "0.1",
+            features = ["time"]
         ),
        "tracing": crate.spec(
             version = "0.1.19",
@@ -234,6 +243,7 @@ crates_repository(
                   "HtmlDocument",
                   "IntersectionObserver",
                   "IntersectionObserverEntry",
+                  "IntersectionObserverInit",
                   "MediaQueryList",
                   "MessageEvent",
                   "MouseEvent",

@@ -5,11 +5,15 @@ mod lighthouse;
 #[cfg(feature = "ssr")]
 mod robots;
 #[cfg(feature = "ssr")]
+mod metrics_stream;
+#[cfg(feature = "ssr")]
 pub use health_check::*;
 #[cfg(feature = "ssr")]
 pub use lighthouse::*;
 #[cfg(feature = "ssr")]
 pub use robots::*;
+#[cfg(feature = "ssr")]
+pub use metrics_stream::*;
 
 #[allow(dead_code)]
 pub fn error_chain_fmt(
