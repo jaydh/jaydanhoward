@@ -4,7 +4,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     use crate::middleware::cache_control::CacheControl;
     use crate::middleware::rate_limit::RateLimiter;
     use crate::middleware::security_headers::SecurityHeaders;
-    use crate::routes::{health_check, robots_txt, upload_lighthouse_report};
+    use crate::routes::{health_check, metrics_stream, robots_txt, upload_lighthouse_report};
     use crate::telemtry::{get_subscriber, init_subscriber};
     use actix_files::Files;
     use actix_web::{web, HttpServer};
@@ -42,6 +42,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                     .to(upload_lighthouse_report)
                     .wrap(auth_rate_limiter),
             )
+            .route("/api/metrics/stream", web::get().to(metrics_stream))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
             .route("/health_check", web::get().to(health_check))
             .route("/robots.txt", web::get().to(robots_txt))

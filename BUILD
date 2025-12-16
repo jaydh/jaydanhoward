@@ -41,6 +41,7 @@ server_deps = [
     "@server_crates//:actix-files",
     "@server_crates//:actix-multipart",
     "@server_crates//:actix-web",
+    "@server_crates//:actix-web-lab",
     "@server_crates//:anyhow",
     "@server_crates//:base64",
     "@server_crates//:cfg-if",
@@ -54,11 +55,12 @@ server_deps = [
     "@server_crates//:leptos_router",
     "@server_crates//:rand",
     "@server_crates//:reqwest",
-    "@server_crates//:scraper",
     "@server_crates//:serde",
     "@server_crates//:serde-aux",
+    "@server_crates//:serde_json",
     "@server_crates//:thiserror",
     "@server_crates//:tokio",
+    "@server_crates//:tokio-stream",
     "@server_crates//:tracing",
     "@server_crates//:tracing-bunyan-formatter",
     "@server_crates//:tracing-log",
@@ -233,8 +235,6 @@ oci_image(
         ":zstd_lib_amd64",
     ],
     workdir = "/app/jaydanhoward_bin_linux_amd64.runfiles",
-    architecture = "amd64",
-    os = "linux",
 )
 
 oci_image(
@@ -246,9 +246,6 @@ oci_image(
         ":zstd_lib_arm64",
     ],
     workdir = "/app/jaydanhoward_bin_linux_arm64.runfiles",
-    architecture = "arm64",
-    os = "linux",
-    variant = "v8",
 )
 
 oci_push(
@@ -269,8 +266,8 @@ oci_push(
 oci_image_index(
     name = "jaydanhoward_image_index",
     images = [
-        ":jaydanhoward_image_amd64",
         ":jaydanhoward_image_arm64",
+        ":jaydanhoward_image_amd64",
     ],
 )
 

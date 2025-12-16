@@ -19,6 +19,7 @@ pub fn Lighthouse() -> impl IntoView {
             <iframe
                 src="/assets/lighthouse.html"
                 title="Lighthouse Report"
+                loading="lazy"
                 class="grow w-full rounded-xl border border-border shadow-minimal-lg"
             ></iframe>
         </div>

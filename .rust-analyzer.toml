@@ -1,0 +1,19 @@
+# Minimal rust-analyzer config for Bazel projects
+# No dependency duplication - just tells rust-analyzer to work without cargo
+
+[check]
+# Disable cargo check since we use Bazel
+enable = false
+
+[cargo]
+# Don't try to load Cargo.toml
+noDefaultFeatures = false
+
+[procMacro]
+enable = true
+
+[inlayHints]
+enable = true
+
+[completion]
+autoimport.enable = true
