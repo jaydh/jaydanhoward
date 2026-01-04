@@ -1,5 +1,6 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
+use leptos_router::hooks::use_navigate;
 
 #[server]
 pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
@@ -98,7 +99,7 @@ fn MediaItem(
                     if is_video {
                         view! {
                             <video
-                                src=src.()
+                                src=src.clone()
                                 muted=true
                                 loop=true
                                 playsinline=true
@@ -152,6 +153,28 @@ pub fn Photography() -> impl IntoView {
 
     // State for preview modal
     let (selected_image, set_selected_image) = signal::<Option<usize>>(None);
+
+    // Get navigation hook
+    let navigate = use_navigate();
+
+    // Helper to extract filename from URL
+    let get_filename = |url: &str| -> String {
+        url.split('/').last().unwrap_or("").to_string()
+    };
+
+    // Create an Effect to sync URL with selected_image changes
+    Effect::new(move |_| {
+        if let Some(idx) = selected_image.get() {
+            if let Some(Ok(images)) = images_resource.get() {
+                if let Some(url) = images.get(idx) {
+                    let filename = get_filename(url);
+                    navigate(&format!("/?image={}", filename), Default::default());
+                }
+            }
+        } else {
+            navigate("/", Default::default());
+        }
+    });
 
     // Set up keyboard and touch event listeners for modal navigation
     #[cfg(feature = "hydrate")]
