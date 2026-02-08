@@ -2,6 +2,69 @@ use crate::components::icons::Icon;
 use leptos::prelude::*;
 
 #[component]
+fn ThemeToggle() -> impl IntoView {
+    #[allow(unused_variables)]
+    let (is_dark, set_is_dark) = signal(false);
+
+    // Initialize theme from localStorage / system preference
+    #[cfg(not(feature = "ssr"))]
+    {
+        Effect::new(move |prev: Option<()>| {
+            if prev.is_some() {
+                return; // Only run once
+            }
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            // Check if dark class is already set (by FOUC prevention script)
+            let is_currently_dark = document
+                .document_element()
+                .map(|el| el.class_list().contains("dark"))
+                .unwrap_or(false);
+            set_is_dark.set(is_currently_dark);
+        });
+    }
+
+    #[cfg(not(feature = "ssr"))]
+    let toggle_theme = move |_| {
+        let window = web_sys::window().unwrap();
+        let document = window.document().unwrap();
+        let html = document.document_element().unwrap();
+        let new_dark = !is_dark.get_untracked();
+
+        if new_dark {
+            html.class_list().add_1("dark").unwrap();
+        } else {
+            html.class_list().remove_1("dark").unwrap();
+        }
+
+        // Persist to localStorage
+        if let Ok(Some(storage)) = window.local_storage() {
+            let _ = storage.set_item("theme", if new_dark { "dark" } else { "light" });
+        }
+
+        set_is_dark.set(new_dark);
+    };
+
+    #[cfg(feature = "ssr")]
+    let toggle_theme = move |_: leptos::ev::MouseEvent| {};
+
+    view! {
+        <button
+            class="px-2 py-2 text-charcoal hover:text-accent transition-colors duration-200"
+            on:click=toggle_theme
+            aria-label="Toggle dark mode"
+        >
+            <Show
+                when=move || is_dark()
+                fallback=|| view! { <Icon name="moon" class="w-5 h-5" /> }
+            >
+                <Icon name="sun" class="w-5 h-5" />
+            </Show>
+        </button>
+    }
+}
+
+#[component]
 pub fn Nav() -> impl IntoView {
     let routes = vec![("#about", "About", "about"), ("#life", "Game of Life", "life"), ("#path", "Pathfinding", "path"), ("#photography", "Photography", "photography")];
     #[allow(unused_variables)]
@@ -143,7 +206,9 @@ pub fn Nav() -> impl IntoView {
                                 </a>
                             }
                         })
-                        .collect_view()} <div class="flex flex-col relative">
+                        .collect_view()}
+                    <ThemeToggle />
+                    <div class="flex flex-col relative">
                         <button
                             type="button"
                             class="px-4 py-2 text-charcoal hover:text-accent transition-colors duration-200 flex items-center gap-1"

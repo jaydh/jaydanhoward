@@ -4,7 +4,7 @@ use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
 use leptos::prelude::*;
-use leptos_meta::{provide_meta_context, Html, Link, Style, Title};
+use leptos_meta::{provide_meta_context, Html, Link, Script, Style, Title};
 use leptos_router::components::*;
 use leptos_router::path;
 
@@ -66,6 +66,13 @@ pub fn App() -> impl IntoView {
 
     view! {
         <Stylesheets />
+        <Script>{r#"
+            (function(){
+                if(localStorage.theme==='dark'||(!('theme' in localStorage)&&window.matchMedia('(prefers-color-scheme: dark)').matches)){
+                    document.documentElement.classList.add('dark')
+                }
+            })()
+        "#}</Script>
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
         <Link rel="preconnect" href="https://caddy.jaydanhoward.com" />
         <Link rel="dns-prefetch" href="https://caddy.jaydanhoward.com" />
