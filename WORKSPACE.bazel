@@ -247,6 +247,7 @@ crates_repository(
                   "MediaQueryList",
                   "MessageEvent",
                   "MouseEvent",
+                  "Storage",
                   "Touch",
                   "TouchEvent",
                   "TouchEventInit",

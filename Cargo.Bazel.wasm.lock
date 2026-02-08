@@ -1,5 +1,5 @@
 {
-  "checksum": "e9d28ef19c78ddc1f04fb3f394b6ec1a6482bc9208d9bd20156c2e303356ebf6",
+  "checksum": "39d68a50271179f4d9836fbd8d80b6559b848e15bfb275900ce97dd49d1f7657",
   "crates": {
     "aho-corasick 1.1.3": {
       "name": "aho-corasick",
@@ -13130,6 +13130,7 @@
             "ShadowRoot",
             "ShadowRootInit",
             "ShadowRootMode",
+            "Storage",
             "StorageEvent",
             "StreamPipeOptions",
             "SubmitEvent",
