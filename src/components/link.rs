@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_location;

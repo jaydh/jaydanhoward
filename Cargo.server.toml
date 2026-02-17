@@ -19,10 +19,10 @@ console_error_panic_hook = "0.1"
 futures = "0.3.28"
 futures-util = "0.3.28"
 http = "0.2"
-leptos = { version = "0.8.2", features = ["ssr", "nightly"] }
-leptos_actix = "0.8.2"
-leptos_meta = "0.8.2"
-leptos_router = { version = "0.8.2", features = ["nightly"] }
+leptos = { version = "0.8.16", features = ["ssr", "nightly"] }
+leptos_actix = "0.8.7"
+leptos_meta = "0.8.6"
+leptos_router = { version = "0.8.12", features = ["nightly"] }
 rand = "0.8.5"
 reqwest = { version = "0.12", default-features = false, features = [
     "http2", "rustls-tls", "rustls-tls-native-roots", "json", "gzip",
