@@ -219,7 +219,7 @@ oci.pull(
         "linux/amd64",
         "linux/arm64/v8",
     ],
-    tag = "latest",
+    digest = "sha256:c2cac2cc7c4b1a853569b7a022d8105bf9669741e28bff13e31093ee18f229bb",
 )
 
 use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8")
