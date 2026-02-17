@@ -309,7 +309,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "VnXPDBImKUyTX14gCJZ30baidZvw/HO+nq0vXiw5h5o=",
-        "usagesDigest": "9XR+YkkG5+Wqty+ElXKgNmqKPAfR/DZlsmOeZpj/83g=",
+        "usagesDigest": "teiSQu8VjYxxd65cCJFNxLQHtfrQWdERFKrx5OAjl4Y=",
         "recordedInputs": [
           "REPO_MAPPING:aspect_bazel_lib+,bazel_tools bazel_tools",
           "REPO_MAPPING:bazel_features+,bazel_tools bazel_tools",
@@ -364,7 +364,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/cc-debian13",
-              "identifier": "sha256:c2cac2cc7c4b1a853569b7a022d8105bf9669741e28bff13e31093ee18f229bb",
+              "identifier": "sha256:22fd4bd55e5f0ef1929985f111816ba1e43c00a0ddeb001c0fdfb2724b4e3cc2",
               "platform": "linux/amd64",
               "target_name": "distroless_cc_debian13_linux_amd64",
               "bazel_tags": []
@@ -376,7 +376,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/cc-debian13",
-              "identifier": "sha256:c2cac2cc7c4b1a853569b7a022d8105bf9669741e28bff13e31093ee18f229bb",
+              "identifier": "sha256:22fd4bd55e5f0ef1929985f111816ba1e43c00a0ddeb001c0fdfb2724b4e3cc2",
               "platform": "linux/arm64/v8",
               "target_name": "distroless_cc_debian13_linux_arm64_v8",
               "bazel_tags": []
@@ -389,7 +389,7 @@
               "scheme": "https",
               "registry": "gcr.io",
               "repository": "distroless/cc-debian13",
-              "identifier": "sha256:c2cac2cc7c4b1a853569b7a022d8105bf9669741e28bff13e31093ee18f229bb",
+              "identifier": "sha256:22fd4bd55e5f0ef1929985f111816ba1e43c00a0ddeb001c0fdfb2724b4e3cc2",
               "platforms": {
                 "@@platforms//cpu:x86_64": "@distroless_cc_debian13_linux_amd64",
                 "@@platforms//cpu:arm64": "@distroless_cc_debian13_linux_arm64_v8"
