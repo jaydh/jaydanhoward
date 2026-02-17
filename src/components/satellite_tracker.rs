@@ -66,19 +66,37 @@ pub fn SatelliteTracker() -> impl IntoView {
     let (tle_data, set_tle_data) = signal(Vec::<TleData>::new());
     let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(None::<String>);
-    let (selected_group, set_selected_group) = signal("starlink".to_string());
 
     // Canvas reference for WebGL rendering
     let canvas_ref = NodeRef::<leptos::tachys::html::element::Canvas>::new();
 
-    // Fetch TLE data when component mounts or group changes
+    // Signal for displaying current simulation date
+    #[cfg_attr(feature = "ssr", allow(unused_variables))]
+    let (current_date_display, set_current_date_display) = signal(String::new());
+
+    // Renderer value for zoom controls (needs to be accessible outside Effect)
+    #[cfg(not(feature = "ssr"))]
+    let (renderer_signal, set_renderer_signal) = signal(None::<StoredValue<crate::components::satellite_renderer::SatelliteRenderer, leptos::prelude::LocalStorage>>);
+
+    // Visibility tracking for intersection observer
+    #[cfg(not(feature = "ssr"))]
+    let (is_visible, set_is_visible) = signal(false);
+
+    // Zoom button long press handling
+    #[cfg(not(feature = "ssr"))]
+    use std::rc::Rc;
+    #[cfg(not(feature = "ssr"))]
+    use std::cell::RefCell;
+    #[cfg(not(feature = "ssr"))]
+    let zoom_interval: Rc<RefCell<Option<leptos::leptos_dom::helpers::IntervalHandle>>> = Rc::new(RefCell::new(None));
+
+    // Fetch TLE data when component mounts
     Effect::new(move |_| {
-        let group = selected_group.get();
         set_loading.set(true);
         set_error.set(None);
 
         leptos::task::spawn_local(async move {
-            match get_tle_data(group).await {
+            match get_tle_data("active".to_string()).await {
                 Ok(data) => {
                     #[cfg(not(feature = "ssr"))]
                     {
@@ -145,8 +163,89 @@ pub fn SatelliteTracker() -> impl IntoView {
                         // Store renderer in a StoredValue for the render loop
                         let renderer_value = StoredValue::new_local(renderer);
 
+                        // Make renderer accessible for zoom buttons
+                        set_renderer_signal.set(Some(renderer_value));
+
+                        // Add mouse drag controls
+                        let is_dragging = StoredValue::new_local(false);
+                        let last_mouse_x = StoredValue::new_local(0.0_f64);
+                        let last_mouse_y = StoredValue::new_local(0.0_f64);
+
+                        let canvas_element = canvas.clone();
+
+                        // Mouse down
+                        let mousedown_callback = Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                            is_dragging.set_value(true);
+                            last_mouse_x.set_value(e.client_x() as f64);
+                            last_mouse_y.set_value(e.client_y() as f64);
+                        }) as Box<dyn FnMut(_)>);
+
+                        canvas_element
+                            .add_event_listener_with_callback("mousedown", mousedown_callback.as_ref().unchecked_ref())
+                            .unwrap();
+                        mousedown_callback.forget();
+
+                        // Mouse move
+                        let canvas_element2 = canvas.clone();
+                        let mousemove_callback = Closure::wrap(Box::new(move |e: web_sys::MouseEvent| {
+                            if is_dragging.get_value() {
+                                let current_x = e.client_x() as f64;
+                                let current_y = e.client_y() as f64;
+                                let delta_x = (current_x - last_mouse_x.get_value()) as f32;
+                                let delta_y = (current_y - last_mouse_y.get_value()) as f32;
+
+                                renderer_value.update_value(|renderer| {
+                                    renderer.rotate_camera(delta_x, delta_y);
+                                });
+
+                                last_mouse_x.set_value(current_x);
+                                last_mouse_y.set_value(current_y);
+                            }
+                        }) as Box<dyn FnMut(_)>);
+
+                        canvas_element2
+                            .add_event_listener_with_callback("mousemove", mousemove_callback.as_ref().unchecked_ref())
+                            .unwrap();
+                        mousemove_callback.forget();
+
+                        // Mouse up
+                        let canvas_element3 = canvas.clone();
+                        let mouseup_callback = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                            is_dragging.set_value(false);
+                        }) as Box<dyn FnMut(_)>);
+
+                        canvas_element3
+                            .add_event_listener_with_callback("mouseup", mouseup_callback.as_ref().unchecked_ref())
+                            .unwrap();
+                        mouseup_callback.forget();
+
+                        // Mouse leave (stop dragging if mouse leaves canvas)
+                        let mouseleave_callback = Closure::wrap(Box::new(move |_: web_sys::MouseEvent| {
+                            is_dragging.set_value(false);
+                        }) as Box<dyn FnMut(_)>);
+
+                        canvas
+                            .add_event_listener_with_callback("mouseleave", mouseleave_callback.as_ref().unchecked_ref())
+                            .unwrap();
+                        mouseleave_callback.forget();
+
                         // Store satellites for the render loop
                         let satellites_value = StoredValue::new_local(Vec::<satellite_calculations::Satellite>::new());
+
+                        // Generate 24 hours of timestamps (every 5 minutes = 288 time points)
+                        let now_ms = js_sys::Date::now();
+                        let twenty_four_hours_ms = 24.0 * 60.0 * 60.0 * 1000.0;
+                        let start_time = now_ms - twenty_four_hours_ms;
+                        let time_step = 5.0 * 60.0 * 1000.0; // 5 minutes in ms
+                        let num_steps = (twenty_four_hours_ms / time_step) as usize;
+
+                        let time_points: Vec<f64> = (0..num_steps)
+                            .map(|i| start_time + (i as f64 * time_step))
+                            .collect();
+
+                        let time_points_value = StoredValue::new_local(time_points);
+                        let current_time_index = StoredValue::new_local(0_usize);
+                        let frame_counter = StoredValue::new_local(0_usize);
 
                         // Watch for TLE data changes and update satellites
                         let tle_data_copy = tle_data;
@@ -170,23 +269,55 @@ pub fn SatelliteTracker() -> impl IntoView {
                         let g = f.clone();
 
                         *g.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                            // Calculate satellite positions and render frame
-                            satellites_value.with_value(|satellites| {
-                                if !satellites.is_empty() {
-                                    let positions = satellite_calculations::calculate_positions(satellites);
-                                    let sat_positions: Vec<satellite_calculations::SatellitePosition> =
-                                        positions.into_iter().map(|(_, pos)| pos).collect();
+                            // Only animate if visible
+                            if is_visible.get_untracked() {
+                                // Calculate satellite positions and render frame
+                                satellites_value.with_value(|satellites| {
+                                    if !satellites.is_empty() {
+                                        // Get current time point from the loop
+                                        let time_index = current_time_index.get_value();
+                                        let time_points = time_points_value.get_value();
 
-                                    renderer_value.update_value(|renderer| {
-                                        renderer.update_satellites(sat_positions);
-                                        renderer.render();
-                                    });
-                                } else {
-                                    renderer_value.update_value(|renderer| {
-                                        renderer.render();
-                                    });
-                                }
-                            });
+                                        if time_index < time_points.len() {
+                                            let current_time = time_points[time_index];
+
+                                            // Calculate positions at this specific time
+                                            let positions = satellite_calculations::calculate_positions_at_time(satellites, current_time);
+                                            let sat_positions: Vec<satellite_calculations::SatellitePosition> =
+                                                positions.into_iter().map(|(_, pos)| pos).collect();
+
+                                            renderer_value.update_value(|renderer| {
+                                                renderer.update_satellites(sat_positions);
+                                                renderer.render();
+                                            });
+
+                                            // Update date display
+                                            use wasm_bindgen::JsValue;
+                                            let date = js_sys::Date::new(&JsValue::from_f64(current_time));
+                                            let date_str = date.to_iso_string().as_string().unwrap_or_default();
+                                            // Format as HH:MM (just time since it's within 24 hours)
+                                            if date_str.len() >= 16 {
+                                                let formatted = format!("{}", &date_str[11..16]);
+                                                set_current_date_display.set(formatted);
+                                            }
+
+                                            // Advance to next time point every 2 frames for smoother animation
+                                            let frame_count = frame_counter.get_value();
+                                            frame_counter.set_value(frame_count + 1);
+
+                                            if frame_count % 2 == 0 {
+                                                // Move to next time point and loop back to start
+                                                let next_index = (time_index + 1) % time_points.len();
+                                                current_time_index.set_value(next_index);
+                                            }
+                                        }
+                                    } else {
+                                        renderer_value.update_value(|renderer| {
+                                            renderer.render();
+                                        });
+                                    }
+                                });
+                            }
 
                             // Request next frame
                             let window = web_sys::window().unwrap();
@@ -215,28 +346,34 @@ pub fn SatelliteTracker() -> impl IntoView {
         }
     });
 
+    // Set up intersection observer to pause when not visible
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+
+        if let Some(canvas) = canvas_ref.get_untracked() {
+            let callback = Closure::wrap(Box::new(move |entries: js_sys::Array| {
+                if let Some(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>().ok() {
+                    set_is_visible.set(entry.is_intersecting());
+                }
+            }) as Box<dyn FnMut(js_sys::Array)>);
+
+            let options = web_sys::IntersectionObserverInit::new();
+            options.set_threshold(&JsValue::from_f64(0.1)); // Trigger when 10% visible
+
+            if let Ok(observer) = web_sys::IntersectionObserver::new_with_options(
+                callback.as_ref().unchecked_ref(),
+                &options
+            ) {
+                observer.observe(&canvas);
+                callback.forget();
+            }
+        }
+    });
+
     view! {
         <div class="w-full bg-gradient-to-br from-gray-900 to-black py-6 px-4 rounded-xl mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-bold text-white">
-                    "Satellite Orbit Tracker"
-                </h2>
-                <div class="flex gap-2">
-                    <select
-                        class="px-3 py-1 rounded bg-gray-800 text-white text-sm border border-gray-700"
-                        on:change=move |ev| {
-                            let value = event_target_value(&ev);
-                            set_selected_group.set(value);
-                        }
-                    >
-                        <option value="starlink">"Starlink"</option>
-                        <option value="active">"All Active"</option>
-                        <option value="stations">"Space Stations"</option>
-                        <option value="visual">"Visible"</option>
-                        <option value="gps-ops">"GPS"</option>
-                    </select>
-                </div>
-            </div>
 
             {move || {
                 error.get().map(|err| view! {
@@ -264,16 +401,211 @@ pub fn SatelliteTracker() -> impl IntoView {
                     "Your browser does not support canvas"
                 </canvas>
 
-                <div class="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-sm">
-                    {move || {
-                        let count = tle_data.get().len();
-                        format!("Tracking {} satellites", count)
-                    }}
+                // Zoom controls
+                <div class="absolute top-4 right-4 flex flex-col gap-2">
+                    {
+                        #[cfg(not(feature = "ssr"))]
+                        {
+                            let zoom_interval_in = zoom_interval.clone();
+                            let zoom_interval_up1 = zoom_interval.clone();
+                            let zoom_interval_leave1 = zoom_interval.clone();
+                            let zoom_interval_out = zoom_interval.clone();
+                            let zoom_interval_up2 = zoom_interval.clone();
+                            let zoom_interval_leave2 = zoom_interval.clone();
+
+                            view! {
+                                <button
+                                    class="bg-black/70 hover:bg-black/90 text-white px-3 py-2 rounded text-lg font-bold select-none"
+                                    on:click=move |_| {
+                                        if let Some(renderer_value) = renderer_signal.get() {
+                                            renderer_value.update_value(|renderer| {
+                                                renderer.adjust_zoom(1.0);
+                                            });
+                                        }
+                                    }
+                                    on:mousedown=move |_| {
+                                        let zoom_interval = zoom_interval_in.clone();
+                                        if let Some(handle) = zoom_interval.borrow_mut().take() {
+                                            handle.clear();
+                                        }
+                                        leptos::leptos_dom::helpers::set_timeout(
+                                            move || {
+                                                let zoom_interval = zoom_interval.clone();
+                                                let interval_handle = leptos::leptos_dom::helpers::set_interval_with_handle(
+                                                    move || {
+                                                        if let Some(renderer_value) = renderer_signal.get() {
+                                                            renderer_value.update_value(|renderer| {
+                                                                renderer.adjust_zoom(1.0);
+                                                            });
+                                                        }
+                                                    },
+                                                    std::time::Duration::from_millis(50),
+                                                ).ok();
+                                                *zoom_interval.borrow_mut() = interval_handle;
+                                            },
+                                            std::time::Duration::from_millis(200),
+                                        );
+                                    }
+                                    on:mouseup=move |_| {
+                                        if let Some(handle) = zoom_interval_up1.borrow_mut().take() {
+                                            handle.clear();
+                                        }
+                                    }
+                                    on:mouseleave=move |_| {
+                                        if let Some(handle) = zoom_interval_leave1.borrow_mut().take() {
+                                            handle.clear();
+                                        }
+                                    }
+                                >
+                                    "+"
+                                </button>
+                                <button
+                                    class="bg-black/70 hover:bg-black/90 text-white px-3 py-2 rounded text-lg font-bold select-none"
+                                    on:click=move |_| {
+                                        if let Some(renderer_value) = renderer_signal.get() {
+                                            renderer_value.update_value(|renderer| {
+                                                renderer.adjust_zoom(-1.0);
+                                            });
+                                        }
+                                    }
+                                    on:mousedown=move |_| {
+                                        let zoom_interval = zoom_interval_out.clone();
+                                        if let Some(handle) = zoom_interval.borrow_mut().take() {
+                                            handle.clear();
+                                        }
+                                        leptos::leptos_dom::helpers::set_timeout(
+                                            move || {
+                                                let zoom_interval = zoom_interval.clone();
+                                                let interval_handle = leptos::leptos_dom::helpers::set_interval_with_handle(
+                                                    move || {
+                                                        if let Some(renderer_value) = renderer_signal.get() {
+                                                            renderer_value.update_value(|renderer| {
+                                                                renderer.adjust_zoom(-1.0);
+                                                            });
+                                                        }
+                                                    },
+                                                    std::time::Duration::from_millis(50),
+                                                ).ok();
+                                                *zoom_interval.borrow_mut() = interval_handle;
+                                            },
+                                            std::time::Duration::from_millis(200),
+                                        );
+                                    }
+                                    on:mouseup=move |_| {
+                                        if let Some(handle) = zoom_interval_up2.borrow_mut().take() {
+                                            handle.clear();
+                                        }
+                                    }
+                                    on:mouseleave=move |_| {
+                                        if let Some(handle) = zoom_interval_leave2.borrow_mut().take() {
+                                            handle.clear();
+                                        }
+                                    }
+                                >
+                                    "-"
+                                </button>
+                            }
+                        }
+                        #[cfg(feature = "ssr")]
+                        {
+                            view! {
+                                <button class="bg-black/70 hover:bg-black/90 text-white px-3 py-2 rounded text-lg font-bold select-none">
+                                    "+"
+                                </button>
+                                <button class="bg-black/70 hover:bg-black/90 text-white px-3 py-2 rounded text-lg font-bold select-none">
+                                    "-"
+                                </button>
+                            }
+                        }
+                    }
+                </div>
+
+                // View preset controls
+                <div class="absolute top-4 left-4 flex flex-col gap-2">
+                    <button
+                        class="bg-black/70 hover:bg-black/90 text-white px-3 py-1 rounded text-sm"
+                        on:click=move |_| {
+                            #[cfg(not(feature = "ssr"))]
+                            {
+                                if let Some(renderer_value) = renderer_signal.get() {
+                                    renderer_value.update_value(|renderer| {
+                                        renderer.set_preset_view("equator");
+                                    });
+                                }
+                            }
+                        }
+                    >
+                        "Equator"
+                    </button>
+                    <button
+                        class="bg-black/70 hover:bg-black/90 text-white px-3 py-1 rounded text-sm"
+                        on:click=move |_| {
+                            #[cfg(not(feature = "ssr"))]
+                            {
+                                if let Some(renderer_value) = renderer_signal.get() {
+                                    renderer_value.update_value(|renderer| {
+                                        renderer.set_preset_view("north");
+                                    });
+                                }
+                            }
+                        }
+                    >
+                        "North"
+                    </button>
+                    <button
+                        class="bg-black/70 hover:bg-black/90 text-white px-3 py-1 rounded text-sm"
+                        on:click=move |_| {
+                            #[cfg(not(feature = "ssr"))]
+                            {
+                                if let Some(renderer_value) = renderer_signal.get() {
+                                    renderer_value.update_value(|renderer| {
+                                        renderer.set_preset_view("south");
+                                    });
+                                }
+                            }
+                        }
+                    >
+                        "South"
+                    </button>
+                    <button
+                        class="bg-black/70 hover:bg-black/90 text-white px-3 py-1 rounded text-sm"
+                        on:click=move |_| {
+                            #[cfg(not(feature = "ssr"))]
+                            {
+                                if let Some(renderer_value) = renderer_signal.get() {
+                                    renderer_value.update_value(|renderer| {
+                                        renderer.set_preset_view("oblique");
+                                    });
+                                }
+                            }
+                        }
+                    >
+                        "Oblique"
+                    </button>
+                </div>
+
+                <div class="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-sm space-y-1">
+                    <div>
+                        {move || {
+                            let count = tle_data.get().len();
+                            format!("Tracking {} satellites", count)
+                        }}
+                    </div>
+                    <div class="text-xs text-gray-300">
+                        {move || {
+                            let time = current_date_display.get();
+                            if !time.is_empty() {
+                                format!("Time: {} UTC", time)
+                            } else {
+                                "Loading timeline...".to_string()
+                            }
+                        }}
+                    </div>
                 </div>
             </div>
 
             <div class="mt-4 text-xs text-gray-400">
-                <p>"Data from CelesTrak • Updates every 5 minutes"</p>
+                <p>"Data from CelesTrak • Animating last 24 hours of orbital data"</p>
             </div>
         </div>
     }

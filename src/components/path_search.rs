@@ -1174,10 +1174,15 @@ pub fn PathSearch() -> impl IntoView {
                     for entry in entries.iter() {
                         let entry: web_sys::IntersectionObserverEntry = entry.unchecked_into();
 
-                        if entry.is_intersecting() && !*has_started.borrow() {
-                            *has_started.borrow_mut() = true;
-                            // Start simulation
+                        if entry.is_intersecting() {
+                            if !*has_started.borrow() {
+                                *has_started.borrow_mut() = true;
+                            }
+                            // Start simulation when visible
                             set_is_running(true);
+                        } else {
+                            // Pause simulation when not visible
+                            set_is_running(false);
                         }
                     }
                 },

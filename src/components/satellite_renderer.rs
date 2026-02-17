@@ -11,7 +11,12 @@ pub struct SatelliteRenderer {
     earth_vertex_buffer: Option<WebGlBuffer>,
     earth_index_buffer: Option<WebGlBuffer>,
     earth_index_count: i32,
-    rotation: f32,
+    equator_vertex_buffer: Option<WebGlBuffer>,
+    equator_vertex_count: i32,
+    camera_angle_horizontal: f32,
+    camera_angle_vertical: f32,
+    camera_distance: f32,
+    auto_rotate: bool,
     satellite_positions: Vec<SatellitePosition>,
     satellite_vertex_buffer: Option<WebGlBuffer>,
 }
@@ -24,10 +29,55 @@ impl SatelliteRenderer {
             earth_vertex_buffer: None,
             earth_index_buffer: None,
             earth_index_count: 0,
-            rotation: 0.0,
+            equator_vertex_buffer: None,
+            equator_vertex_count: 0,
+            camera_angle_horizontal: 0.0,
+            camera_angle_vertical: 0.5,
+            camera_distance: 4.0,
+            auto_rotate: true,
             satellite_positions: Vec::new(),
             satellite_vertex_buffer: None,
         })
+    }
+
+    /// Adjust camera zoom (positive = zoom in, negative = zoom out)
+    pub fn adjust_zoom(&mut self, delta: f32) {
+        self.camera_distance = (self.camera_distance - delta * 0.3).clamp(1.5, 20.0);
+    }
+
+    /// Rotate camera based on mouse drag
+    pub fn rotate_camera(&mut self, delta_x: f32, delta_y: f32) {
+        self.auto_rotate = false; // Disable auto-rotation when user interacts
+        self.camera_angle_horizontal += delta_x * 0.01;
+        self.camera_angle_vertical = (self.camera_angle_vertical - delta_y * 0.01).clamp(-1.5, 1.5);
+    }
+
+    /// Set camera to a preset view
+    pub fn set_preset_view(&mut self, preset: &str) {
+        self.auto_rotate = false;
+        match preset {
+            "equator" => {
+                // Side view of equator
+                self.camera_angle_horizontal = 0.0;
+                self.camera_angle_vertical = 0.0;
+            }
+            "north" => {
+                // Top-down view of North Pole
+                self.camera_angle_horizontal = 0.0;
+                self.camera_angle_vertical = std::f32::consts::PI / 2.0 - 0.1; // Almost straight down
+            }
+            "south" => {
+                // Bottom-up view of South Pole
+                self.camera_angle_horizontal = 0.0;
+                self.camera_angle_vertical = -(std::f32::consts::PI / 2.0 - 0.1); // Almost straight up
+            }
+            "oblique" => {
+                // Default oblique view
+                self.camera_angle_horizontal = 0.0;
+                self.camera_angle_vertical = 0.5;
+            }
+            _ => {}
+        }
     }
 
     /// Update satellite positions
@@ -92,6 +142,9 @@ impl SatelliteRenderer {
         // Create Earth sphere geometry
         self.create_earth_sphere()?;
 
+        // Create equator line
+        self.create_equator_line()?;
+
         Ok(())
     }
 
@@ -131,6 +184,49 @@ impl SatelliteRenderer {
         }
 
         self.earth_index_buffer = Some(index_buffer);
+
+        Ok(())
+    }
+
+    fn create_equator_line(&mut self) -> Result<(), String> {
+        // Generate equator circle at y=0, slightly above Earth surface
+        let radius = 1.01; // Slightly larger than Earth radius
+        let segments = 128;
+        let mut vertices = Vec::new();
+
+        for i in 0..=segments {
+            let angle = (i as f32 / segments as f32) * 2.0 * std::f32::consts::PI;
+            let x = radius * angle.cos();
+            let z = radius * angle.sin();
+
+            // Position
+            vertices.push(x);
+            vertices.push(0.0); // y = 0 for equator
+            vertices.push(z);
+
+            // Color (bright yellow/gold for visibility)
+            vertices.push(1.0); // R
+            vertices.push(0.9); // G
+            vertices.push(0.2); // B
+        }
+
+        self.equator_vertex_count = (segments + 1) as i32;
+
+        // Create vertex buffer
+        let vertex_buffer = self.gl.create_buffer()
+            .ok_or("Failed to create equator vertex buffer")?;
+        self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&vertex_buffer));
+
+        unsafe {
+            let vertices_array = js_sys::Float32Array::view(&vertices);
+            self.gl.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                &vertices_array,
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+        }
+
+        self.equator_vertex_buffer = Some(vertex_buffer);
 
         Ok(())
     }
@@ -193,13 +289,24 @@ impl SatelliteRenderer {
         if let Some(program) = &self.program {
             self.gl.use_program(Some(program));
 
-            // Update rotation
-            self.rotation += 0.001;
+            // Update camera orbit angle (slow rotation around Earth) if auto-rotate is enabled
+            if self.auto_rotate {
+                self.camera_angle_horizontal += 0.002;
+            }
 
-            // Set up matrices
+            // Set up matrices - orbit camera around Earth
+            let camera_x = self.camera_distance * self.camera_angle_horizontal.cos() * self.camera_angle_vertical.cos();
+            let camera_z = self.camera_distance * self.camera_angle_horizontal.sin() * self.camera_angle_vertical.cos();
+            let camera_y = self.camera_distance * self.camera_angle_vertical.sin();
+
             let projection = Self::perspective_matrix(45.0, 1200.0 / 600.0, 0.1, 100.0);
-            let view = Self::look_at([0.0, 0.0, 3.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
-            let model = Self::rotation_matrix_y(self.rotation);
+            let view = Self::look_at([camera_x, camera_y, camera_z], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]);
+            let model = [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ]; // Identity matrix - Earth stays fixed
             let model_view = Self::multiply_matrices(&view, &model);
 
             // Set uniforms
@@ -229,6 +336,28 @@ impl SatelliteRenderer {
                     self.earth_index_count,
                     WebGl2RenderingContext::UNSIGNED_SHORT,
                     0,
+                );
+            }
+
+            // Draw equator line
+            if let Some(equator_buffer) = &self.equator_vertex_buffer {
+                self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(equator_buffer));
+
+                let position_loc = self.gl.get_attrib_location(program, "position") as u32;
+                let color_loc = self.gl.get_attrib_location(program, "color") as u32;
+
+                let stride = 6 * 4; // 6 floats * 4 bytes
+                self.gl.vertex_attrib_pointer_with_i32(position_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 0);
+                self.gl.enable_vertex_attrib_array(position_loc);
+
+                self.gl.vertex_attrib_pointer_with_i32(color_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 3 * 4);
+                self.gl.enable_vertex_attrib_array(color_loc);
+
+                self.gl.line_width(2.0);
+                self.gl.draw_arrays(
+                    WebGl2RenderingContext::LINE_STRIP,
+                    0,
+                    self.equator_vertex_count,
                 );
             }
 
@@ -304,16 +433,6 @@ impl SatelliteRenderer {
         ]
     }
 
-    fn rotation_matrix_y(angle: f32) -> [f32; 16] {
-        let c = angle.cos();
-        let s = angle.sin();
-        [
-            c, 0.0, s, 0.0,
-            0.0, 1.0, 0.0, 0.0,
-            -s, 0.0, c, 0.0,
-            0.0, 0.0, 0.0, 1.0,
-        ]
-    }
 
     fn multiply_matrices(a: &[f32; 16], b: &[f32; 16]) -> [f32; 16] {
         let mut result = [0.0; 16];
