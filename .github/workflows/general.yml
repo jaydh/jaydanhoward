@@ -119,14 +119,6 @@ jobs:
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: kubernetes
-          platforms: linux/amd64,linux/arm64
-          driver-opts: |
-            namespace=arc
-            serviceaccount=buildx-runner
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
@@ -135,9 +127,10 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Create and Push Multi-Arch Manifest
         run: |
-          docker buildx imagetools create -t harbor.home.local/library/jaydanhoward:latest \
-            harbor.home.local/library/jaydanhoward:latest-amd64 \
-            harbor.home.local/library/jaydanhoward:latest-arm64
+          docker manifest create harbor.home.local/library/jaydanhoward:latest \
+            --amend harbor.home.local/library/jaydanhoward:latest-amd64 \
+            --amend harbor.home.local/library/jaydanhoward:latest-arm64
+          docker manifest push harbor.home.local/library/jaydanhoward:latest
   harbor-lighthouse-image:
     name: Build and Push Lighthouse Multi-Arch Image
     runs-on: arc-runner-set-k8s
@@ -149,11 +142,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
-          driver: kubernetes
-          platforms: linux/amd64,linux/arm64
-          driver-opts: |
-            namespace=arc
-            serviceaccount=buildx-runner
+          driver: docker-container
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
