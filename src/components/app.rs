@@ -48,6 +48,14 @@ fn HomePage() -> impl IntoView {
             <section id="about" class="flex flex-col py-20">
                 <About />
             </section>
+            <section id="satellites" class="flex flex-col py-20 border-t border-border">
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">
+                        "Orbital Mechanics"
+                    </h1>
+                    <SatelliteTracker />
+                </div>
+            </section>
             <section id="life" class="flex flex-col py-20 border-t border-border">
                 <Life />
             </section>
@@ -56,9 +64,6 @@ fn HomePage() -> impl IntoView {
             </section>
             <section id="photography" class="flex flex-col py-20 border-t border-border">
                 <Photography />
-            </section>
-            <section id="satellites" class="flex flex-col py-20 border-t border-border">
-                <SatelliteTracker />
             </section>
         </div>
     }
@@ -72,7 +77,8 @@ pub fn App() -> impl IntoView {
         <Stylesheets />
         <Script>{r#"
             (function(){
-                if(localStorage.theme==='dark'||(!('theme' in localStorage)&&window.matchMedia('(prefers-color-scheme: dark)').matches)){
+                // Default to dark mode if no preference is set
+                if(localStorage.theme==='dark'||!('theme' in localStorage)||(localStorage.theme!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){
                     document.documentElement.classList.add('dark')
                 }
             })()

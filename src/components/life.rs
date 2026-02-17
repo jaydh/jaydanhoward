@@ -480,12 +480,17 @@ pub fn LifeGame(
                 for entry in entries.iter() {
                     let entry: web_sys::IntersectionObserverEntry = entry.unchecked_into();
 
-                    if entry.is_intersecting() && !*has_started.borrow() {
-                        *has_started.borrow_mut() = true;
-                        // Randomize cells
-                        randomize_cells(initial_probability, initial_grid_size, set_cells);
-                        // Start simulation
+                    if entry.is_intersecting() {
+                        if !*has_started.borrow() {
+                            *has_started.borrow_mut() = true;
+                            // Randomize cells
+                            randomize_cells(initial_probability, initial_grid_size, set_cells);
+                        }
+                        // Start simulation when visible
                         set_is_running(true);
+                    } else {
+                        // Pause simulation when not visible
+                        set_is_running(false);
                     }
                 }
             }) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
