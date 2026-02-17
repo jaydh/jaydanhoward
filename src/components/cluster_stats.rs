@@ -279,24 +279,24 @@ fn NodeCard(node: NodeMetric) -> impl IntoView {
     let mem_pct = (node.memory_usage_gb / node.memory_total_gb * 100.0).min(100.0);
 
     view! {
-        <div class="bg-white rounded-lg shadow-sm p-3 border border-gray-200">
+        <div class="bg-surface rounded-lg shadow-sm p-3 border border-border">
             <h4 class="font-medium text-sm text-charcoal mb-2">{node.name}</h4>
             <div class="space-y-1.5 text-xs">
                 <div class="flex justify-between items-center">
-                    <span class="text-gray-600">"CPU"</span>
+                    <span class="text-charcoal-lighter">"CPU"</span>
                     <span class="font-semibold">{format!("{:.1}%", node.cpu_usage_percent)}</span>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-1">
+                <div class="w-full bg-border rounded-full h-1">
                     <div
                         class="bg-blue-500 h-1 rounded-full transition-all"
                         style={format!("width: {}%", node.cpu_usage_percent)}
                     ></div>
                 </div>
                 <div class="flex justify-between items-center">
-                    <span class="text-gray-600">"Mem"</span>
+                    <span class="text-charcoal-lighter">"Mem"</span>
                     <span class="font-semibold">{format!("{:.1}G", node.memory_usage_gb)}</span>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-1">
+                <div class="w-full bg-border rounded-full h-1">
                     <div
                         class="bg-purple-500 h-1 rounded-full transition-all"
                         style={format!("width: {}%", mem_pct)}
@@ -472,7 +472,7 @@ pub fn ClusterStats() -> impl IntoView {
     });
 
     view! {
-        <div class="w-full bg-gradient-to-br from-gray-50 to-gray-100 py-6 px-4 rounded-xl mb-8">
+        <div class="w-full bg-gray py-6 px-4 rounded-xl mb-8">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="text-xl font-bold text-charcoal">
                     "Homelab Cluster"
@@ -481,7 +481,7 @@ pub fn ClusterStats() -> impl IntoView {
                     <span class="text-xs text-green-600">"● Live"</span>
                     {move || {
                         last_refresh.get().map(|time| view! {
-                            <span class="text-xs text-gray-500 ml-2">{time}</span>
+                            <span class="text-xs text-charcoal-lighter ml-2">{time}</span>
                         })
                     }}
                 </div>
@@ -506,14 +506,14 @@ pub fn ClusterStats() -> impl IntoView {
                     view! {
                         <div class="flex gap-6 mb-4 text-sm">
                             <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-bold text-blue-600">{cluster.pod_count}</span>
-                                <span class="text-gray-600">"pods"</span>
+                                <span class="text-2xl font-bold text-accent">{cluster.pod_count}</span>
+                                <span class="text-charcoal-lighter">"pods"</span>
                             </div>
                             <div class="flex items-baseline gap-2">
                                 <span class="text-2xl font-bold text-green-600">
                                     {cluster.healthy_node_count} "/" {cluster.node_count}
                                 </span>
-                                <span class="text-gray-600">"nodes"</span>
+                                <span class="text-charcoal-lighter">"nodes"</span>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
@@ -541,7 +541,7 @@ pub fn ClusterStats() -> impl IntoView {
                     }.into_any()
                 } else {
                     view! {
-                        <p class="text-center text-gray-500">"Connecting to metrics stream..."</p>
+                        <p class="text-center text-charcoal-light">"Connecting to metrics stream..."</p>
                     }.into_any()
                 }
             }}
@@ -549,7 +549,7 @@ pub fn ClusterStats() -> impl IntoView {
             {move || {
                 (!node_metrics.get().is_empty()).then(|| view! {
                     <div class="mt-4">
-                        <h3 class="text-sm font-medium text-gray-600 mb-2">"Nodes"</h3>
+                        <h3 class="text-sm font-medium text-charcoal-lighter mb-2">"Nodes"</h3>
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                             <For
                                 each=move || node_metrics.get()
@@ -600,9 +600,9 @@ fn LineChart(
     let current_val = data.last().copied().unwrap_or(0.0);
 
     view! {
-        <div class="bg-white p-3 rounded-lg shadow-sm">
+        <div class="bg-surface p-3 rounded-lg shadow-sm border border-border">
             <div class="flex justify-between items-center mb-1.5">
-                <h3 class="text-xs font-medium text-gray-600">{title}</h3>
+                <h3 class="text-xs font-medium text-charcoal-lighter">{title}</h3>
                 <span class="text-base font-bold" style=format!("color: {}", color)>
                     {format!("{:.1}{}", current_val, unit)}
                 </span>
@@ -679,13 +679,13 @@ fn StackedAreaChart(
     let current_tx = data_tx.last().copied().unwrap_or(0.0);
 
     view! {
-        <div class="bg-white p-3 rounded-lg shadow-sm">
+        <div class="bg-surface p-3 rounded-lg shadow-sm border border-border">
             <div class="flex justify-between items-center mb-1.5">
-                <h3 class="text-xs font-medium text-gray-600">{title}</h3>
+                <h3 class="text-xs font-medium text-charcoal-lighter">{title}</h3>
                 <div class="flex gap-3 text-xs font-semibold">
-                    <span class="text-blue-600">"↓ " {format!("{:.1}", current_rx)}</span>
+                    <span class="text-accent">"↓ " {format!("{:.1}", current_rx)}</span>
                     <span class="text-amber-500">"↑ " {format!("{:.1}", current_tx)}</span>
-                    <span class="text-gray-500">"Mbps"</span>
+                    <span class="text-charcoal-lighter">"Mbps"</span>
                 </div>
             </div>
             <svg viewBox="0 0 100 30" class="w-full h-12" preserveAspectRatio="none">

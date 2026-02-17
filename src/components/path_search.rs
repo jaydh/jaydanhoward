@@ -718,8 +718,16 @@ fn SearchGrid(
             .unwrap()
             .unchecked_into::<web_sys::CanvasRenderingContext2d>();
 
+        // Check dark mode
+        let is_dark = web_sys::window()
+            .and_then(|w| w.document())
+            .and_then(|d| d.document_element())
+            .map(|el| el.class_list().contains("dark"))
+            .unwrap_or(false);
+
         // Clear canvas
-        context.set_fill_style_str("#f9fafb");
+        let bg_color = if is_dark { "#111827" } else { "#f9fafb" };
+        context.set_fill_style_str(bg_color);
         context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
 
         let current_grid = grid();
@@ -756,7 +764,7 @@ fn SearchGrid(
                 };
 
                 let color = if !is_passable {
-                    "#1f2937".to_string() // gray-800 - walls
+                    if is_dark { "#9CA3AF".to_string() } else { "#1f2937".to_string() }
                 } else if is_start {
                     "#22c55e".to_string() // green-500 - start
                 } else if is_end {
@@ -766,9 +774,13 @@ fn SearchGrid(
                 } else if in_final_path {
                     "#c084fc".to_string() // purple-400 - path
                 } else if is_visited {
-                    format!("rgba(147, 197, 253, {})", fade_factor)
+                    if is_dark {
+                        format!("rgba(96, 165, 250, {})", fade_factor)
+                    } else {
+                        format!("rgba(147, 197, 253, {})", fade_factor)
+                    }
                 } else {
-                    "#f9fafb".to_string() // gray-50 - unvisited
+                    bg_color.to_string()
                 };
 
                 context.set_fill_style_str(&color);
@@ -778,7 +790,7 @@ fn SearchGrid(
 
         // Draw grid lines (only for larger cells)
         if cell_px >= 5.0 {
-            context.set_stroke_style_str("#d1d5db");
+            context.set_stroke_style_str(if is_dark { "#374151" } else { "#d1d5db" });
             context.set_line_width(1.0);
             for i in 0..=grid_sz {
                 let pos = i as f64 * cell_px;
@@ -812,8 +824,8 @@ fn SearchGrid(
                 .unwrap();
             context.fill();
 
-            // White border for visibility
-            context.set_stroke_style_str("#ffffff");
+            // Border for visibility
+            context.set_stroke_style_str(if is_dark { "#111827" } else { "#ffffff" });
             context.set_line_width(2.0);
             context.stroke();
         }
@@ -836,8 +848,8 @@ fn SearchGrid(
                 .unwrap();
             context.fill();
 
-            // White border for visibility
-            context.set_stroke_style_str("#ffffff");
+            // Border for visibility
+            context.set_stroke_style_str(if is_dark { "#111827" } else { "#ffffff" });
             context.set_line_width(2.0);
             context.stroke();
         }
