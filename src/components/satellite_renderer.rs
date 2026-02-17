@@ -42,7 +42,9 @@ impl SatelliteRenderer {
 
     /// Adjust camera zoom (positive = zoom in, negative = zoom out)
     pub fn adjust_zoom(&mut self, delta: f32) {
-        self.camera_distance = (self.camera_distance - delta * 0.3).clamp(1.5, 20.0);
+        // Make zoom speed proportional to current distance (faster when far away)
+        let zoom_factor = self.camera_distance * 0.1;
+        self.camera_distance = (self.camera_distance - delta * zoom_factor).clamp(1.5, 20.0);
     }
 
     /// Rotate camera based on mouse drag

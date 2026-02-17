@@ -90,6 +90,10 @@ pub fn SatelliteTracker() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     let zoom_interval: Rc<RefCell<Option<leptos::leptos_dom::helpers::IntervalHandle>>> = Rc::new(RefCell::new(None));
 
+    // Animation speed control (frames to skip: 0 = every frame, 1 = every other frame, etc.)
+    #[cfg(not(feature = "ssr"))]
+    let (frame_skip, set_frame_skip) = signal(2_usize); // Default: advance every 2 frames
+
     // Fetch TLE data when component mounts
     Effect::new(move |_| {
         set_loading.set(true);
@@ -301,11 +305,12 @@ pub fn SatelliteTracker() -> impl IntoView {
                                                 set_current_date_display.set(formatted);
                                             }
 
-                                            // Advance to next time point every 2 frames for smoother animation
+                                            // Advance to next time point based on speed setting
                                             let frame_count = frame_counter.get_value();
                                             frame_counter.set_value(frame_count + 1);
 
-                                            if frame_count % 2 == 0 {
+                                            let skip = frame_skip.get_untracked();
+                                            if frame_count % (skip + 1) == 0 {
                                                 // Move to next time point and loop back to start
                                                 let next_index = (time_index + 1) % time_points.len();
                                                 current_time_index.set_value(next_index);
@@ -584,7 +589,7 @@ pub fn SatelliteTracker() -> impl IntoView {
                     </button>
                 </div>
 
-                <div class="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-sm space-y-1">
+                <div class="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded text-sm space-y-2">
                     <div>
                         {move || {
                             let count = tle_data.get().len();
@@ -601,6 +606,44 @@ pub fn SatelliteTracker() -> impl IntoView {
                             }
                         }}
                     </div>
+                    {
+                        #[cfg(not(feature = "ssr"))]
+                        {
+                            view! {
+                                <div class="flex items-center gap-1.5">
+                                    <button
+                                        class="bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-xs"
+                                        on:click=move |_| {
+                                            set_frame_skip.update(|skip| {
+                                                *skip = (*skip + 1).min(10); // Max: every 11 frames
+                                            });
+                                        }
+                                    >
+                                        "-"
+                                    </button>
+                                    <button
+                                        class="bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-xs"
+                                        on:click=move |_| {
+                                            set_frame_skip.update(|skip| {
+                                                *skip = skip.saturating_sub(1); // Min: every frame
+                                            });
+                                        }
+                                    >
+                                        "+"
+                                    </button>
+                                </div>
+                            }
+                        }
+                        #[cfg(feature = "ssr")]
+                        {
+                            view! {
+                                <div class="flex items-center gap-1.5">
+                                    <button class="bg-white/20 px-2 py-0.5 rounded text-xs">"-"</button>
+                                    <button class="bg-white/20 px-2 py-0.5 rounded text-xs">"+"</button>
+                                </div>
+                            }
+                        }
+                    }
                 </div>
             </div>
 
