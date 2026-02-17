@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Find the cargo-audit binary (Bazel makes it available in runfiles)
-CARGO_AUDIT=""
-for binary in ../cargo_audit_linux_x86_64/cargo-audit ../cargo_audit_linux_arm64/cargo-audit ../cargo_audit_macos_x86_64/cargo-audit; do
-    if [ -f "$binary" ]; then
-        CARGO_AUDIT="$binary"
-        break
-    fi
-done
+# Find the cargo-audit binary in runfiles (works with both WORKSPACE and bzlmod canonical names)
+RUNFILES_ROOT="${RUNFILES_DIR:-${TEST_SRCDIR:-}}"
+CARGO_AUDIT=$(find "$RUNFILES_ROOT" -maxdepth 2 -name "cargo-audit" 2>/dev/null | head -1)
 
 if [ -z "$CARGO_AUDIT" ]; then
     echo "ERROR: cargo-audit binary not found"

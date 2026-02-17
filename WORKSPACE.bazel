@@ -14,48 +14,4 @@ rust_analyzer_dependencies()
 
 register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")
 
-# Cargo audit binaries for security scanning
-http_archive(
-    name = "cargo_audit_linux_x86_64",
-    build_file_content = """
-exports_files(["cargo-audit"])
-filegroup(
-    name = "binary",
-    srcs = ["cargo-audit"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "1afe6f3dba2e3d81dfb8db34be37ae9647480b132cd719357276ae643ebf962a",
-    strip_prefix = "cargo-audit-x86_64-unknown-linux-musl-v0.21.0",
-    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.21.0/cargo-audit-x86_64-unknown-linux-musl-v0.21.0.tgz"],
-)
 
-http_archive(
-    name = "cargo_audit_linux_arm64",
-    build_file_content = """
-exports_files(["cargo-audit"])
-filegroup(
-    name = "binary",
-    srcs = ["cargo-audit"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "9e4ee9c0aa5af18ecf5c0e4d5aa4ed8a8fb5ec9a86fe25f05d2e964e6a22fc26",
-    strip_prefix = "cargo-audit-aarch64-unknown-linux-musl-v0.21.0",
-    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.21.0/cargo-audit-aarch64-unknown-linux-musl-v0.21.0.tgz"],
-)
-
-http_archive(
-    name = "cargo_audit_macos_x86_64",
-    build_file_content = """
-exports_files(["cargo-audit"])
-filegroup(
-    name = "binary",
-    srcs = ["cargo-audit"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "87e0a4aece55917ebe02b73e7c69fe83c4d995b8fc435820f24bd92a9c2c1fb8",
-    strip_prefix = "cargo-audit-x86_64-apple-darwin-v0.21.0",
-    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.21.0/cargo-audit-x86_64-apple-darwin-v0.21.0.tgz"],
-)

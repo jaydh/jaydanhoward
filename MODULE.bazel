@@ -132,6 +132,51 @@ filegroup(
 )
 
 http_archive(
+    name = "cargo_audit_linux_x86_64",
+    build_file_content = """
+exports_files(["cargo-audit"])
+filegroup(
+    name = "binary",
+    srcs = ["cargo-audit"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "c32506f338bdcdaef5a17fb9f33abb6ecf9561324cfd34237fd335f9283a1eab",
+    strip_prefix = "cargo-audit-x86_64-unknown-linux-musl-v0.22.1",
+    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-unknown-linux-musl-v0.22.1.tgz"],
+)
+
+http_archive(
+    name = "cargo_audit_linux_arm64",
+    build_file_content = """
+exports_files(["cargo-audit"])
+filegroup(
+    name = "binary",
+    srcs = ["cargo-audit"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "4c8df835ee484441bd2c8c6bcac28c4ce4b4058ba9e7477cb9e0012fe7769f66",
+    strip_prefix = "cargo-audit-aarch64-unknown-linux-gnu-v0.22.1",
+    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-aarch64-unknown-linux-gnu-v0.22.1.tgz"],
+)
+
+http_archive(
+    name = "cargo_audit_macos_x86_64",
+    build_file_content = """
+exports_files(["cargo-audit"])
+filegroup(
+    name = "binary",
+    srcs = ["cargo-audit"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "582d104a2a4bdb127c6bf6d056d89eede40686d11f52e4bc1765132ec99d2fca",
+    strip_prefix = "cargo-audit-x86_64-apple-darwin-v0.22.1",
+    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-apple-darwin-v0.22.1.tgz"],
+)
+
+http_archive(
     name = "wasm_bindgen_linux_x86_64",
     build_file = "//wasm_bindgen:wasm_bindgen_linux_x86_64.BUILD",
     sha256 = "63d6a38deb65bd7023c02bdf382ab66b0d2c0241c8582fd3413b5a808b8aeb5b",
