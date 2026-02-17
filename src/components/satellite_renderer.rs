@@ -82,6 +82,25 @@ impl SatelliteRenderer {
         }
     }
 
+    /// Get color based on altitude and inclination
+    /// True GEO satellites must be at ~35,786 km AND near 0° inclination (on equator)
+    fn get_altitude_color(altitude_km: f32, inclination_deg: f32) -> [f32; 3] {
+        // Check for true geostationary: altitude ~35,786 km AND inclination near 0°
+        // GEO satellites at the right altitude, allowing for slight drift (< 5°)
+        if altitude_km > 35000.0 && altitude_km < 37000.0 && inclination_deg.abs() < 5.0 {
+            return [1.0, 0.3, 0.3]; // Red - True Geostationary Orbit (on equator)
+        }
+
+        // Color by altitude for all other satellites
+        match altitude_km {
+            a if a < 600.0   => [0.3, 0.8, 1.0],  // Cyan - Low Earth Orbit (ISS, Starlink)
+            a if a < 2000.0  => [0.5, 1.0, 0.5],  // Green - LEO high
+            a if a < 20000.0 => [1.0, 0.8, 0.2],  // Yellow - Medium Earth Orbit (GPS, Galileo)
+            a if a < 35000.0 => [1.0, 0.5, 0.2],  // Orange - MEO high
+            _                => [0.8, 0.6, 1.0],  // Purple - HEO (highly elliptical, inclined geosync, etc)
+        }
+    }
+
     /// Update satellite positions
     pub fn update_satellites(&mut self, positions: Vec<SatellitePosition>) {
         self.satellite_positions = positions;
@@ -95,10 +114,11 @@ impl SatelliteRenderer {
                 vertices.push(pos.x);
                 vertices.push(pos.y);
                 vertices.push(pos.z);
-                // Color (bright white/yellow for satellites)
-                vertices.push(1.0);
-                vertices.push(1.0);
-                vertices.push(0.8);
+                // Color based on altitude and inclination
+                let color = Self::get_altitude_color(pos.altitude_km, pos.inclination_deg);
+                vertices.push(color[0]);
+                vertices.push(color[1]);
+                vertices.push(color[2]);
             }
 
             if self.satellite_vertex_buffer.is_none() {
