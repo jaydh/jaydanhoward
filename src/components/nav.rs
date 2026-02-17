@@ -66,7 +66,13 @@ fn ThemeToggle() -> impl IntoView {
 
 #[component]
 pub fn Nav() -> impl IntoView {
-    let routes = vec![("#about", "About", "about"), ("#life", "Game of Life", "life"), ("#path", "Pathfinding", "path"), ("#photography", "Photography", "photography")];
+    let routes = vec![
+        ("#about", "About", "about"),
+        ("#satellites", "Satellites", "satellites"),
+        ("#life", "Game of Life", "life"),
+        ("#path", "Pathfinding", "path"),
+        ("#photography", "Photography", "photography")
+    ];
     #[allow(unused_variables)]
     let (active_section, set_active_section) = signal(String::new());
 
@@ -113,7 +119,7 @@ pub fn Nav() -> impl IntoView {
                     let container_top = 100.0; // Account for nav height
 
                     // Check each section and find which one is most visible
-                    let section_ids = vec!["about", "life", "path", "photography"];
+                    let section_ids = vec!["about", "satellites", "life", "path", "photography"];
                     let mut best_section = String::new();
                     let mut min_distance = f64::MAX;
 
