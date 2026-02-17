@@ -350,7 +350,7 @@ pub fn LifeGame(
                         Some("error") => {
                             *calculation_pending.borrow_mut() = false;
                             if let Some(error) = response.get("error") {
-                                web_sys::console::error_1(&format!("Worker error: {}", error).into());
+                                web_sys::console::error_1(&format!("Worker error: {error}").into());
                             }
                         }
                         _ => {}
