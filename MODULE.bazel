@@ -103,6 +103,52 @@ http_file(
     url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64",
 )
 
+# wasm-opt from Binaryen for WASM optimization
+http_archive(
+    name = "wasm_opt_linux_x86_64",
+    build_file_content = """
+exports_files(["bin/wasm-opt"])
+filegroup(
+    name = "binary",
+    srcs = ["bin/wasm-opt"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "e487e0eac1f02a6739816c617270b033e5d3f8ca90439301fd0286460322fd76",
+    strip_prefix = "binaryen-version_126",
+    urls = ["https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-x86_64-linux.tar.gz"],
+)
+
+http_archive(
+    name = "wasm_opt_linux_arm64",
+    build_file_content = """
+exports_files(["bin/wasm-opt"])
+filegroup(
+    name = "binary",
+    srcs = ["bin/wasm-opt"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "4013cbcee8928abca015884e3f89d01804f6e1d9f40a4ea01dcdd0aba3e609f5",
+    strip_prefix = "binaryen-version_126",
+    urls = ["https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-aarch64-linux.tar.gz"],
+)
+
+http_archive(
+    name = "wasm_opt_macos_arm64",
+    build_file_content = """
+exports_files(["bin/wasm-opt"])
+filegroup(
+    name = "binary",
+    srcs = ["bin/wasm-opt"],
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "3f1e1379894944531501a8ccc6b59c57f0c7a00fc136dd933f8a6b0c53515a88",
+    strip_prefix = "binaryen-version_126",
+    urls = ["https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-arm64-macos.tar.gz"],
+)
+
 deb_archive(
     name = "zstd_deb_amd64",
     build_file_content = """
