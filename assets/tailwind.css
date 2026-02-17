@@ -1,3 +1,27 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    --color-charcoal: 30 30 30;
+    --color-charcoal-light: 85 85 85;
+    --color-charcoal-lighter: 107 107 107;
+    --color-gray: 225 225 225;
+    --color-accent: 59 130 246;
+    --color-accent-dark: 37 99 235;
+    --color-surface: 255 255 255;
+    --color-border: 229 231 235;
+  }
+
+  .dark {
+    --color-charcoal: 229 231 235;
+    --color-charcoal-light: 156 163 175;
+    --color-charcoal-lighter: 107 114 128;
+    --color-gray: 55 65 81;
+    --color-accent: 96 165 250;
+    --color-accent-dark: 59 130 246;
+    --color-surface: 17 24 39;
+    --color-border: 55 65 81;
+  }
+}

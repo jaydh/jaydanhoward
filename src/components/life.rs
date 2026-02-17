@@ -197,12 +197,19 @@ fn Grid(
                 .unwrap()
                 .unchecked_into::<web_sys::CanvasRenderingContext2d>();
 
+            // Check dark mode
+            let is_dark = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.document_element())
+                .map(|el| el.class_list().contains("dark"))
+                .unwrap_or(false);
+
             // Clear canvas
-            context.set_fill_style_str("#FFFFFF");
+            context.set_fill_style_str(if is_dark { "#111827" } else { "#FFFFFF" });
             context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
 
             // Draw alive cells - batch with beginPath/fill for better performance
-            context.set_fill_style_str("#3B82F6");
+            context.set_fill_style_str(if is_dark { "#60A5FA" } else { "#3B82F6" });
             context.begin_path();
             for &(x, y) in cells_snapshot.iter() {
                 context.rect(x as f64 * cell_px, y as f64 * cell_px, cell_px, cell_px);

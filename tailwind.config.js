@@ -1,19 +1,20 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: {
     files: ["*.html", "./src/**/*.rs"],
   },
   theme: {
     extend: {
       colors: {
-        "charcoal": "#1E1E1E",
-        "charcoal-light": "#555555",
-        "charcoal-lighter": "#6B6B6B",
-        "gray": "#E1E1E1",
-        "accent": "#3B82F6",
-        "accent-dark": "#2563EB",
-        "surface": "#FFFFFF",
-        "border": "#E5E7EB",
+        "charcoal": "rgb(var(--color-charcoal) / <alpha-value>)",
+        "charcoal-light": "rgb(var(--color-charcoal-light) / <alpha-value>)",
+        "charcoal-lighter": "rgb(var(--color-charcoal-lighter) / <alpha-value>)",
+        "gray": "rgb(var(--color-gray) / <alpha-value>)",
+        "accent": "rgb(var(--color-accent) / <alpha-value>)",
+        "accent-dark": "rgb(var(--color-accent-dark) / <alpha-value>)",
+        "surface": "rgb(var(--color-surface) / <alpha-value>)",
+        "border": "rgb(var(--color-border) / <alpha-value>)",
       },
       boxShadow: {
         'minimal': '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
