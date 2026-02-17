@@ -21,7 +21,7 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let r = Runfiles::create().expect("Must run using bazel with runfiles");
     let leptos_toml_path = rlocation!(r, "_main/leptos.toml").expect("Failed to locate runfile");
-    let main_path = rlocation!(r, "_main").expect("Failed to locate main");
+    let main_path = leptos_toml_path.parent().expect("Failed to locate main").to_path_buf();
 
     let conf = get_configuration(Some(leptos_toml_path.to_string_lossy().as_ref()))
         .expect("Failed to read conf");

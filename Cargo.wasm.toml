@@ -1,0 +1,38 @@
+[package]
+name = "jaydanhoward-wasm-deps"
+version = "0.0.0"
+edition = "2021"
+
+# This is a virtual manifest used only for Bazel dependency resolution.
+# It mirrors the WASM crate dependencies for crate_universe.
+
+[dependencies]
+anyhow = "1.0.72"
+cfg-if = "1"
+console_log = "1.0.0"
+console_error_panic_hook = "0.1"
+getrandom = { version = "0.2", features = ["js"] }
+js-sys = "0.3"
+leptos = { version = "0.8.2", features = ["hydrate", "nightly"] }
+leptos_meta = "0.8.2"
+leptos_router = { version = "0.8.2", features = ["nightly"] }
+log = "0.4.22"
+rand = "0.8.5"
+satkit = "0.3.4"
+serde = "1.0.183"
+sgp4 = "2.1.0"
+three-d = "0.18"
+serde-aux = "4"
+serde_json = "1"
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2.100"
+web-sys = { version = "0.3.70", features = [
+    "AbortController", "AbortSignal", "CanvasRenderingContext2d", "Document",
+    "DomRect", "Element", "HtmlCanvasElement", "HtmlDocument",
+    "IntersectionObserver", "IntersectionObserverEntry", "IntersectionObserverInit",
+    "MediaQueryList", "MessageEvent", "MouseEvent", "Touch", "TouchEvent",
+    "TouchEventInit", "TouchInit", "TouchList", "WebGl2RenderingContext",
+    "WebGlBuffer", "WebGlFramebuffer", "WebGlProgram", "WebGlRenderbuffer",
+    "WebGlShader", "WebGlTexture", "WebGlUniformLocation",
+    "WebGlVertexArrayObject", "Window", "Worker",
+] }

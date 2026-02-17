@@ -42,7 +42,7 @@ async fn parse_prometheus_value(query: &str) -> Result<f64, ServerFnError<String
     }
 }
 
-#[server(GetClusterMetrics, "/api")]
+#[server(name = GetClusterMetrics, prefix = "/api", endpoint = "get_cluster_metrics")]
 pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<String>> {
     // Cluster CPU metrics
     let cpu_used = parse_prometheus_value(
@@ -106,7 +106,7 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
     })
 }
 
-#[server(GetNodeMetrics, "/api")]
+#[server(name = GetNodeMetrics, prefix = "/api", endpoint = "get_node_metrics")]
 pub async fn get_node_metrics() -> Result<Vec<NodeMetric>, ServerFnError<String>> {
     use crate::prometheus_client::query_prometheus;
 
@@ -191,7 +191,7 @@ pub struct HistoricalMetrics {
     pub network_tx_history: Vec<f64>,
 }
 
-#[server(GetHistoricalMetrics, "/api")]
+#[server(name = GetHistoricalMetrics, prefix = "/api", endpoint = "get_historical_metrics")]
 pub async fn get_historical_metrics() -> Result<HistoricalMetrics, ServerFnError<String>> {
     use crate::prometheus_client::query_prometheus_range;
     use std::time::{SystemTime, UNIX_EPOCH};

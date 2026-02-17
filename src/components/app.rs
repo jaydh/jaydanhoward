@@ -3,6 +3,7 @@ use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
+use crate::components::satellite_tracker::SatelliteTracker;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Html, Link, Style, Title};
 use leptos_router::components::*;
@@ -55,6 +56,9 @@ fn HomePage() -> impl IntoView {
             </section>
             <section id="photography" class="flex flex-col py-20 border-t border-border">
                 <Photography />
+            </section>
+            <section id="satellites" class="flex flex-col py-20 border-t border-border">
+                <SatelliteTracker />
             </section>
         </div>
     }

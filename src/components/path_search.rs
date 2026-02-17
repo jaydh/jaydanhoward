@@ -532,10 +532,9 @@ fn calculate_next(
                 // This gives random exploration with backtracking capability
                 let curr = current_cell.get_untracked().unwrap();
                 viable_neighbors.sort_by_key(|coord| {
-                    let hash = ((coord.x_pos * 73856093)
+                    ((coord.x_pos * 73856093)
                         ^ (coord.y_pos * 19349663)
-                        ^ (curr.x_pos * 83492791)) as usize;
-                    hash
+                        ^ (curr.x_pos * 83492791)) as usize
                 });
 
                 set_current_path_candidates.update(|path| {
@@ -798,7 +797,7 @@ fn SearchGrid(
         if let Some(s) = start {
             let center_x = s.x_pos as f64 * cell_px + cell_px / 2.0;
             let center_y = s.y_pos as f64 * cell_px + cell_px / 2.0;
-            let marker_size = (cell_px * 0.7).max(6.0).min(20.0);
+            let marker_size = (cell_px * 0.7).clamp(6.0, 20.0);
 
             context.set_fill_style_str("#22c55e"); // green
             context.begin_path();
@@ -822,7 +821,7 @@ fn SearchGrid(
         if let Some(e) = end {
             let center_x = e.x_pos as f64 * cell_px + cell_px / 2.0;
             let center_y = e.y_pos as f64 * cell_px + cell_px / 2.0;
-            let marker_size = (cell_px * 0.7).max(6.0).min(20.0);
+            let marker_size = (cell_px * 0.7).clamp(6.0, 20.0);
 
             context.set_fill_style_str("#f59e0b"); // amber
             context.begin_path();

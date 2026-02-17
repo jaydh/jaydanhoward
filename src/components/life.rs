@@ -176,7 +176,7 @@ fn Grid(
         let max_height = window_height * 0.6; // Use 60% of viewport height
 
         // Use the smaller dimension to keep it square
-        let max_size = max_width.min(max_height).min(800.0).max(300.0); // Between 300-800px
+        let max_size = max_width.min(max_height).clamp(300.0, 800.0); // Between 300-800px
 
         let grid = grid_size();
         let cell_px = (max_size / grid as f64).floor().max(1.0);
@@ -435,27 +435,18 @@ pub fn LifeGame(
     }
 
     #[cfg(not(feature = "ssr"))]
-    let start_simulation = {
-        let set_is_running = set_is_running;
-        move || {
-            set_is_running(true);
-        }
+    let start_simulation = move || {
+        set_is_running(true);
     };
 
     #[cfg(not(feature = "ssr"))]
-    let stop_simulation = {
-        let set_is_running = set_is_running;
-        move || {
-            set_is_running(false);
-        }
+    let stop_simulation = move || {
+        set_is_running(false);
     };
 
     #[cfg(not(feature = "ssr"))]
-    let toggle_simulation = {
-        let is_running = is_running;
-        move || {
-            set_is_running(!is_running());
-        }
+    let toggle_simulation = move || {
+        set_is_running(!is_running());
     };
 
     // Auto-start when element comes into view
