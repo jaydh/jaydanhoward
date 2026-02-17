@@ -30,8 +30,20 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
             ServerFnError::ServerError("Failed to fetch files".to_string())
         })?;
 
-    let files: Vec<FileItem> = response.json().await.map_err(|e| {
-        tracing::error!("Failed to parse JSON response from caddy: {}", e);
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        tracing::error!("Caddy returned non-success status {}: {}", status, &body[..body.len().min(200)]);
+        return Err(ServerFnError::ServerError(format!("Caddy returned {}", status)));
+    }
+
+    let body = response.text().await.map_err(|e| {
+        tracing::error!("Failed to read caddy response body: {}", e);
+        ServerFnError::ServerError("Failed to read response".to_string())
+    })?;
+
+    let files: Vec<FileItem> = serde_json::from_str(&body).map_err(|e| {
+        tracing::error!("Failed to parse JSON from caddy (body: {}): {}", &body[..body.len().min(200)], e);
         ServerFnError::ServerError("Failed to parse response".to_string())
     })?;
 
