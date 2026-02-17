@@ -51,7 +51,7 @@ fn HomePage() -> impl IntoView {
             <section id="satellites" class="flex flex-col py-20 border-t border-border">
                 <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
                     <h1 class="text-3xl font-bold text-charcoal">
-                        "Orbital Mechanics"
+                        "Satellites"
                     </h1>
                     <SatelliteTracker />
                 </div>
