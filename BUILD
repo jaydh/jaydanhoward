@@ -1,8 +1,9 @@
 load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_shared_library", "rust_library")
 load("@rules_pkg//:pkg.bzl", "pkg_tar")
-load("@rules_rust_wasm_bindgen//rules_js:defs.bzl", "js_rust_wasm_bindgen", )
+load("@rules_rust_wasm_bindgen//:defs.bzl", "rust_wasm_bindgen")
 load("@rules_oci//oci:defs.bzl", "oci_image", "oci_load", "oci_push", "oci_image_index",)
 load("@rules_rust//rust:defs.bzl", "rust_clippy")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
 load("@bazel_skylib//lib:selects.bzl", "selects")
 
 platform(
@@ -82,6 +83,7 @@ wasm_deps = [
     "@wasm_crates//:serde",
     "@wasm_crates//:serde_json",
     "@wasm_crates//:serde-wasm-bindgen",
+    "@wasm_crates//:sgp4",
     "@wasm_crates//:wasm-bindgen",
     "@wasm_crates//:web-sys",
     "@rules_rust//tools/runfiles",
@@ -102,7 +104,7 @@ rust_shared_library(
     deps = wasm_deps
 )
 
-js_rust_wasm_bindgen(
+rust_wasm_bindgen(
     name = "jaydanhoward_wasm",
     target = "web",
     wasm_file = ":jaydanhoward",
@@ -115,6 +117,7 @@ rust_binary(
         "src/**/*.rs",
     ]),
     crate_features = ["ssr"],
+    crate_name = "jaydanhoward",
     edition = "2021",
     data = [
         ":jaydanhoward_wasm",
@@ -141,6 +144,7 @@ rust_binary(
         "src/**/*.rs",
     ]),
     crate_features = ["ssr"],
+    crate_name = "jaydanhoward",
     edition = "2021",
     data = [
         ":jaydanhoward_wasm",
@@ -166,6 +170,7 @@ rust_binary(
         "src/**/*.rs",
     ]),
     crate_features = ["ssr"],
+    crate_name = "jaydanhoward",
     edition = "2021",
     data = [
         ":jaydanhoward_wasm",

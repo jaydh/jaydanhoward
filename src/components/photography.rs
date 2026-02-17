@@ -1,7 +1,7 @@
 use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
 
-#[server]
+#[server(name = FetchImages, prefix = "/api", endpoint = "fetch_images")]
 pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
     use serde::Deserialize;
 
@@ -98,7 +98,7 @@ fn MediaItem(
                     if is_video {
                         view! {
                             <video
-                                src=src.()
+                                src=src
                                 muted=true
                                 loop=true
                                 playsinline=true
@@ -161,16 +161,14 @@ pub fn Photography() -> impl IntoView {
         use wasm_bindgen::closure::Closure;
         use wasm_bindgen::JsCast;
 
+        type ModalClosures = (
+            Closure<dyn Fn(web_sys::KeyboardEvent)>,
+            Closure<dyn Fn(web_sys::TouchEvent)>,
+            Closure<dyn Fn(web_sys::TouchEvent)>,
+        );
+
         // Store closures so we can clean them up
-        let closures: Rc<
-            RefCell<
-                Option<(
-                    Closure<dyn Fn(web_sys::KeyboardEvent)>,
-                    Closure<dyn Fn(web_sys::TouchEvent)>,
-                    Closure<dyn Fn(web_sys::TouchEvent)>,
-                )>,
-            >,
-        > = Rc::new(RefCell::new(None));
+        let closures: Rc<RefCell<Option<ModalClosures>>> = Rc::new(RefCell::new(None));
 
         Effect::new(move |_| {
             let window = web_sys::window().expect("window");
@@ -178,7 +176,7 @@ pub fn Photography() -> impl IntoView {
             if selected_image.get().is_some() {
                 // Modal is open - set up event listeners if not already set up
                 if closures.borrow().is_none() {
-                    let images_count_resource = images_resource.clone();
+                    let images_count_resource = images_resource;
 
                     // Keyboard navigation
                     let set_selected_for_keyboard = set_selected_image;
@@ -223,7 +221,7 @@ pub fn Photography() -> impl IntoView {
 
                     let set_selected_for_touch = set_selected_image;
                     let selected_for_touch = selected_image;
-                    let images_count_for_touch = images_resource.clone();
+                    let images_count_for_touch = images_resource;
                     let touchend_closure =
                         Closure::wrap(Box::new(move |event: web_sys::TouchEvent| {
                             if let Some(touch) = event.changed_touches().get(0) {

@@ -7,10 +7,74 @@ bazel_dep(
     name = "rules_pkg",
     version = "1.0.1",
 )
-bazel_dep(name = "bazel_skylib", version = "1.7.1")
-bazel_dep(name = "platforms", version = "0.0.10")
-bazel_dep(name = "aspect_bazel_lib", version = "2.10.0")
-bazel_dep(name = "bazel_features", version = "1.11.0") 
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+bazel_dep(name = "platforms", version = "1.0.0")
+bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
+bazel_dep(name = "bazel_features", version = "1.33.0")
+bazel_dep(name = "rules_cc", version = "0.2.14")
+bazel_dep(name = "rules_shell", version = "0.6.1")
+bazel_dep(name = "rules_rust", version = "0.68.1")
+bazel_dep(name = "rules_rust_wasm_bindgen", version = "0.68.1")
+bazel_dep(name = "rules_rust_bindgen", version = "0.68.1")
+
+# rules_rust 0.68.1 (latest BCR release) doesn't support Bazel 9 because CcInfo
+# moved from a built-in to @rules_cc. Use HEAD of main which has the fix.
+_RULES_RUST_COMMIT = "af24d277c91a69a0eae05b4ade444dae4e2784c4"
+_RULES_RUST_ARCHIVE = "https://github.com/bazelbuild/rules_rust/archive/{commit}.tar.gz"
+_RULES_RUST_STRIP = "rules_rust-{commit}"
+
+archive_override(
+    module_name = "rules_rust",
+    integrity = "sha256-8SHrw0ZpYY187RkjmxivY0MXM5YtS51B9NOKLxbzyAA=",
+    urls = [_RULES_RUST_ARCHIVE.format(commit = _RULES_RUST_COMMIT)],
+    strip_prefix = _RULES_RUST_STRIP.format(commit = _RULES_RUST_COMMIT),
+)
+
+archive_override(
+    module_name = "rules_rust_wasm_bindgen",
+    integrity = "sha256-8SHrw0ZpYY187RkjmxivY0MXM5YtS51B9NOKLxbzyAA=",
+    urls = [_RULES_RUST_ARCHIVE.format(commit = _RULES_RUST_COMMIT)],
+    strip_prefix = _RULES_RUST_STRIP.format(commit = _RULES_RUST_COMMIT) + "/extensions/wasm_bindgen",
+)
+
+archive_override(
+    module_name = "rules_rust_bindgen",
+    integrity = "sha256-8SHrw0ZpYY187RkjmxivY0MXM5YtS51B9NOKLxbzyAA=",
+    urls = [_RULES_RUST_ARCHIVE.format(commit = _RULES_RUST_COMMIT)],
+    strip_prefix = _RULES_RUST_STRIP.format(commit = _RULES_RUST_COMMIT) + "/extensions/bindgen",
+)
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = "2021",
+    versions = ["nightly/2025-04-03"],
+    extra_target_triples = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "wasm32-unknown-unknown",
+    ],
+)
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+register_toolchains("//wasm_bindgen:wasm_bindgen_toolchain")
+
+# Server crate dependencies (native target)
+server_crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+server_crate.from_cargo(
+    name = "server_crates",
+    cargo_lockfile = "//:Cargo.server.lock",
+    manifests = ["//:Cargo.server.toml"],
+)
+use_repo(server_crate, "server_crates")
+
+# WASM crate dependencies (wasm32 target)
+wasm_crate = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+wasm_crate.from_cargo(
+    name = "wasm_crates",
+    cargo_lockfile = "//:Cargo.wasm.lock",
+    manifests = ["//:Cargo.wasm.toml"],
+)
+use_repo(wasm_crate, "wasm_crates")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 

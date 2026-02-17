@@ -13,6 +13,7 @@ mod telemtry;
 async fn main() -> () {
     use startup::run;
 
+    components::register_server_fns();
     let _ = run().await;
 }
 
