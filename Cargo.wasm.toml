@@ -34,5 +34,5 @@ web-sys = { version = "0.3.70", features = [
     "TouchEventInit", "TouchInit", "TouchList", "WebGl2RenderingContext",
     "WebGlBuffer", "WebGlFramebuffer", "WebGlProgram", "WebGlRenderbuffer",
     "WebGlShader", "WebGlTexture", "WebGlUniformLocation",
-    "WebGlVertexArrayObject", "Window", "Worker",
+    "WebGlVertexArrayObject", "Window", "Worker", "Storage",
 ] }
