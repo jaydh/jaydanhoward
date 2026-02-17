@@ -8,6 +8,8 @@ pub struct SatellitePosition {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+    pub altitude_km: f32,
+    pub inclination_deg: f32,
 }
 
 #[derive(Clone)]
@@ -15,6 +17,7 @@ pub struct Satellite {
     pub name: String,
     constants: Constants,
     epoch_j2000_years: f64,
+    inclination_deg: f64,
 }
 
 impl Satellite {
@@ -34,10 +37,14 @@ impl Satellite {
         // Get epoch time (Julian years since J2000)
         let epoch_j2000_years = elements.epoch();
 
+        // Get inclination in degrees
+        let inclination_deg = elements.inclination.to_degrees();
+
         Ok(Self {
             name,
             constants,
             epoch_j2000_years,
+            inclination_deg,
         })
     }
 
@@ -53,10 +60,20 @@ impl Satellite {
         const EARTH_RADIUS_KM: f64 = 6371.0;
         let scale = 1.0 / EARTH_RADIUS_KM;
 
+        // Calculate altitude (distance from Earth center minus Earth radius)
+        let distance_from_center = (
+            prediction.position[0].powi(2) +
+            prediction.position[1].powi(2) +
+            prediction.position[2].powi(2)
+        ).sqrt();
+        let altitude_km = distance_from_center - EARTH_RADIUS_KM;
+
         Ok(SatellitePosition {
             x: (prediction.position[0] * scale) as f32,
             y: (prediction.position[2] * scale) as f32, // ECI z -> our y (vertical/polar)
             z: (prediction.position[1] * scale) as f32, // ECI y -> our z
+            altitude_km: altitude_km as f32,
+            inclination_deg: self.inclination_deg as f32,
         })
     }
 
