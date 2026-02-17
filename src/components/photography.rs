@@ -34,7 +34,7 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
         tracing::error!("Caddy returned non-success status {}: {}", status, &body[..body.len().min(200)]);
-        return Err(ServerFnError::ServerError(format!("Caddy returned {}", status)));
+        return Err(ServerFnError::ServerError(format!("Caddy returned {status}")));
     }
 
     let body = response.text().await.map_err(|e| {
@@ -76,7 +76,7 @@ pub async fn fetch_images() -> Result<Vec<String>, ServerFnError<String>> {
         if let Some(base) = base_name {
             // Validate that the path doesn't contain directory traversal attempts
             if !base.contains("..") && !base.starts_with('/') {
-                let full_url = format!("https://caddy.jaydanhoward.com/{}", base);
+                let full_url = format!("https://caddy.jaydanhoward.com/{base}");
                 media_files.push(full_url);
             }
         }

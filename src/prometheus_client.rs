@@ -47,7 +47,7 @@ pub async fn query_prometheus(query: &str) -> Result<PrometheusData, anyhow::Err
     let client = Client::new();
     match std::env::var("PROMETHEUS_URL") {
         Ok(base_url) => {
-            let url = format!("{}/api/v1/query?query={}", base_url, query);
+            let url = format!("{base_url}/api/v1/query?query={query}");
 
             let response = client
                 .get(&url)
@@ -74,8 +74,7 @@ pub async fn query_prometheus_range(
     match std::env::var("PROMETHEUS_URL") {
         Ok(base_url) => {
             let url = format!(
-                "{}/api/v1/query_range?query={}&start={}&end={}&step={}",
-                base_url, query, start, end, step
+                "{base_url}/api/v1/query_range?query={query}&start={start}&end={end}&step={step}"
             );
 
             let response = client

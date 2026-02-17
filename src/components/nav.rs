@@ -192,9 +192,9 @@ pub fn Nav() -> impl IntoView {
                                     class=move || {
                                         let base = "px-4 py-2 relative transition-all duration-200";
                                         if active_section() == section_id {
-                                            format!("{} text-accent font-medium after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent after:scale-x-100 after:transition-transform after:duration-200", base)
+                                            format!("{base} text-accent font-medium after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent after:scale-x-100 after:transition-transform after:duration-200")
                                         } else {
-                                            format!("{} text-charcoal hover:text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200", base)
+                                            format!("{base} text-charcoal hover:text-accent after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 after:bg-accent after:scale-x-0 hover:after:scale-x-100 after:transition-transform after:duration-200")
                                         }
                                     }
                                     on:click=move |_| {

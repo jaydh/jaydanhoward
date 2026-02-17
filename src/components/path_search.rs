@@ -102,7 +102,7 @@ struct VecCoordinate(Vec<CoordinatePair>);
 impl fmt::Display for VecCoordinate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for (i, item) in self.0.iter().enumerate() {
-            writeln!(f, "Item {}: {}", i, item)?;
+            writeln!(f, "Item {i}: {item}")?;
         }
         Ok(())
     }
@@ -775,9 +775,9 @@ fn SearchGrid(
                     "#c084fc".to_string() // purple-400 - path
                 } else if is_visited {
                     if is_dark {
-                        format!("rgba(96, 165, 250, {})", fade_factor)
+                        format!("rgba(96, 165, 250, {fade_factor})")
                     } else {
-                        format!("rgba(147, 197, 253, {})", fade_factor)
+                        format!("rgba(147, 197, 253, {fade_factor})")
                     }
                 } else {
                     bg_color.to_string()
@@ -1083,7 +1083,7 @@ fn AlgorithmSimulation(
                     completion_steps().map(|steps| {
                         view! {
                             <span class="text-xs text-charcoal-light font-mono">
-                                {format!("{} steps", steps)}
+                                {format!("{steps} steps")}
                             </span>
                         }
                     })
