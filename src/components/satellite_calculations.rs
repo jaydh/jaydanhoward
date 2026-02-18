@@ -37,8 +37,8 @@ impl Satellite {
         // Get epoch time (Julian years since J2000)
         let epoch_j2000_years = elements.epoch();
 
-        // Get inclination in degrees
-        let inclination_deg = elements.inclination.to_degrees();
+        // elements.inclination is already in degrees per the sgp4 crate API
+        let inclination_deg = elements.inclination;
 
         Ok(Self {
             name,

@@ -39,17 +39,29 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         .await
         .map_err(|e| ServerFnError::ServerError(format!("Failed to fetch TLE data: {}", e)))?;
 
+    if !response.status().is_success() {
+        return Err(ServerFnError::ServerError(format!(
+            "CelesTrak returned HTTP {}",
+            response.status()
+        )));
+    }
+
     let text = response
         .text()
         .await
         .map_err(|e| ServerFnError::ServerError(format!("Failed to read response: {}", e)))?;
 
     // Parse TLE format (3 lines per satellite: name, line1, line2)
-    let lines: Vec<&str> = text.lines().collect();
+    // Filter blank lines first to avoid misalignment from leading/trailing whitespace or
+    // any extra lines in the response.
+    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     let mut satellites = Vec::new();
 
     for chunk in lines.chunks(3) {
-        if chunk.len() == 3 {
+        if chunk.len() == 3
+            && chunk[1].trim_start().starts_with("1 ")
+            && chunk[2].trim_start().starts_with("2 ")
+        {
             satellites.push(TleData {
                 name: chunk[0].trim().to_string(),
                 line1: chunk[1].trim().to_string(),
