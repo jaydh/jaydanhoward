@@ -1,4 +1,3 @@
-use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
 
 #[component]
@@ -29,7 +28,6 @@ pub fn Lighthouse() -> impl IntoView {
 #[component]
 pub fn Dev() -> impl IntoView {
     view! {
-        <SourceAnchor href="#[git]" />
         <Lighthouse />
     }
 }

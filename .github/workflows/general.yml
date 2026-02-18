@@ -52,7 +52,7 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Build
         run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_amd64
+          bazel --bazelrc=.bazelrc.ci build --stamp --embed_label=${{ github.sha }} jaydanhoward_image_amd64
   harbor-image-x86_64-push:
     if: github.event_name == 'push'
     name: Push JDH Image - x86_64
@@ -91,7 +91,7 @@ jobs:
           password: ${{ secrets.HARBOR_TOKEN}}
       - name: Bazel Build
         run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
+          bazel --bazelrc=.bazelrc.ci build --stamp --embed_label=${{ github.sha }} jaydanhoward_image_arm64
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [harbor-image-arm64]

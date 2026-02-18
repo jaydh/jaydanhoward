@@ -1,4 +1,5 @@
 use crate::components::about::About;
+use crate::components::footer::Footer;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
@@ -65,6 +66,7 @@ fn HomePage() -> impl IntoView {
             <section id="photography" class="flex flex-col py-20 border-t border-border">
                 <Photography />
             </section>
+            <Footer />
         </div>
     }
 }
