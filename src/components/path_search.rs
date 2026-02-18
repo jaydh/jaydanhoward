@@ -1,5 +1,4 @@
 use crate::components::icons::Icon;
-use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
 #[cfg(not(feature = "ssr"))]
 use rand::Rng;
@@ -1219,7 +1218,6 @@ pub fn PathSearch() -> impl IntoView {
     let randomize = move |_| {};
 
     view! {
-        <SourceAnchor href="#[git]" />
         <div
             node_ref=container_ref
             class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center relative"

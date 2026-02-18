@@ -3,6 +3,7 @@ mod app;
 mod beliefs;
 mod cluster_stats;
 mod dev;
+mod footer;
 mod icons;
 mod life;
 mod link;
@@ -16,7 +17,6 @@ mod satellite_renderer;
 #[cfg(not(feature = "ssr"))]
 mod satellite_calculations;
 mod skills;
-mod source_anchor;
 mod work;
 
 pub use app::App;

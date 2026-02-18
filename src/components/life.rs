@@ -1,5 +1,4 @@
 use crate::components::icons::Icon;
-use crate::components::source_anchor::SourceAnchor;
 use leptos::prelude::*;
 use std::collections::HashSet;
 
@@ -677,7 +676,6 @@ pub fn LifeGame(
 #[component]
 pub fn Life() -> impl IntoView {
     view! {
-        <SourceAnchor href="#[git]" />
         <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
             <h1 class="text-3xl font-bold text-charcoal">
                 "Conway's Game of Life"
