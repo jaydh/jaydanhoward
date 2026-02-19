@@ -4,3 +4,4 @@ common --enable_workspace
 build --@rules_rust//rust/toolchain/channel=nightly
 build --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
 build --output_groups=+clippy_checks
+build --workspace_status_command="bash workspace_status.sh"
