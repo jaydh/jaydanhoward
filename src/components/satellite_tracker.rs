@@ -659,7 +659,7 @@ pub fn SatelliteTracker() -> impl IntoView {
                 </div>
 
                 // Altitude legend
-                <div class="absolute bottom-4 left-4 bg-black/80 text-white px-3 py-2 rounded text-xs">
+                <div class="absolute bottom-4 right-4 bg-black/80 text-white px-3 py-2 rounded text-xs">
                     <div class="font-semibold mb-1.5">"Orbital Classification"</div>
                     <div class="flex flex-col gap-1">
                         <div class="flex items-center gap-2">

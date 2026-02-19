@@ -169,7 +169,7 @@ rust_binary(
     crate_features = ["ssr"],
     crate_name = "jaydanhoward",
     edition = "2021",
-    stamp = -1,
+    stamp = 1,
     data = [
         ":jaydanhoward_wasm",
         "leptos.toml",
@@ -180,7 +180,7 @@ rust_binary(
     ],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
-        "GIT_SHA": "$(BUILD_EMBED_LABEL)",
+        "GIT_SHA": "{STABLE_GIT_COMMIT_SHA}",
     },
     deps = server_deps,
     rustc_flags = [
@@ -209,7 +209,7 @@ rust_binary(
     ],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
-        "GIT_SHA": "$(BUILD_EMBED_LABEL)",
+        "GIT_SHA": "{STABLE_GIT_COMMIT_SHA}",
     },
     deps = server_deps,
     rustc_flags = [
@@ -237,7 +237,7 @@ rust_binary(
     ],
     rustc_env = {
         "SERVER_FN_OVERRIDE_KEY": "bazel",
-        "GIT_SHA": "$(BUILD_EMBED_LABEL)",
+        "GIT_SHA": "{STABLE_GIT_COMMIT_SHA}",
     },
     deps = server_deps,
     rustc_flags = [
