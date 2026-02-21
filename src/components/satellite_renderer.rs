@@ -19,6 +19,8 @@ pub struct SatelliteRenderer {
     auto_rotate: bool,
     satellite_positions: Vec<SatellitePosition>,
     satellite_vertex_buffer: Option<WebGlBuffer>,
+    pole_axis_vertex_buffer: Option<WebGlBuffer>,
+    pole_axis_vertex_count: i32,
 }
 
 impl SatelliteRenderer {
@@ -37,6 +39,8 @@ impl SatelliteRenderer {
             auto_rotate: true,
             satellite_positions: Vec::new(),
             satellite_vertex_buffer: None,
+            pole_axis_vertex_buffer: None,
+            pole_axis_vertex_count: 0,
         })
     }
 
@@ -167,6 +171,9 @@ impl SatelliteRenderer {
         // Create equator line
         self.create_equator_line()?;
 
+        // Create pole axis
+        self.create_pole_axis()?;
+
         Ok(())
     }
 
@@ -250,6 +257,37 @@ impl SatelliteRenderer {
 
         self.equator_vertex_buffer = Some(vertex_buffer);
 
+        Ok(())
+    }
+
+    fn create_pole_axis(&mut self) -> Result<(), String> {
+        // Axis line from south pole to north pole, slightly beyond the surface
+        // South pole (y = -1.2): orange-red
+        // North pole (y = +1.2): bright white
+        let vertices: Vec<f32> = vec![
+            // South pole – orange-red
+             0.0, -1.2, 0.0,   1.0, 0.45, 0.1,
+            // Equator midpoint – fade to neutral (helps GPU interpolate colors along the line)
+             0.0,  0.0, 0.0,   0.6, 0.6,  0.6,
+            // North pole – bright white
+             0.0,  1.2, 0.0,   1.0, 1.0,  1.0,
+        ];
+        self.pole_axis_vertex_count = 3;
+
+        let vertex_buffer = self.gl.create_buffer()
+            .ok_or("Failed to create pole axis vertex buffer")?;
+        self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&vertex_buffer));
+
+        unsafe {
+            let vertices_array = js_sys::Float32Array::view(&vertices);
+            self.gl.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                &vertices_array,
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+        }
+
+        self.pole_axis_vertex_buffer = Some(vertex_buffer);
         Ok(())
     }
 
@@ -380,6 +418,28 @@ impl SatelliteRenderer {
                     WebGl2RenderingContext::LINE_STRIP,
                     0,
                     self.equator_vertex_count,
+                );
+            }
+
+            // Draw pole axis (south orange → north white)
+            if let Some(pole_buffer) = &self.pole_axis_vertex_buffer {
+                self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(pole_buffer));
+
+                let position_loc = self.gl.get_attrib_location(program, "position") as u32;
+                let color_loc = self.gl.get_attrib_location(program, "color") as u32;
+
+                let stride = 6 * 4;
+                self.gl.vertex_attrib_pointer_with_i32(position_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 0);
+                self.gl.enable_vertex_attrib_array(position_loc);
+
+                self.gl.vertex_attrib_pointer_with_i32(color_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 3 * 4);
+                self.gl.enable_vertex_attrib_array(color_loc);
+
+                self.gl.line_width(2.0);
+                self.gl.draw_arrays(
+                    WebGl2RenderingContext::LINE_STRIP,
+                    0,
+                    self.pole_axis_vertex_count,
                 );
             }
 
