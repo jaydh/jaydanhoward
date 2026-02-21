@@ -106,6 +106,10 @@ pub fn SatelliteTracker() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     let (frame_skip, set_frame_skip) = signal(2_usize); // Default: advance every 2 frames
 
+    // Orbit type filter bitmask: bit 0=LEO, 1=LEO High, 2=MEO, 3=MEO High, 4=GEO, 5=HEO
+    #[cfg(not(feature = "ssr"))]
+    let (orbit_filter, set_orbit_filter) = signal(0b00111111_u8); // All types enabled
+
     // Fetch TLE data when component mounts
     Effect::new(move |_| {
         set_loading.set(true);
@@ -299,8 +303,22 @@ pub fn SatelliteTracker() -> impl IntoView {
 
                                             // Calculate positions at this specific time
                                             let positions = satellite_calculations::calculate_positions_at_time(satellites, current_time);
+                                            let filter = orbit_filter.get_untracked();
                                             let sat_positions: Vec<satellite_calculations::SatellitePosition> =
-                                                positions.into_iter().map(|(_, pos)| pos).collect();
+                                                positions.into_iter().map(|(_, pos)| pos).filter(|pos| {
+                                                    let idx: u8 = if pos.altitude_km > 35000.0 && pos.altitude_km < 37000.0 && pos.inclination_deg.abs() < 5.0 {
+                                                        4 // GEO
+                                                    } else {
+                                                        match pos.altitude_km {
+                                                            a if a < 600.0   => 0, // LEO
+                                                            a if a < 2000.0  => 1, // LEO High
+                                                            a if a < 20000.0 => 2, // MEO
+                                                            a if a < 35000.0 => 3, // MEO High
+                                                            _                => 5, // HEO
+                                                        }
+                                                    };
+                                                    (filter >> idx) & 1 == 1
+                                                }).collect();
 
                                             renderer_value.update_value(|renderer| {
                                                 renderer.update_satellites(sat_positions);
@@ -618,6 +636,16 @@ pub fn SatelliteTracker() -> impl IntoView {
                             }
                         }}
                     </div>
+                    <div class="text-xs text-gray-400 flex gap-3">
+                        <span class="flex items-center gap-1">
+                            <span class="inline-block w-2 h-2 rounded-full shrink-0" style="background: white;"></span>
+                            "N"
+                        </span>
+                        <span class="flex items-center gap-1">
+                            <span class="inline-block w-2 h-2 rounded-full shrink-0" style="background: rgb(255, 115, 26);"></span>
+                            "S"
+                        </span>
+                    </div>
                     {
                         #[cfg(not(feature = "ssr"))]
                         {
@@ -627,7 +655,7 @@ pub fn SatelliteTracker() -> impl IntoView {
                                         class="bg-white/20 hover:bg-white/30 px-2 py-0.5 rounded text-xs"
                                         on:click=move |_| {
                                             set_frame_skip.update(|skip| {
-                                                *skip = (*skip + 1).min(10); // Max: every 11 frames
+                                                *skip = (*skip + 1).min(29); // Max: every 30 frames
                                             });
                                         }
                                     >
@@ -662,32 +690,118 @@ pub fn SatelliteTracker() -> impl IntoView {
 
             <div class="mt-3 text-xs text-gray-400 space-y-2">
                 <p>"Data from CelesTrak • Animating last 24 hours of orbital data"</p>
-                <div class="flex flex-wrap gap-x-4 gap-y-1">
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(77, 204, 255);"></div>
-                        <span>"LEO (&lt;600km)"</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(128, 255, 128);"></div>
-                        <span>"LEO High (600-2000km)"</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 204, 51);"></div>
-                        <span>"MEO (2000-20000km)"</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 128, 51);"></div>
-                        <span>"MEO High (20000-35000km)"</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 77, 77);"></div>
-                        <span>"GEO (35786km equatorial)"</span>
-                    </div>
-                    <div class="flex items-center gap-1.5">
-                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(204, 153, 255);"></div>
-                        <span>"HEO (high orbit)"</span>
-                    </div>
-                </div>
+                {
+                    #[cfg(not(feature = "ssr"))]
+                    {
+                        view! {
+                            <div class="flex flex-wrap gap-x-4 gap-y-1">
+                                <button
+                                    class=move || {
+                                        let active = (orbit_filter.get() >> 0) & 1 == 1;
+                                        let base = "flex items-center gap-1.5 hover:opacity-90 transition-opacity";
+                                        if active { base.to_string() } else { format!("{base} opacity-40") }
+                                    }
+                                    on:click=move |_| set_orbit_filter.update(|f| *f ^= 1 << 0)
+                                    title="Toggle LEO (<600km)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(77, 204, 255);"></div>
+                                    <span>"LEO (<600km)"</span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let active = (orbit_filter.get() >> 1) & 1 == 1;
+                                        let base = "flex items-center gap-1.5 hover:opacity-90 transition-opacity";
+                                        if active { base.to_string() } else { format!("{base} opacity-40") }
+                                    }
+                                    on:click=move |_| set_orbit_filter.update(|f| *f ^= 1 << 1)
+                                    title="Toggle LEO High (600-2000km)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(128, 255, 128);"></div>
+                                    <span>"LEO High (600-2000km)"</span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let active = (orbit_filter.get() >> 2) & 1 == 1;
+                                        let base = "flex items-center gap-1.5 hover:opacity-90 transition-opacity";
+                                        if active { base.to_string() } else { format!("{base} opacity-40") }
+                                    }
+                                    on:click=move |_| set_orbit_filter.update(|f| *f ^= 1 << 2)
+                                    title="Toggle MEO (2000-20000km)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 204, 51);"></div>
+                                    <span>"MEO (2000-20000km)"</span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let active = (orbit_filter.get() >> 3) & 1 == 1;
+                                        let base = "flex items-center gap-1.5 hover:opacity-90 transition-opacity";
+                                        if active { base.to_string() } else { format!("{base} opacity-40") }
+                                    }
+                                    on:click=move |_| set_orbit_filter.update(|f| *f ^= 1 << 3)
+                                    title="Toggle MEO High (20000-35000km)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 128, 51);"></div>
+                                    <span>"MEO High (20000-35000km)"</span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let active = (orbit_filter.get() >> 4) & 1 == 1;
+                                        let base = "flex items-center gap-1.5 hover:opacity-90 transition-opacity";
+                                        if active { base.to_string() } else { format!("{base} opacity-40") }
+                                    }
+                                    on:click=move |_| set_orbit_filter.update(|f| *f ^= 1 << 4)
+                                    title="Toggle GEO (35786km equatorial)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 77, 77);"></div>
+                                    <span>"GEO (35786km equatorial)"</span>
+                                </button>
+                                <button
+                                    class=move || {
+                                        let active = (orbit_filter.get() >> 5) & 1 == 1;
+                                        let base = "flex items-center gap-1.5 hover:opacity-90 transition-opacity";
+                                        if active { base.to_string() } else { format!("{base} opacity-40") }
+                                    }
+                                    on:click=move |_| set_orbit_filter.update(|f| *f ^= 1 << 5)
+                                    title="Toggle HEO (high orbit)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(204, 153, 255);"></div>
+                                    <span>"HEO (high orbit)"</span>
+                                </button>
+                            </div>
+                        }
+                    }
+                    #[cfg(feature = "ssr")]
+                    {
+                        view! {
+                            <div class="flex flex-wrap gap-x-4 gap-y-1">
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(77, 204, 255);"></div>
+                                    <span>"LEO (<600km)"</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(128, 255, 128);"></div>
+                                    <span>"LEO High (600-2000km)"</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 204, 51);"></div>
+                                    <span>"MEO (2000-20000km)"</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 128, 51);"></div>
+                                    <span>"MEO High (20000-35000km)"</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 77, 77);"></div>
+                                    <span>"GEO (35786km equatorial)"</span>
+                                </div>
+                                <div class="flex items-center gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(204, 153, 255);"></div>
+                                    <span>"HEO (high orbit)"</span>
+                                </div>
+                            </div>
+                        }
+                    }
+                }
             </div>
         </div>
     }

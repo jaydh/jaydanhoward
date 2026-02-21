@@ -21,6 +21,7 @@ pub struct SatelliteRenderer {
     satellite_vertex_buffer: Option<WebGlBuffer>,
     pole_axis_vertex_buffer: Option<WebGlBuffer>,
     pole_axis_vertex_count: i32,
+    pole_tips_vertex_buffer: Option<WebGlBuffer>,
 }
 
 impl SatelliteRenderer {
@@ -41,6 +42,7 @@ impl SatelliteRenderer {
             satellite_vertex_buffer: None,
             pole_axis_vertex_buffer: None,
             pole_axis_vertex_count: 0,
+            pole_tips_vertex_buffer: None,
         })
     }
 
@@ -174,6 +176,9 @@ impl SatelliteRenderer {
         // Create pole axis
         self.create_pole_axis()?;
 
+        // Create pole tip markers
+        self.create_pole_tips()?;
+
         Ok(())
     }
 
@@ -291,6 +296,32 @@ impl SatelliteRenderer {
         Ok(())
     }
 
+    fn create_pole_tips(&mut self) -> Result<(), String> {
+        // Two large GL_POINTS at the pole tips for clear N/S visibility
+        // North pole (y = +1.25): bright white
+        // South pole (y = -1.25): orange-red
+        let vertices: Vec<f32> = vec![
+            0.0,  1.25, 0.0,   1.0, 1.0,  1.0,  // North – white
+            0.0, -1.25, 0.0,   1.0, 0.45, 0.1,  // South – orange-red
+        ];
+
+        let vertex_buffer = self.gl.create_buffer()
+            .ok_or("Failed to create pole tips vertex buffer")?;
+        self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(&vertex_buffer));
+
+        unsafe {
+            let vertices_array = js_sys::Float32Array::view(&vertices);
+            self.gl.buffer_data_with_array_buffer_view(
+                WebGl2RenderingContext::ARRAY_BUFFER,
+                &vertices_array,
+                WebGl2RenderingContext::STATIC_DRAW,
+            );
+        }
+
+        self.pole_tips_vertex_buffer = Some(vertex_buffer);
+        Ok(())
+    }
+
     fn generate_sphere(radius: f32, latitude_bands: u32, longitude_bands: u32) -> (Vec<f32>, Vec<u16>) {
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
@@ -376,6 +407,8 @@ impl SatelliteRenderer {
             let model_view_loc = self.gl.get_uniform_location(program, "uModelViewMatrix");
             self.gl.uniform_matrix4fv_with_f32_array(model_view_loc.as_ref(), false, &model_view);
 
+            let point_size_loc = self.gl.get_uniform_location(program, "u_point_size");
+
             // Draw Earth
             if let (Some(vertex_buffer), Some(index_buffer)) = (&self.earth_vertex_buffer, &self.earth_index_buffer) {
                 self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(vertex_buffer));
@@ -443,9 +476,28 @@ impl SatelliteRenderer {
                 );
             }
 
+            // Draw pole tip markers as large points so they're visible through satellites
+            if let Some(tips_buffer) = &self.pole_tips_vertex_buffer {
+                self.gl.uniform1f(point_size_loc.as_ref(), 8.0);
+                self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(tips_buffer));
+
+                let position_loc = self.gl.get_attrib_location(program, "position") as u32;
+                let color_loc = self.gl.get_attrib_location(program, "color") as u32;
+
+                let stride = 6 * 4;
+                self.gl.vertex_attrib_pointer_with_i32(position_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 0);
+                self.gl.enable_vertex_attrib_array(position_loc);
+
+                self.gl.vertex_attrib_pointer_with_i32(color_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 3 * 4);
+                self.gl.enable_vertex_attrib_array(color_loc);
+
+                self.gl.draw_arrays(WebGl2RenderingContext::POINTS, 0, 2);
+            }
+
             // Draw satellites
             if let Some(sat_buffer) = &self.satellite_vertex_buffer {
                 if !self.satellite_positions.is_empty() {
+                    self.gl.uniform1f(point_size_loc.as_ref(), 2.0);
                     self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(sat_buffer));
 
                     let position_loc = self.gl.get_attrib_location(program, "position") as u32;
@@ -589,11 +641,12 @@ out vec3 vColor;
 
 uniform mat4 uModelViewMatrix;
 uniform mat4 uProjectionMatrix;
+uniform float u_point_size;
 
 void main() {
     vColor = color;
     gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = 2.0;
+    gl_PointSize = u_point_size;
 }
 "#;
 
