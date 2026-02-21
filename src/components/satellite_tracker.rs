@@ -658,40 +658,36 @@ pub fn SatelliteTracker() -> impl IntoView {
                     }
                 </div>
 
-                // Altitude legend
-                <div class="absolute bottom-4 right-4 bg-black/80 text-white px-3 py-2 rounded text-xs">
-                    <div class="font-semibold mb-1.5">"Orbital Classification"</div>
-                    <div class="flex flex-col gap-1">
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full" style="background-color: rgb(77, 204, 255);"></div>
-                            <span>"LEO (< 600km)"</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full" style="background-color: rgb(128, 255, 128);"></div>
-                            <span>"LEO High (600-2000km)"</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full" style="background-color: rgb(255, 204, 51);"></div>
-                            <span>"MEO (2000-20000km)"</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full" style="background-color: rgb(255, 128, 51);"></div>
-                            <span>"MEO High (20000-30000km)"</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full" style="background-color: rgb(255, 77, 77);"></div>
-                            <span>"GEO (35786km, equator)"</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <div class="w-3 h-3 rounded-full" style="background-color: rgb(204, 153, 255);"></div>
-                            <span>"HEO (high orbit)"</span>
-                        </div>
-                    </div>
-                </div>
             </div>
 
-            <div class="mt-4 text-xs text-gray-400">
+            <div class="mt-3 text-xs text-gray-400 space-y-2">
                 <p>"Data from CelesTrak • Animating last 24 hours of orbital data"</p>
+                <div class="flex flex-wrap gap-x-4 gap-y-1">
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(77, 204, 255);"></div>
+                        <span>"LEO (&lt;600km)"</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(128, 255, 128);"></div>
+                        <span>"LEO High (600-2000km)"</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 204, 51);"></div>
+                        <span>"MEO (2000-20000km)"</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 128, 51);"></div>
+                        <span>"MEO High (20000-35000km)"</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(255, 77, 77);"></div>
+                        <span>"GEO (35786km equatorial)"</span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(204, 153, 255);"></div>
+                        <span>"HEO (high orbit)"</span>
+                    </div>
+                </div>
             </div>
         </div>
     }

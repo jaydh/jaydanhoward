@@ -70,8 +70,8 @@ impl Satellite {
 
         Ok(SatellitePosition {
             x: (prediction.position[0] * scale) as f32,
-            y: (prediction.position[2] * scale) as f32, // ECI z -> our y (vertical/polar)
-            z: (prediction.position[1] * scale) as f32, // ECI y -> our z
+            y: (prediction.position[2] * scale) as f32,  // ECI z -> our y (vertical/polar)
+            z: -(prediction.position[1] * scale) as f32, // ECI y -> our z (negated so prograde orbits are CCW from north)
             altitude_km: altitude_km as f32,
             inclination_deg: self.inclination_deg as f32,
         })
