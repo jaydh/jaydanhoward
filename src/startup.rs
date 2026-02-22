@@ -1,9 +1,11 @@
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
     use crate::components::App;
+    use crate::db::create_pool;
     use crate::middleware::cache_control::CacheControl;
     use crate::middleware::rate_limit::RateLimiter;
     use crate::middleware::security_headers::SecurityHeaders;
+    use crate::middleware::visitor_logger::VisitorLogger;
     use crate::routes::{health_check, metrics_stream, robots_txt, upload_lighthouse_report};
     use crate::telemtry::{get_subscriber, init_subscriber};
     use actix_files::Files;
@@ -21,9 +23,6 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let r = Runfiles::create().expect("Must run using bazel with runfiles");
     let leptos_toml_path = rlocation!(r, "_main/leptos.toml").expect("Failed to locate runfile");
-    // In bazel dev builds, rlocation! uses manifest mode: source files resolve to the source
-    // directory and WASM outputs resolve to the Bazel cache. There is no common parent.
-    // Resolve each location independently and serve them under separate URL prefixes.
     let assets_root = leptos_toml_path
         .parent()
         .expect("Failed to locate assets root")
@@ -42,6 +41,26 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let addr = conf.leptos_options.site_addr;
 
+    // Optionally connect to Postgres if DATABASE_URL is set
+    let pool = match std::env::var("DATABASE_URL") {
+        Ok(url) => match create_pool(&url).await {
+            Ok(p) => {
+                log::info!("Connected to Postgres");
+                Some(p)
+            }
+            Err(e) => {
+                log::warn!("Failed to connect to Postgres: {}", e);
+                None
+            }
+        },
+        Err(_) => {
+            log::info!("DATABASE_URL not set, visitor tracking disabled");
+            None
+        }
+    };
+
+    let http_client = reqwest::Client::new();
+
     log::info!("Starting Server on {}", addr);
     HttpServer::new(move || {
         let routes = generate_route_list(App);
@@ -49,7 +68,9 @@ pub async fn run() -> Result<(), std::io::Error> {
         // Rate limiter for authentication endpoints: 5 requests per minute
         let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
 
-        actix_web::App::new()
+        let visitor_logger = VisitorLogger::new(pool.clone(), http_client.clone());
+
+        let mut app = actix_web::App::new()
             .route(
                 "/api/lighthouse",
                 web::post()
@@ -87,9 +108,16 @@ pub async fn run() -> Result<(), std::io::Error> {
                 wasm_dir.to_string_lossy().as_ref(),
             ))
             .service(Files::new("/", assets_root.to_string_lossy().as_ref()))
+            .wrap(visitor_logger)
             .wrap(CacheControl)
             .wrap(SecurityHeaders)
-            .wrap(actix_web::middleware::Compress::default())
+            .wrap(actix_web::middleware::Compress::default());
+
+        if let Some(ref p) = pool {
+            app = app.app_data(web::Data::new(p.clone()));
+        }
+
+        app
     })
     .bind(&addr)?
     .run()

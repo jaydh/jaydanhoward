@@ -18,10 +18,14 @@ if [ -n "${HOME:-}" ] && [ -d "$ADVISORY_DB" ]; then
     echo "Using cached advisory database"
 fi
 
+# RUSTSEC-2023-0071: Marvin Attack timing side-channel in rsa crate, pulled in
+# transitively by sqlx-core for Postgres SCRAM auth. No upstream fix available.
+IGNORE_FLAGS="--ignore RUSTSEC-2023-0071"
+
 echo "Running cargo-audit on server dependencies..."
-"$CARGO_AUDIT" audit $AUDIT_FLAGS --file Cargo.server.lock
+"$CARGO_AUDIT" audit $AUDIT_FLAGS $IGNORE_FLAGS --file Cargo.server.lock
 
 echo "Running cargo-audit on WASM dependencies..."
-"$CARGO_AUDIT" audit $AUDIT_FLAGS --file Cargo.wasm.lock
+"$CARGO_AUDIT" audit $AUDIT_FLAGS $IGNORE_FLAGS --file Cargo.wasm.lock
 
 echo "Security audit passed!"

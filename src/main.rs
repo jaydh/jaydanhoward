@@ -2,6 +2,8 @@
 
 mod components;
 #[cfg(feature = "ssr")]
+mod db;
+#[cfg(feature = "ssr")]
 mod middleware;
 mod prometheus_client;
 mod routes;

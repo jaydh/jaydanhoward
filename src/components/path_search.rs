@@ -1220,12 +1220,8 @@ pub fn PathSearch() -> impl IntoView {
     view! {
         <div
             node_ref=container_ref
-            class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center relative"
+            class="w-full flex flex-col gap-8 items-center"
         >
-            <h1 class="text-3xl font-bold text-charcoal">
-                "Pathfinding Algorithms"
-            </h1>
-
             <div class="flex gap-3 items-center">
                 <button
                     class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"

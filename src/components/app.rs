@@ -1,10 +1,13 @@
 use crate::components::about::About;
+use crate::components::cluster_stats::ClusterStats;
+use crate::components::dev::Lighthouse;
 use crate::components::footer::Footer;
 use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
 use crate::components::satellite_tracker::SatelliteTracker;
+use crate::components::visitors::Visitors;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Html, Link, Script, Style, Title};
 use leptos_router::components::*;
@@ -47,24 +50,42 @@ fn HomePage() -> impl IntoView {
             style="scroll-behavior: smooth; -webkit-overflow-scrolling: touch; will-change: scroll-position;"
         >
             <section id="about" class="flex flex-col py-20">
-                <About />
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">"About"</h1>
+                    <About />
+                </div>
+            </section>
+            <section id="cluster" class="flex flex-col py-20 border-t border-border">
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">"Cluster"</h1>
+                    <ClusterStats />
+                    <Lighthouse />
+                    <Visitors />
+                </div>
             </section>
             <section id="satellites" class="flex flex-col py-20 border-t border-border">
                 <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
-                    <h1 class="text-3xl font-bold text-charcoal">
-                        "Satellites"
-                    </h1>
+                    <h1 class="text-3xl font-bold text-charcoal">"Satellites"</h1>
                     <SatelliteTracker />
                 </div>
             </section>
             <section id="life" class="flex flex-col py-20 border-t border-border">
-                <Life />
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">"Conway's Game of Life"</h1>
+                    <Life />
+                </div>
             </section>
             <section id="path" class="flex flex-col py-20 border-t border-border">
-                <PathSearch />
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center relative">
+                    <h1 class="text-3xl font-bold text-charcoal">"Pathfinding Algorithms"</h1>
+                    <PathSearch />
+                </div>
             </section>
             <section id="photography" class="flex flex-col py-20 border-t border-border">
-                <Photography />
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">"Photography"</h1>
+                    <Photography />
+                </div>
             </section>
             <Footer />
         </div>

@@ -676,11 +676,6 @@ pub fn LifeGame(
 #[component]
 pub fn Life() -> impl IntoView {
     view! {
-        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
-            <h1 class="text-3xl font-bold text-charcoal">
-                "Conway's Game of Life"
-            </h1>
-            <LifeGame auto_start=true initial_grid_size=250 />
-        </div>
+        <LifeGame auto_start=true initial_grid_size=250 />
     }
 }
