@@ -81,14 +81,17 @@ where
             return Box::pin(fut);
         }
 
-        let ip = req
-            .connection_info()
-            .realip_remote_addr()
-            .unwrap_or("unknown")
-            .split(':')
-            .next()
-            .unwrap_or("unknown")
-            .to_string();
+        let ip = {
+            let raw = req
+                .connection_info()
+                .realip_remote_addr()
+                .unwrap_or("unknown")
+                .to_string();
+            // Strip port if present: "1.2.3.4:port" or "[::1]:port" → bare IP
+            raw.parse::<std::net::SocketAddr>()
+                .map(|s| s.ip().to_string())
+                .unwrap_or(raw)
+        };
 
         if is_private_ip(&ip) {
             let fut = self.service.call(req);

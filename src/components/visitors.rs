@@ -2,6 +2,12 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IpVisit {
+    pub path: String,
+    pub minutes_ago: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IpInfo {
     pub ip: String,
     pub country: Option<String>,
@@ -9,6 +15,7 @@ pub struct IpInfo {
     pub city: Option<String>,
     pub region: Option<String>,
     pub isp: Option<String>,
+    pub history: Vec<IpVisit>,
 }
 
 #[server(name = GetMyInfo, prefix = "/api", endpoint = "get_my_info")]
@@ -21,14 +28,16 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
         .await
         .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
 
-    let ip = req
-        .connection_info()
-        .realip_remote_addr()
-        .unwrap_or("unknown")
-        .split(':')
-        .next()
-        .unwrap_or("unknown")
-        .to_string();
+    let ip = {
+        let raw = req
+            .connection_info()
+            .realip_remote_addr()
+            .unwrap_or("unknown")
+            .to_string();
+        raw.parse::<std::net::SocketAddr>()
+            .map(|s| s.ip().to_string())
+            .unwrap_or(raw)
+    };
 
     let pool = match extract::<Data<PgPool>>().await {
         Ok(p) => p,
@@ -40,6 +49,7 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
                 city: None,
                 region: None,
                 isp: None,
+                history: vec![],
             })
         }
     };
@@ -53,7 +63,43 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
             city: info.city,
             region: info.region,
             isp: info.isp,
+            history: info
+                .history
+                .into_iter()
+                .map(|v| IpVisit { path: v.path, minutes_ago: v.minutes_ago })
+                .collect(),
         })
+        .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+}
+
+#[server(name = ForgetMe, prefix = "/api", endpoint = "forget_me")]
+pub async fn forget_me() -> Result<(), ServerFnError<String>> {
+    use actix_web::HttpRequest;
+    use leptos_actix::extract;
+    use actix_web::web::Data;
+    use sqlx::PgPool;
+
+    let req = extract::<HttpRequest>()
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+
+    let ip = {
+        let raw = req
+            .connection_info()
+            .realip_remote_addr()
+            .unwrap_or("unknown")
+            .to_string();
+        raw.parse::<std::net::SocketAddr>()
+            .map(|s| s.ip().to_string())
+            .unwrap_or(raw)
+    };
+
+    let pool = extract::<Data<PgPool>>()
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+
+    crate::db::delete_ip_visits(&pool, &ip)
+        .await
         .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
 }
 
@@ -177,41 +223,72 @@ fn format_time_ago(minutes: i64) -> String {
 #[component]
 fn YourVisit() -> impl IntoView {
     let info = Resource::new(|| (), |_| get_my_info());
+    let forget = Action::new(|_: &()| forget_me());
 
     view! {
         <Suspense fallback=|| ()>
-            {move || info.get().map(|result| match result {
-                Err(_) => view! { <div></div> }.into_any(),
-                Ok(info) => {
-                    let location = match (&info.city, &info.region, &info.country) {
-                        (Some(city), Some(region), _) => format!("{city}, {region}"),
-                        (Some(city), _, Some(country)) => format!("{city}, {country}"),
-                        (_, _, Some(country)) => country.clone(),
-                        _ => String::new(),
-                    };
-                    let flag = info.country_code.as_deref()
-                        .map(country_flag)
-                        .unwrap_or_default();
-                    view! {
-                        <div class="flex items-center gap-2 text-xs text-charcoal-lighter bg-surface border border-border rounded-lg px-3 py-2 font-mono">
-                            <span class="text-charcoal">"You: "</span>
-                            <span class="text-accent">{info.ip}</span>
-                            {if !location.is_empty() {
-                                view! {
-                                    <span class="text-charcoal-lighter">"·"</span>
-                                    <span>{flag}" "{location}</span>
-                                }.into_any()
-                            } else {
-                                view! { <span></span> }.into_any()
-                            }}
-                            {info.isp.map(|isp| view! {
-                                <span class="text-charcoal-lighter">"·"</span>
-                                <span class="truncate">{isp}</span>
+            {move || {
+                // Hide the card once forget_me succeeds
+                if forget.value().get().is_some_and(|r| r.is_ok()) {
+                    return Some(view! { <div></div> }.into_any());
+                }
+                info.get().map(|result| match result {
+                    Err(_) => view! { <div></div> }.into_any(),
+                    Ok(info) => {
+                        let location = match (&info.city, &info.region, &info.country) {
+                            (Some(city), Some(region), _) => format!("{city}, {region}"),
+                            (Some(city), _, Some(country)) => format!("{city}, {country}"),
+                            (_, _, Some(country)) => country.clone(),
+                            _ => String::new(),
+                        };
+                        let flag = info.country_code.as_deref()
+                            .map(country_flag)
+                            .unwrap_or_default();
+                        let history = info.history.clone();
+                        view! {
+                            <div class="bg-surface border border-border rounded-lg p-3 font-mono text-xs space-y-2">
+                                // Header row: IP · location · ISP · forget button
+                                <div class="flex items-center gap-2 text-charcoal-lighter flex-wrap">
+                                    <span class="text-charcoal">"You: "</span>
+                                    <span class="text-accent">{info.ip}</span>
+                                    {if !location.is_empty() {
+                                        view! {
+                                            <span class="text-charcoal-lighter">"·"</span>
+                                            <span>{flag}" "{location}</span>
+                                        }.into_any()
+                                    } else {
+                                        view! { <span></span> }.into_any()
+                                    }}
+                                    {info.isp.map(|isp| view! {
+                                        <span class="text-charcoal-lighter">"·"</span>
+                                        <span class="truncate opacity-70">{isp}</span>
+                                    })}
+                                    <button
+                                        class="ml-auto text-charcoal-lighter hover:text-red-400 transition-colors"
+                                        title="Delete all records of your visits"
+                                        on:click=move |_| { forget.dispatch(()); }
+                                    >
+                                        "forget me"
+                                    </button>
+                                </div>
+                            // Visit history
+                            {(!history.is_empty()).then(|| view! {
+                                <div class="space-y-1 pt-1 border-t border-border">
+                                    {history.into_iter().map(|v| {
+                                        let time = format_time_ago(v.minutes_ago);
+                                        view! {
+                                            <div class="flex items-center gap-2 text-charcoal-lighter">
+                                                <span class="text-charcoal truncate flex-1">{v.path}</span>
+                                                <span class="flex-shrink-0 opacity-60">{time}</span>
+                                            </div>
+                                        }
+                                    }).collect::<Vec<_>>()}
+                                </div>
                             })}
                         </div>
                     }.into_any()
                 }
-            })}
+            })}}
         </Suspense>
     }
 }

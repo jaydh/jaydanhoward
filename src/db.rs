@@ -207,6 +207,12 @@ mod inner {
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct IpVisit {
+        pub path: String,
+        pub minutes_ago: i64,
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct IpInfo {
         pub ip: String,
         pub country: Option<String>,
@@ -214,10 +220,13 @@ mod inner {
         pub city: Option<String>,
         pub region: Option<String>,
         pub isp: Option<String>,
+        pub history: Vec<IpVisit>,
     }
 
     pub async fn get_ip_info(pool: &PgPool, ip: &str) -> Result<IpInfo, sqlx::Error> {
-        let row = sqlx::query(
+        use sqlx::Row;
+
+        let meta_row = sqlx::query(
             r#"
             SELECT country, country_code, city, region, isp
             FROM visitors
@@ -230,26 +239,51 @@ mod inner {
         .fetch_optional(pool)
         .await?;
 
-        Ok(match row {
-            Some(row) => {
-                use sqlx::Row;
-                IpInfo {
-                    ip: ip.to_string(),
-                    country: row.try_get("country").ok().flatten(),
-                    country_code: row.try_get("country_code").ok().flatten(),
-                    city: row.try_get("city").ok().flatten(),
-                    region: row.try_get("region").ok().flatten(),
-                    isp: row.try_get("isp").ok().flatten(),
+        let (country, country_code, city, region, isp) = match meta_row {
+            Some(row) => (
+                row.try_get("country").ok().flatten(),
+                row.try_get("country_code").ok().flatten(),
+                row.try_get("city").ok().flatten(),
+                row.try_get("region").ok().flatten(),
+                row.try_get("isp").ok().flatten(),
+            ),
+            None => (None, None, None, None, None),
+        };
+
+        let now = Utc::now();
+        let history_rows = sqlx::query(
+            r#"
+            SELECT path, visited_at
+            FROM visitors
+            WHERE ip = $1
+            ORDER BY visited_at DESC
+            LIMIT 20
+            "#,
+        )
+        .bind(ip)
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+
+        let history = history_rows
+            .into_iter()
+            .map(|row| {
+                let visited_at: DateTime<Utc> = row.try_get("visited_at").unwrap_or(now);
+                IpVisit {
+                    path: row.try_get("path").unwrap_or_default(),
+                    minutes_ago: (now - visited_at).num_minutes().max(0),
                 }
-            }
-            None => IpInfo {
-                ip: ip.to_string(),
-                country: None,
-                country_code: None,
-                city: None,
-                region: None,
-                isp: None,
-            },
-        })
+            })
+            .collect();
+
+        Ok(IpInfo { ip: ip.to_string(), country, country_code, city, region, isp, history })
+    }
+
+    pub async fn delete_ip_visits(pool: &PgPool, ip: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM visitors WHERE ip = $1")
+            .bind(ip)
+            .execute(pool)
+            .await?;
+        Ok(())
     }
 }
