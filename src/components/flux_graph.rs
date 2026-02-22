@@ -40,16 +40,49 @@ pub struct HelmReleaseInfo {
     pub message: Option<String>,
 }
 
+// Shared for both Deployments and StatefulSets
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct WorkloadInfo {
+    pub name: String,
+    pub ready: u32,
+    pub desired: u32,
+}
+
+impl WorkloadInfo {
+    fn status(&self) -> ReadyStatus {
+        if self.desired == 0 || self.ready == self.desired {
+            ReadyStatus::Ready
+        } else if self.ready == 0 {
+            ReadyStatus::Failed
+        } else {
+            ReadyStatus::Unknown
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SourceInfo {
+    pub name: String,
+    pub kind: String,
+    pub status: ReadyStatus,
+    pub revision: Option<String>,
+    pub url: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct KustomizationNode {
-    pub id: String,           // "namespace/name"
+    pub id: String,
     pub name: String,
     pub namespace: String,
     pub status: ReadyStatus,
     pub message: Option<String>,
     pub revision: Option<String>,
-    pub depends_on: Vec<String>, // ids of nodes this one depends on
+    pub reconciled_at: Option<String>,
+    pub depends_on: Vec<String>,
+    pub source: Option<SourceInfo>,
     pub helm_releases: Vec<HelmReleaseInfo>,
+    pub deployments: Vec<WorkloadInfo>,
+    pub stateful_sets: Vec<WorkloadInfo>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -66,7 +99,6 @@ pub async fn get_flux_graph() -> Result<FluxGraphData, ServerFnError<String>> {
 
     let client = match Client::try_default().await {
         Ok(c) => c,
-        // Not running in-cluster and no kubeconfig — return empty graph.
         Err(_) => return Ok(FluxGraphData { nodes: vec![] }),
     };
 
@@ -84,9 +116,41 @@ pub async fn get_flux_graph() -> Result<FluxGraphData, ServerFnError<String>> {
         kind: "HelmRelease".into(),
         plural: "helmreleases".into(),
     };
+    let deploy_ar = ApiResource {
+        group: "apps".into(),
+        version: "v1".into(),
+        api_version: "apps/v1".into(),
+        kind: "Deployment".into(),
+        plural: "deployments".into(),
+    };
+    let sts_ar = ApiResource {
+        group: "apps".into(),
+        version: "v1".into(),
+        api_version: "apps/v1".into(),
+        kind: "StatefulSet".into(),
+        plural: "statefulsets".into(),
+    };
+    let gitrepo_ar = ApiResource {
+        group: "source.toolkit.fluxcd.io".into(),
+        version: "v1".into(),
+        api_version: "source.toolkit.fluxcd.io/v1".into(),
+        kind: "GitRepository".into(),
+        plural: "gitrepositories".into(),
+    };
+    let ocirepo_ar = ApiResource {
+        group: "source.toolkit.fluxcd.io".into(),
+        version: "v1beta2".into(),
+        api_version: "source.toolkit.fluxcd.io/v1beta2".into(),
+        kind: "OCIRepository".into(),
+        plural: "ocirepositories".into(),
+    };
 
     let ks_api: Api<DynamicObject> = Api::all_with(client.clone(), &ks_ar);
-    let hr_api: Api<DynamicObject> = Api::all_with(client, &hr_ar);
+    let hr_api: Api<DynamicObject> = Api::all_with(client.clone(), &hr_ar);
+    let deploy_api: Api<DynamicObject> = Api::all_with(client.clone(), &deploy_ar);
+    let sts_api: Api<DynamicObject> = Api::all_with(client.clone(), &sts_ar);
+    let gitrepo_api: Api<DynamicObject> = Api::all_with(client.clone(), &gitrepo_ar);
+    let ocirepo_api: Api<DynamicObject> = Api::all_with(client, &ocirepo_ar);
 
     let ks_list = ks_api
         .list(&ListParams::default())
@@ -98,21 +162,70 @@ pub async fn get_flux_graph() -> Result<FluxGraphData, ServerFnError<String>> {
         .await
         .map_err(|e| ServerFnError::ServerError(format!("list helmreleases: {e}")))?;
 
-    // Group HelmReleases by the Kustomization that manages them.
-    // Flux stamps kustomize.toolkit.fluxcd.io/name on every resource it applies.
+    let deploy_list = deploy_api
+        .list(&ListParams::default())
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("list deployments: {e}")))?;
+
+    let sts_list = sts_api
+        .list(&ListParams::default())
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("list statefulsets: {e}")))?;
+
+    let gitrepo_list = gitrepo_api
+        .list(&ListParams::default())
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("list gitrepositories: {e}")))?;
+
+    let ocirepo_items: Vec<DynamicObject> = ocirepo_api
+        .list(&ListParams::default())
+        .await
+        .map(|l| l.items)
+        .unwrap_or_default();
+
+    // Build source lookup: "Kind/namespace/name" → SourceInfo
+    let mut source_map: HashMap<String, SourceInfo> = HashMap::new();
+    for obj in &gitrepo_list.items {
+        let info = parse_source_info(obj, "GitRepository");
+        let key = format!(
+            "GitRepository/{}/{}",
+            obj.metadata.namespace.as_deref().unwrap_or(""),
+            obj.metadata.name.as_deref().unwrap_or("")
+        );
+        source_map.insert(key, info);
+    }
+    for obj in &ocirepo_items {
+        let info = parse_source_info(obj, "OCIRepository");
+        let key = format!(
+            "OCIRepository/{}/{}",
+            obj.metadata.namespace.as_deref().unwrap_or(""),
+            obj.metadata.name.as_deref().unwrap_or("")
+        );
+        source_map.insert(key, info);
+    }
+
+    // Group HelmReleases by Kustomization.
     let mut hr_by_ks: HashMap<String, Vec<HelmReleaseInfo>> = HashMap::new();
     for obj in hr_list.items {
-        let parent = obj
-            .metadata
-            .labels
-            .as_ref()
-            .and_then(|l| l.get("kustomize.toolkit.fluxcd.io/name"))
-            .cloned()
-            .unwrap_or_default();
-        hr_by_ks
-            .entry(parent)
-            .or_default()
-            .push(parse_helm_release(&obj));
+        let parent = flux_parent_label(&obj);
+        if parent.is_empty() { continue; }
+        hr_by_ks.entry(parent).or_default().push(parse_helm_release(&obj));
+    }
+
+    // Group Deployments by Kustomization.
+    let mut deploy_by_ks: HashMap<String, Vec<WorkloadInfo>> = HashMap::new();
+    for obj in deploy_list.items {
+        let parent = flux_parent_label(&obj);
+        if parent.is_empty() { continue; }
+        deploy_by_ks.entry(parent).or_default().push(parse_workload(&obj));
+    }
+
+    // Group StatefulSets by Kustomization.
+    let mut sts_by_ks: HashMap<String, Vec<WorkloadInfo>> = HashMap::new();
+    for obj in sts_list.items {
+        let parent = flux_parent_label(&obj);
+        if parent.is_empty() { continue; }
+        sts_by_ks.entry(parent).or_default().push(parse_workload(&obj));
     }
 
     let mut nodes = Vec::new();
@@ -125,6 +238,10 @@ pub async fn get_flux_graph() -> Result<FluxGraphData, ServerFnError<String>> {
         let (status, message) = parse_status(&obj.data, suspended);
 
         let revision = obj.data["status"]["lastAppliedRevision"]
+            .as_str()
+            .map(str::to_string);
+
+        let reconciled_at = obj.data["status"]["lastHandledReconcileAt"]
             .as_str()
             .map(str::to_string);
 
@@ -141,8 +258,27 @@ pub async fn get_flux_graph() -> Result<FluxGraphData, ServerFnError<String>> {
             })
             .unwrap_or_default();
 
+        let source = {
+            let kind = obj.data["spec"]["sourceRef"]["kind"].as_str().unwrap_or("");
+            let src_name = obj.data["spec"]["sourceRef"]["name"].as_str().unwrap_or("");
+            let src_ns = obj.data["spec"]["sourceRef"]["namespace"]
+                .as_str()
+                .unwrap_or(&namespace);
+            if kind.is_empty() || src_name.is_empty() {
+                None
+            } else {
+                source_map.get(&format!("{kind}/{src_ns}/{src_name}")).cloned()
+            }
+        };
+
         let mut helm_releases = hr_by_ks.remove(&name).unwrap_or_default();
         helm_releases.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut deployments = deploy_by_ks.remove(&name).unwrap_or_default();
+        deployments.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut stateful_sets = sts_by_ks.remove(&name).unwrap_or_default();
+        stateful_sets.sort_by(|a, b| a.name.cmp(&b.name));
 
         nodes.push(KustomizationNode {
             id,
@@ -151,12 +287,26 @@ pub async fn get_flux_graph() -> Result<FluxGraphData, ServerFnError<String>> {
             status,
             message,
             revision,
+            reconciled_at,
             depends_on,
+            source,
             helm_releases,
+            deployments,
+            stateful_sets,
         });
     }
 
     Ok(FluxGraphData { nodes })
+}
+
+#[cfg(feature = "ssr")]
+fn flux_parent_label(obj: &kube::api::DynamicObject) -> String {
+    obj.metadata
+        .labels
+        .as_ref()
+        .and_then(|l| l.get("kustomize.toolkit.fluxcd.io/name"))
+        .cloned()
+        .unwrap_or_default()
 }
 
 #[cfg(feature = "ssr")]
@@ -182,6 +332,14 @@ fn parse_status(data: &serde_json::Value, suspended: bool) -> (ReadyStatus, Opti
 }
 
 #[cfg(feature = "ssr")]
+fn parse_workload(obj: &kube::api::DynamicObject) -> WorkloadInfo {
+    let name = obj.metadata.name.clone().unwrap_or_default();
+    let desired = obj.data["spec"]["replicas"].as_u64().unwrap_or(1) as u32;
+    let ready = obj.data["status"]["readyReplicas"].as_u64().unwrap_or(0) as u32;
+    WorkloadInfo { name, ready, desired }
+}
+
+#[cfg(feature = "ssr")]
 fn parse_helm_release(obj: &kube::api::DynamicObject) -> HelmReleaseInfo {
     let name = obj.metadata.name.clone().unwrap_or_default();
     let suspended = obj.data["spec"]["suspend"].as_bool().unwrap_or(false);
@@ -193,6 +351,18 @@ fn parse_helm_release(obj: &kube::api::DynamicObject) -> HelmReleaseInfo {
         .as_str()
         .map(str::to_string);
     HelmReleaseInfo { name, chart, status, revision, message }
+}
+
+#[cfg(feature = "ssr")]
+fn parse_source_info(obj: &kube::api::DynamicObject, kind: &str) -> SourceInfo {
+    let name = obj.metadata.name.clone().unwrap_or_default();
+    let suspended = obj.data["spec"]["suspend"].as_bool().unwrap_or(false);
+    let (status, _) = parse_status(&obj.data, suspended);
+    let revision = obj.data["status"]["artifact"]["revision"]
+        .as_str()
+        .map(str::to_string);
+    let url = obj.data["spec"]["url"].as_str().map(str::to_string);
+    SourceInfo { name, kind: kind.to_string(), status, revision, url }
 }
 
 // ── Layout (pure Rust, runs on both SSR and WASM) ────────────────────────────
@@ -218,9 +388,9 @@ fn assign_layers(nodes: &[KustomizationNode]) -> HashMap<String, usize> {
                 .filter_map(|dep| layers.get(dep).copied())
                 .max();
             let new_layer = parent_max.map(|l| l + 1).unwrap_or(0);
-            let entry = layers.entry(node.id.clone()).or_insert(0);
-            if new_layer > *entry {
-                *entry = new_layer;
+            let e = layers.entry(node.id.clone()).or_insert(0);
+            if new_layer > *e {
+                *e = new_layer;
                 changed = true;
             }
         }
@@ -272,6 +442,25 @@ fn short_rev(rev: &str) -> String {
         .unwrap_or_else(|| rev.chars().take(7).collect())
 }
 
+// Compact timestamp: "2026-02-22T19:04:18Z" → "Feb 22 19:04"
+fn format_ts(ts: &str) -> String {
+    let date_time: Vec<&str> = ts.splitn(2, 'T').collect();
+    if date_time.len() != 2 { return ts.chars().take(16).collect(); }
+    let date_parts: Vec<&str> = date_time[0].splitn(3, '-').collect();
+    let time = &date_time[1][..date_time[1].len().min(5)];
+    if date_parts.len() == 3 {
+        let month = match date_parts[1] {
+            "01" => "Jan", "02" => "Feb", "03" => "Mar", "04" => "Apr",
+            "05" => "May", "06" => "Jun", "07" => "Jul", "08" => "Aug",
+            "09" => "Sep", "10" => "Oct", "11" => "Nov", "12" => "Dec",
+            _ => date_parts[1],
+        };
+        format!("{} {} {}", month, date_parts[2], time)
+    } else {
+        format!("{} {}", date_time[0], time)
+    }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 #[component]
@@ -308,7 +497,6 @@ pub fn FluxGraphView() -> impl IntoView {
                         let positions = layout_positions(&graph.nodes);
                         let h = svg_height(&graph.nodes);
 
-                        // Collect edges: (from_id, to_id) where to depends_on from
                         let edges: Vec<(String, String)> = graph.nodes.iter()
                             .flat_map(|n| n.depends_on.iter().map(|dep| (dep.clone(), n.id.clone())))
                             .collect();
@@ -338,7 +526,7 @@ pub fn FluxGraphView() -> impl IntoView {
                                             </marker>
                                         </defs>
 
-                                        // Edges (rendered first, behind nodes)
+                                        // Edges
                                         {edges.iter().filter_map(|(from, to)| {
                                             let (fx, fy) = *positions.get(from)?;
                                             let (tx, ty) = *positions.get(to)?;
@@ -360,7 +548,7 @@ pub fn FluxGraphView() -> impl IntoView {
                                             })
                                         }).collect::<Vec<_>>()}
 
-                                        // Nodes
+                                        // Kustomization nodes
                                         {nodes_svg.iter().filter_map(|node| {
                                             let (cx, cy) = *positions.get(&node.id)?;
                                             let x = cx - NODE_W / 2.0;
@@ -377,11 +565,7 @@ pub fn FluxGraphView() -> impl IntoView {
                                                     on:click=move |_| {
                                                         let id = node_id.clone();
                                                         selected.update(|s| {
-                                                            *s = if s.as_deref() == Some(&id) {
-                                                                None
-                                                            } else {
-                                                                Some(id)
-                                                            };
+                                                            *s = if s.as_deref() == Some(&id) { None } else { Some(id) };
                                                         });
                                                     }
                                                 >
@@ -434,7 +618,7 @@ pub fn FluxGraphView() -> impl IntoView {
                                     let node = nodes_detail.iter().find(|n| n.id == id)?.clone();
                                     Some(view! {
                                         <div class="bg-surface border border-border rounded-lg p-4 space-y-3">
-                                            // Header row
+                                            // Header
                                             <div class="flex items-center justify-between gap-4">
                                                 <div class="flex items-center gap-2 min-w-0">
                                                     <div
@@ -448,11 +632,18 @@ pub fn FluxGraphView() -> impl IntoView {
                                                         {node.status.label()}
                                                     </span>
                                                 </div>
-                                                {node.revision.as_ref().map(|r| view! {
-                                                    <span class="font-mono text-xs text-charcoal-lighter flex-shrink-0">
-                                                        {short_rev(r)}
-                                                    </span>
-                                                })}
+                                                <div class="flex items-center gap-3 flex-shrink-0">
+                                                    {node.reconciled_at.as_ref().map(|t| view! {
+                                                        <span class="font-mono text-xs text-charcoal-lighter" title="last reconciled">
+                                                            {format_ts(t)}
+                                                        </span>
+                                                    })}
+                                                    {node.revision.as_ref().map(|r| view! {
+                                                        <span class="font-mono text-xs text-charcoal-lighter">
+                                                            {short_rev(r)}
+                                                        </span>
+                                                    })}
+                                                </div>
                                             </div>
 
                                             // Status message
@@ -460,6 +651,27 @@ pub fn FluxGraphView() -> impl IntoView {
                                                 <p class="text-xs text-charcoal-lighter font-mono truncate">
                                                     {m.clone()}
                                                 </p>
+                                            })}
+
+                                            // Source
+                                            {node.source.as_ref().map(|src| {
+                                                let kind_short = if src.kind == "OCIRepository" { "oci" } else { "git" };
+                                                let label = format!("{kind_short}/{}", src.name);
+                                                let color = src.status.dot_color();
+                                                let rev = src.revision.as_deref().map(short_rev);
+                                                let url = src.url.clone();
+                                                view! {
+                                                    <div class="flex items-center gap-2 text-xs font-mono text-charcoal-lighter">
+                                                        <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style={format!("background:{color}")}/>
+                                                        <span class="text-charcoal">{label}</span>
+                                                        {rev.map(|r| view! {
+                                                            <span>{r}</span>
+                                                        })}
+                                                        {url.map(|u| view! {
+                                                            <span class="truncate opacity-60">{u}</span>
+                                                        })}
+                                                    </div>
+                                                }
                                             })}
 
                                             // HelmReleases
@@ -472,17 +684,57 @@ pub fn FluxGraphView() -> impl IntoView {
                                                         {node.helm_releases.iter().map(|hr| {
                                                             let color = hr.status.dot_color();
                                                             let name = hr.name.clone();
-                                                            let chart = hr.chart.clone()
-                                                                .unwrap_or_else(|| name.clone());
+                                                            let chart = hr.chart.clone().unwrap_or_else(|| name.clone());
                                                             view! {
                                                                 <div class="flex items-center gap-1.5 bg-gray border border-border rounded px-2 py-1.5 text-xs font-mono min-w-0">
-                                                                    <div
-                                                                        class="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                                                                        style={format!("background:{color}")}
-                                                                    />
-                                                                    <span class="text-charcoal truncate" title={chart.clone()}>
-                                                                        {name}
-                                                                    </span>
+                                                                    <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style={format!("background:{color}")}/>
+                                                                    <span class="text-charcoal truncate" title={chart.clone()}>{name}</span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()}
+                                                    </div>
+                                                </div>
+                                            })}
+
+                                            // Deployments
+                                            {(!node.deployments.is_empty()).then(|| view! {
+                                                <div>
+                                                    <p class="text-xs text-charcoal-lighter mb-2 uppercase tracking-wider">
+                                                        "Deployments"
+                                                    </p>
+                                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                                        {node.deployments.iter().map(|d| {
+                                                            let color = d.status().dot_color();
+                                                            let name = d.name.clone();
+                                                            let label = format!("{}/{}", d.ready, d.desired);
+                                                            view! {
+                                                                <div class="flex items-center gap-1.5 bg-gray border border-border rounded px-2 py-1.5 text-xs font-mono min-w-0">
+                                                                    <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style={format!("background:{color}")}/>
+                                                                    <span class="text-charcoal truncate">{name}</span>
+                                                                    <span class="text-charcoal-lighter ml-auto flex-shrink-0">{label}</span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()}
+                                                    </div>
+                                                </div>
+                                            })}
+
+                                            // StatefulSets
+                                            {(!node.stateful_sets.is_empty()).then(|| view! {
+                                                <div>
+                                                    <p class="text-xs text-charcoal-lighter mb-2 uppercase tracking-wider">
+                                                        "StatefulSets"
+                                                    </p>
+                                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                                                        {node.stateful_sets.iter().map(|s| {
+                                                            let color = s.status().dot_color();
+                                                            let name = s.name.clone();
+                                                            let label = format!("{}/{}", s.ready, s.desired);
+                                                            view! {
+                                                                <div class="flex items-center gap-1.5 bg-gray border border-border rounded px-2 py-1.5 text-xs font-mono min-w-0">
+                                                                    <div class="w-1.5 h-1.5 rounded-full flex-shrink-0" style={format!("background:{color}")}/>
+                                                                    <span class="text-charcoal truncate">{name}</span>
+                                                                    <span class="text-charcoal-lighter ml-auto flex-shrink-0">{label}</span>
                                                                 </div>
                                                             }
                                                         }).collect::<Vec<_>>()}

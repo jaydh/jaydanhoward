@@ -56,6 +56,7 @@ server_deps = [
     "@server_crates//:leptos_router",
     "@server_crates//:rand",
     "@server_crates//:reqwest",
+    "@server_crates//:rustls",
     "@server_crates//:serde",
     "@server_crates//:serde-aux",
     "@server_crates//:serde_json",
