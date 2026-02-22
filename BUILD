@@ -61,6 +61,8 @@ server_deps = [
     "@server_crates//:serde_json",
     "@server_crates//:thiserror",
     "@server_crates//:chrono",
+    "@server_crates//:kube",
+    "@server_crates//:k8s-openapi",
     "@server_crates//:sqlx",
     "@server_crates//:tokio",
     "@server_crates//:tokio-stream",
