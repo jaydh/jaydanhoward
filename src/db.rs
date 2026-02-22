@@ -9,11 +9,39 @@ mod inner {
 
     pub async fn create_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
         let pool = PgPool::connect(database_url).await?;
-        run_migrations(&pool).await?;
+        if let Err(e) = run_migrations(&pool).await {
+            tracing::warn!("Migration warning (table may already exist): {}", e);
+        }
         Ok(pool)
     }
 
+    // Stable lock key for migration coordination across HA replicas.
+    // Chosen arbitrarily; must never change once deployed.
+    const MIGRATION_LOCK_KEY: i64 = 0x6a64685f6d696772; // "jdh_migr"
+
     async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
+        let mut conn = pool.acquire().await?;
+
+        // Block until this instance holds the advisory lock, then release it
+        // when the connection is returned to the pool.
+        sqlx::query("SELECT pg_advisory_lock($1)")
+            .bind(MIGRATION_LOCK_KEY)
+            .execute(&mut *conn)
+            .await?;
+
+        let result = run_migrations_inner(&mut conn).await;
+
+        sqlx::query("SELECT pg_advisory_unlock($1)")
+            .bind(MIGRATION_LOCK_KEY)
+            .execute(&mut *conn)
+            .await?;
+
+        result
+    }
+
+    async fn run_migrations_inner(
+        conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS visitors (
@@ -31,19 +59,19 @@ mod inner {
             )
             "#,
         )
-        .execute(pool)
+        .execute(&mut **conn)
         .await?;
 
         sqlx::query(
             "CREATE INDEX IF NOT EXISTS visitors_visited_at_idx ON visitors (visited_at DESC)",
         )
-        .execute(pool)
+        .execute(&mut **conn)
         .await?;
 
         sqlx::query(
             "CREATE INDEX IF NOT EXISTS visitors_country_code_idx ON visitors (country_code)",
         )
-        .execute(pool)
+        .execute(&mut **conn)
         .await?;
 
         Ok(())
