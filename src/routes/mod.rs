@@ -7,6 +7,8 @@ mod robots;
 #[cfg(feature = "ssr")]
 mod metrics_stream;
 #[cfg(feature = "ssr")]
+mod world_map;
+#[cfg(feature = "ssr")]
 pub use health_check::*;
 #[cfg(feature = "ssr")]
 pub use lighthouse::*;
@@ -14,6 +16,8 @@ pub use lighthouse::*;
 pub use robots::*;
 #[cfg(feature = "ssr")]
 pub use metrics_stream::*;
+#[cfg(feature = "ssr")]
+pub use world_map::{fetch_world_map_svg, world_map, WorldMapSvg};
 
 #[allow(dead_code)]
 pub fn error_chain_fmt(

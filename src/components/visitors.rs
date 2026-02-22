@@ -227,63 +227,39 @@ fn WorldMap(points: Vec<VisitorPoint>) -> impl IntoView {
             let y = 90.0 - p.lat;
             view! {
                 <circle
-                    cx={format!("{x:.1}")}
-                    cy={format!("{y:.1}")}
-                    r="1.5"
+                    cx={format!("{x:.2}")}
+                    cy={format!("{y:.2}")}
+                    r="1.8"
                     fill="#3b82f6"
-                    fill-opacity="0.85"
+                    fill-opacity="0.9"
                 />
             }
         })
         .collect();
 
+    let is_empty = points.is_empty();
+
     view! {
         <div class="relative w-full rounded-lg overflow-hidden border border-border" style="aspect-ratio: 2/1;">
+            <img
+                src="/world-map.svg"
+                class="absolute inset-0 w-full h-full"
+                style="object-fit: fill;"
+                alt=""
+            />
             <svg
                 viewBox="0 0 360 180"
-                class="w-full h-full"
+                class="absolute inset-0 w-full h-full"
                 preserveAspectRatio="xMidYMid meet"
                 xmlns="http://www.w3.org/2000/svg"
-                style="background: #0f172a;"
             >
-                // — Continent outlines (simplified equirectangular polygons) —
-                // North America
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 12,24 L 23,19 L 85,18 L 115,28 L 127,43 L 114,46 L 105,55 L 99,66 L 97,80 L 90,75 L 70,68 L 59,53 L 56,42 L 45,33 L 20,31 Z"/>
-                // Greenland
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 132,30 L 136,31 L 162,20 L 160,7 L 113,7 L 107,15 Z"/>
-                // South America
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 103,82 L 119,79 L 145,95 L 140,112 L 123,125 L 111,145 L 105,142 L 109,108 L 99,95 L 100,90 Z"/>
-                // Europe
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 171,52 L 172,46 L 178,47 L 180,39 L 185,32 L 208,19 L 213,22 L 200,36 L 210,44 L 203,54 L 195,53 L 175,54 Z"/>
-                // Africa
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 163,55 L 192,56 L 214,59 L 231,79 L 220,100 L 198,125 L 192,108 L 182,86 L 163,76 L 167,63 Z"/>
-                // Asia (includes Middle East and SE Asia)
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 206,52 L 240,35 L 240,22 L 320,22 L 320,48 L 310,60 L 288,85 L 260,82 L 248,68 L 238,68 L 229,78 L 214,59 L 210,44 L 200,36 Z"/>
-                // Australia
-                <path fill="#1e293b" stroke="#334155" stroke-width="0.4"
-                    d="M 294,111 L 311,102 L 325,106 L 331,124 L 318,125 L 295,122 Z"/>
-
-                // — Graticule —
-                <line x1="0" y1="90" x2="360" y2="90" stroke="#1e3a5f" stroke-width="0.3" opacity="0.6"/>
-                <line x1="180" y1="0" x2="180" y2="180" stroke="#1e3a5f" stroke-width="0.3" opacity="0.4"/>
-
                 {dot_elements}
             </svg>
-            {if points.is_empty() {
-                view! {
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <p class="text-xs text-charcoal-lighter">"No location data yet"</p>
-                    </div>
-                }.into_any()
-            } else {
-                view! { <div></div> }.into_any()
-            }}
+            {is_empty.then(|| view! {
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <p class="text-xs text-charcoal-lighter">"No location data yet"</p>
+                </div>
+            })}
         </div>
     }
 }
