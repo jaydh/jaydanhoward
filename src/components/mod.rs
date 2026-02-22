@@ -1,5 +1,6 @@
 mod about;
 mod app;
+mod flux_graph;
 mod visitors;
 mod beliefs;
 mod cluster_stats;
@@ -32,4 +33,5 @@ pub fn register_server_fns() {
     register_explicit::<satellite_tracker::GetTleData>();
     register_explicit::<visitors::GetVisitorStats>();
     register_explicit::<visitors::GetMyInfo>();
+    register_explicit::<flux_graph::GetFluxGraph>();
 }
