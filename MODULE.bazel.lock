@@ -1016,7 +1016,7 @@
           "REPO_MAPPING:rules_rust+,rules_cc rules_cc+",
           "REPO_MAPPING:rules_rust+,rules_rust rules_rust+",
           "FILE:@@//Cargo.server.lock 6f1f59f26079e946e658f9fc76194d00ec54d17f133fdf8364a5510a0e2b7878",
-          "FILE:@@//Cargo.server.toml 268c54fd7472ba64f187bda9841859b170dda50bb35108ba642590d76d56c43d",
+          "FILE:@@//Cargo.server.toml 2a177a73fd101e020224912bb201a335eaf3db6756d5bf11311291ad8fcc738c",
           "FILE:@@//Cargo.wasm.lock d22bdc1f4fccf573ff0c5275b137441c6fe70857043590ccec4e3a8a042ab2a3",
           "FILE:@@//Cargo.wasm.toml ba25e89a479e8609fd14aa6bd03b4f7f69939c4316a7260d3ee9fb9376eae9db"
         ],

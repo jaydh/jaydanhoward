@@ -9,72 +9,9 @@ mod inner {
 
     pub async fn create_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
         let pool = PgPool::connect(database_url).await?;
-        if let Err(e) = run_migrations(&pool).await {
-            tracing::warn!("Migration warning (table may already exist): {}", e);
-        }
+        // sqlx acquires a pg_advisory_xact_lock internally to coordinate concurrent runners.
+        sqlx::migrate!().run(&pool).await?;
         Ok(pool)
-    }
-
-    // Stable lock key for migration coordination across HA replicas.
-    // Chosen arbitrarily; must never change once deployed.
-    const MIGRATION_LOCK_KEY: i64 = 0x6a64685f6d696772; // "jdh_migr"
-
-    async fn run_migrations(pool: &PgPool) -> Result<(), sqlx::Error> {
-        let mut conn = pool.acquire().await?;
-
-        // Block until this instance holds the advisory lock, then release it
-        // when the connection is returned to the pool.
-        sqlx::query("SELECT pg_advisory_lock($1)")
-            .bind(MIGRATION_LOCK_KEY)
-            .execute(&mut *conn)
-            .await?;
-
-        let result = run_migrations_inner(&mut conn).await;
-
-        sqlx::query("SELECT pg_advisory_unlock($1)")
-            .bind(MIGRATION_LOCK_KEY)
-            .execute(&mut *conn)
-            .await?;
-
-        result
-    }
-
-    async fn run_migrations_inner(
-        conn: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
-    ) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            r#"
-            CREATE TABLE IF NOT EXISTS visitors (
-                id BIGSERIAL PRIMARY KEY,
-                ip TEXT NOT NULL,
-                country TEXT,
-                country_code TEXT,
-                region TEXT,
-                city TEXT,
-                lat DOUBLE PRECISION,
-                lon DOUBLE PRECISION,
-                isp TEXT,
-                path TEXT NOT NULL,
-                visited_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            )
-            "#,
-        )
-        .execute(&mut **conn)
-        .await?;
-
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS visitors_visited_at_idx ON visitors (visited_at DESC)",
-        )
-        .execute(&mut **conn)
-        .await?;
-
-        sqlx::query(
-            "CREATE INDEX IF NOT EXISTS visitors_country_code_idx ON visitors (country_code)",
-        )
-        .execute(&mut **conn)
-        .await?;
-
-        Ok(())
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -160,8 +97,9 @@ mod inner {
         .unwrap_or(Some(0))
         .unwrap_or(0);
 
+        // Unique visitor-days: a more meaningful "visits" metric than raw request count.
         let total_visits: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM visitors WHERE visited_at > NOW() - INTERVAL '30 days'",
+            "SELECT COUNT(*) FROM (SELECT DISTINCT ip, visited_at::date FROM visitors WHERE visited_at > NOW() - INTERVAL '30 days') sub",
         )
         .fetch_one(pool)
         .await
@@ -173,7 +111,7 @@ mod inner {
             SELECT
                 COALESCE(country, 'Unknown') as country,
                 COALESCE(country_code, 'XX') as country_code,
-                COUNT(*) as count
+                COUNT(DISTINCT ip) as count
             FROM visitors
             WHERE visited_at > NOW() - INTERVAL '30 days'
                 AND country_code IS NOT NULL
@@ -198,11 +136,16 @@ mod inner {
             })
             .collect();
 
+        // One entry per unique IP, most recent visit.
         let recent_rows = sqlx::query(
             r#"
             SELECT country, country_code, city, path, visited_at
-            FROM visitors
-            WHERE visited_at > NOW() - INTERVAL '30 days'
+            FROM (
+                SELECT DISTINCT ON (ip) country, country_code, city, path, visited_at
+                FROM visitors
+                WHERE visited_at > NOW() - INTERVAL '30 days'
+                ORDER BY ip, visited_at DESC
+            ) deduped
             ORDER BY visited_at DESC
             LIMIT 20
             "#,
