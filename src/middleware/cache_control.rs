@@ -51,9 +51,8 @@ where
 
             // Determine cache duration based on file extension
             let cache_header = if path.ends_with(".wasm") || path.ends_with(".js") {
-                // WASM/JS files: short cache with revalidation to prevent stale deployments
-                // Cloudflare will still cache but will revalidate with origin
-                "public, max-age=300, must-revalidate"
+                // WASM/JS files: always revalidate via ETag to prevent stale deployments
+                "public, no-cache"
             } else if path.ends_with(".woff2")
                 || path.ends_with(".woff")
                 || path.ends_with(".ttf")

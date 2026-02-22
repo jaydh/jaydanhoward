@@ -294,11 +294,7 @@ pub fn Photography() -> impl IntoView {
     }
 
     view! {
-        <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
-            <h1 class="text-3xl font-bold text-charcoal">
-                "Photography"
-            </h1>
-            <Suspense fallback=move || view! {
+        <Suspense fallback=move || view! {
                 <div class="w-full flex justify-center items-center py-20">
                     <p class="text-charcoal-light">"Loading images..."</p>
                 </div>
@@ -437,6 +433,5 @@ pub fn Photography() -> impl IntoView {
                     })
                 }}
             </Suspense>
-        </div>
     }
 }

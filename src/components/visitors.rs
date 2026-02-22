@@ -1,0 +1,281 @@
+use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CountryStat {
+    pub country: String,
+    pub country_code: String,
+    pub count: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RecentVisit {
+    pub country: Option<String>,
+    pub country_code: Option<String>,
+    pub city: Option<String>,
+    pub path: String,
+    pub minutes_ago: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VisitorPoint {
+    pub lat: f64,
+    pub lon: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VisitorStats {
+    pub unique_ips: i64,
+    pub unique_countries: i64,
+    pub total_visits: i64,
+    pub top_countries: Vec<CountryStat>,
+    pub recent_visits: Vec<RecentVisit>,
+    pub points: Vec<VisitorPoint>,
+}
+
+#[server(name = GetVisitorStats, prefix = "/api", endpoint = "get_visitor_stats")]
+pub async fn get_visitor_stats() -> Result<VisitorStats, ServerFnError<String>> {
+    use crate::db::get_visitor_stats as db_get_stats;
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let pool = match extract::<Data<PgPool>>().await {
+        Ok(p) => p,
+        Err(_) => {
+            return Ok(VisitorStats {
+                unique_ips: 0,
+                unique_countries: 0,
+                total_visits: 0,
+                top_countries: vec![],
+                recent_visits: vec![],
+                points: vec![],
+            })
+        }
+    };
+
+    db_get_stats(&pool)
+        .await
+        .map(|s| VisitorStats {
+            unique_ips: s.unique_ips,
+            unique_countries: s.unique_countries,
+            total_visits: s.total_visits,
+            top_countries: s
+                .top_countries
+                .into_iter()
+                .map(|c| CountryStat {
+                    country: c.country,
+                    country_code: c.country_code,
+                    count: c.count,
+                })
+                .collect(),
+            recent_visits: s
+                .recent_visits
+                .into_iter()
+                .map(|v| RecentVisit {
+                    country: v.country,
+                    country_code: v.country_code,
+                    city: v.city,
+                    path: v.path,
+                    minutes_ago: v.minutes_ago,
+                })
+                .collect(),
+            points: s
+                .points
+                .into_iter()
+                .map(|p| VisitorPoint {
+                    lat: p.lat,
+                    lon: p.lon,
+                })
+                .collect(),
+        })
+        .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+}
+
+fn country_flag(code: &str) -> String {
+    code.to_uppercase()
+        .chars()
+        .filter_map(|c| {
+            let offset = c as u32;
+            if offset >= 'A' as u32 && offset <= 'Z' as u32 {
+                char::from_u32(0x1F1E6 + (offset - 'A' as u32))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn format_time_ago(minutes: i64) -> String {
+    if minutes < 1 {
+        "just now".to_string()
+    } else if minutes < 60 {
+        format!("{minutes}m ago")
+    } else if minutes < 1440 {
+        format!("{}h ago", minutes / 60)
+    } else {
+        format!("{}d ago", minutes / 1440)
+    }
+}
+
+#[component]
+fn WorldMap(points: Vec<VisitorPoint>) -> impl IntoView {
+    // Equirectangular projection: lon [-180,180] → x [0,360], lat [90,-90] → y [0,180]
+    let dot_elements: Vec<_> = points
+        .iter()
+        .map(|p| {
+            let x = p.lon + 180.0;
+            let y = 90.0 - p.lat;
+            view! {
+                <circle
+                    cx={format!("{x:.1}")}
+                    cy={format!("{y:.1}")}
+                    r="1.2"
+                    fill="#3b82f6"
+                    fill-opacity="0.7"
+                />
+            }
+        })
+        .collect();
+
+    view! {
+        <div class="relative w-full rounded-lg overflow-hidden bg-gray border border-border" style="aspect-ratio: 2/1;">
+            <svg
+                viewBox="0 0 360 180"
+                class="w-full h-full"
+                preserveAspectRatio="xMidYMid meet"
+                xmlns="http://www.w3.org/2000/svg"
+            >
+                // Graticule lines for visual reference
+                // Equator
+                <line x1="0" y1="90" x2="360" y2="90" stroke="currentColor" stroke-width="0.3" class="text-border" opacity="0.5"/>
+                // Prime meridian
+                <line x1="180" y1="0" x2="180" y2="180" stroke="currentColor" stroke-width="0.3" class="text-border" opacity="0.5"/>
+                // Tropics
+                <line x1="0" y1="66.5" x2="360" y2="66.5" stroke="currentColor" stroke-width="0.2" class="text-border" opacity="0.3"/>
+                <line x1="0" y1="113.5" x2="360" y2="113.5" stroke="currentColor" stroke-width="0.2" class="text-border" opacity="0.3"/>
+                {dot_elements}
+            </svg>
+            {if points.is_empty() {
+                view! {
+                    <div class="absolute inset-0 flex items-center justify-center">
+                        <p class="text-xs text-charcoal-lighter">"No location data yet"</p>
+                    </div>
+                }.into_any()
+            } else {
+                view! { <div></div> }.into_any()
+            }}
+        </div>
+    }
+}
+
+#[component]
+pub fn Visitors() -> impl IntoView {
+    let stats = Resource::new(|| (), |_| get_visitor_stats());
+
+    view! {
+        <div class="w-full">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-charcoal">"Visitors"</h2>
+                <span class="text-xs text-charcoal-lighter">"last 30 days"</span>
+            </div>
+
+            <Suspense fallback=|| view! {
+                <div class="text-center text-charcoal-lighter py-12">"Loading visitor data..."</div>
+            }>
+                {move || {
+                    stats.get().map(|result| match result {
+                        Err(_) => view! {
+                            <div class="text-center text-charcoal-lighter py-12">
+                                "Visitor stats unavailable"
+                            </div>
+                        }.into_any(),
+                        Ok(s) => {
+                            let max_count = s.top_countries.iter().map(|c| c.count).max().unwrap_or(1);
+                            let countries = s.top_countries.clone();
+                            let recent = s.recent_visits.clone();
+                            let points = s.points.clone();
+
+                            view! {
+                                <div class="space-y-6">
+                                    // Summary stats
+                                    <div class="grid grid-cols-3 gap-4">
+                                        <div class="bg-surface border border-border rounded-lg p-4 text-center">
+                                            <div class="text-3xl font-bold text-accent">{s.total_visits}</div>
+                                            <div class="text-xs text-charcoal-lighter mt-1">"total visits"</div>
+                                        </div>
+                                        <div class="bg-surface border border-border rounded-lg p-4 text-center">
+                                            <div class="text-3xl font-bold text-blue-500">{s.unique_ips}</div>
+                                            <div class="text-xs text-charcoal-lighter mt-1">"unique visitors"</div>
+                                        </div>
+                                        <div class="bg-surface border border-border rounded-lg p-4 text-center">
+                                            <div class="text-3xl font-bold text-green-600">{s.unique_countries}</div>
+                                            <div class="text-xs text-charcoal-lighter mt-1">"countries"</div>
+                                        </div>
+                                    </div>
+
+                                    // World map
+                                    <WorldMap points=points />
+
+                                    // Countries + recent side by side
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        // Top countries
+                                        <div class="bg-surface border border-border rounded-lg p-4">
+                                            <h3 class="text-sm font-medium text-charcoal-lighter mb-3">"Top Countries"</h3>
+                                            <div class="space-y-2">
+                                                {countries.into_iter().map(|c| {
+                                                    let pct = (c.count as f64 / max_count as f64 * 100.0) as u32;
+                                                    let flag = country_flag(&c.country_code);
+                                                    view! {
+                                                        <div class="flex items-center gap-2 text-sm">
+                                                            <span class="text-base w-6 flex-shrink-0">{flag}</span>
+                                                            <span class="text-charcoal flex-1 truncate">{c.country}</span>
+                                                            <div class="w-20 bg-border rounded-full h-1.5 flex-shrink-0">
+                                                                <div
+                                                                    class="bg-blue-500 h-1.5 rounded-full"
+                                                                    style={format!("width: {pct}%")}
+                                                                ></div>
+                                                            </div>
+                                                            <span class="text-charcoal-lighter text-xs w-8 text-right flex-shrink-0">
+                                                                {c.count}
+                                                            </span>
+                                                        </div>
+                                                    }
+                                                }).collect::<Vec<_>>()}
+                                            </div>
+                                        </div>
+
+                                        // Recent visitors
+                                        <div class="bg-surface border border-border rounded-lg p-4">
+                                            <h3 class="text-sm font-medium text-charcoal-lighter mb-3">"Recent Visitors"</h3>
+                                            <div class="space-y-2">
+                                                {recent.into_iter().map(|v| {
+                                                    let flag = v.country_code.as_deref()
+                                                        .map(country_flag)
+                                                        .unwrap_or_else(|| "🌐".to_string());
+                                                    let location = match (&v.city, &v.country) {
+                                                        (Some(city), Some(country)) => format!("{city}, {country}"),
+                                                        (None, Some(country)) => country.clone(),
+                                                        _ => "Unknown".to_string(),
+                                                    };
+                                                    let time = format_time_ago(v.minutes_ago);
+                                                    view! {
+                                                        <div class="flex items-center gap-2 text-sm">
+                                                            <span class="text-base w-6 flex-shrink-0">{flag}</span>
+                                                            <span class="text-charcoal flex-1 truncate">{location}</span>
+                                                            <span class="text-charcoal-lighter text-xs flex-shrink-0">{time}</span>
+                                                        </div>
+                                                    }
+                                                }).collect::<Vec<_>>()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }.into_any()
+                        }
+                    })
+                }}
+            </Suspense>
+        </div>
+    }
+}
