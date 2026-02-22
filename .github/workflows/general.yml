@@ -34,76 +34,36 @@ jobs:
       - name: Clippy
         run: |
           bazel --bazelrc=.bazelrc.ci build clippy
-  harbor-image-x86_64:
-    name: Build JDH Image - x86_64
-    runs-on: arc-runner-set-k8s
-    container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [clippy, security-audit]
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
-            docker login harbor.home.local \
-              -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
-      - name: Bazel Build
-        run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_amd64
   harbor-image-x86_64-push:
     if: github.event_name == 'push'
     name: Push JDH Image - x86_64
     runs-on: arc-runner-set-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
-    needs: [harbor-image-x86_64]
+    needs: [clippy, security-audit]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Install Harbor CA cert
+        run: |
+          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
+            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
+            > /tmp/harbor.crt
+          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
+          sudo update-ca-certificates
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
-            docker login harbor.home.local \
-              -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+        run: |
+          mkdir -p ~/.docker
+          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+            "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
+            > ~/.docker/config.json
       - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
-  harbor-image-arm64:
-    needs: [clippy, security-audit]
-    name: Build JDH Image - arm64
-    runs-on: arc-runner-set-arm-k8s
-    container: ${{ vars.RUNNER_IMAGE_URL }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
-            docker login harbor.home.local \
-              -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
-      - name: Bazel Build
-        run: |
-          bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
   harbor-image-arm64-push:
     if: github.event_name == 'push'
-    needs: [harbor-image-arm64]
+    needs: [clippy, security-audit]
     name: Push JDH Image - arm64
     runs-on: arc-runner-set-arm-k8s
     container: ${{ vars.RUNNER_IMAGE_URL }}
@@ -112,15 +72,19 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Install Harbor CA cert
+        run: |
+          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
+            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
+            > /tmp/harbor.crt
+          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
+          sudo update-ca-certificates
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
-            docker login harbor.home.local \
-              -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+        run: |
+          mkdir -p ~/.docker
+          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+            "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
+            > ~/.docker/config.json
       - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push
@@ -131,15 +95,21 @@ jobs:
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
+      - name: Install Harbor CA cert
+        run: |
+          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
+            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
+            > /tmp/harbor.crt
+          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
+          sudo update-ca-certificates
+          sudo mkdir -p /etc/docker/certs.d/harbor.home.local
+          sudo cp /tmp/harbor.crt /etc/docker/certs.d/harbor.home.local/ca.crt
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
-            docker login harbor.home.local \
-              -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+        run: |
+          mkdir -p ~/.docker
+          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+            "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
+            > ~/.docker/config.json
       - name: Create and Push Multi-Arch Manifest
         run: |
           docker manifest create harbor.home.local/library/jaydanhoward:latest \
@@ -158,15 +128,19 @@ jobs:
         uses: docker/setup-buildx-action@v3
         with:
           driver: kubernetes
+      - name: Install Harbor CA cert
+        run: |
+          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
+            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
+            > /tmp/harbor.crt
+          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
+          sudo update-ca-certificates
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
-            docker login harbor.home.local \
-              -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+        run: |
+          mkdir -p ~/.docker
+          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+            "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
+            > ~/.docker/config.json
       - name: Build and Push Multi-Arch Image
         uses: docker/build-push-action@v5
         with:
