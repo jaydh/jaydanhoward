@@ -45,14 +45,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
+        run: |
+          for i in 1 2 3; do
             docker login harbor.home.local \
               -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+              -p "${{ secrets.HARBOR_TOKEN }}" && break
+            [ $i -lt 3 ] && sleep 5
+          done
       - name: Bazel Build
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_amd64
@@ -68,14 +67,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
+        run: |
+          for i in 1 2 3; do
             docker login harbor.home.local \
               -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+              -p "${{ secrets.HARBOR_TOKEN }}" && break
+            [ $i -lt 3 ] && sleep 5
+          done
       - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
@@ -90,14 +88,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
+        run: |
+          for i in 1 2 3; do
             docker login harbor.home.local \
               -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+              -p "${{ secrets.HARBOR_TOKEN }}" && break
+            [ $i -lt 3 ] && sleep 5
+          done
       - name: Bazel Build
         run: |
           bazel --bazelrc=.bazelrc.ci build jaydanhoward_image_arm64
@@ -113,14 +110,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
+        run: |
+          for i in 1 2 3; do
             docker login harbor.home.local \
               -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+              -p "${{ secrets.HARBOR_TOKEN }}" && break
+            [ $i -lt 3 ] && sleep 5
+          done
       - name: Bazel Push
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push
@@ -132,14 +128,13 @@ jobs:
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
+        run: |
+          for i in 1 2 3; do
             docker login harbor.home.local \
               -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+              -p "${{ secrets.HARBOR_TOKEN }}" && break
+            [ $i -lt 3 ] && sleep 5
+          done
       - name: Create and Push Multi-Arch Manifest
         run: |
           docker manifest create harbor.home.local/library/jaydanhoward:latest \
@@ -159,14 +154,13 @@ jobs:
         with:
           driver: kubernetes
       - name: Login to Harbor
-        uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 30
-          max_attempts: 3
-          command: |
+        run: |
+          for i in 1 2 3; do
             docker login harbor.home.local \
               -u "${{ secrets.HARBOR_USER }}" \
-              -p "${{ secrets.HARBOR_TOKEN }}"
+              -p "${{ secrets.HARBOR_TOKEN }}" && break
+            [ $i -lt 3 ] && sleep 5
+          done
       - name: Build and Push Multi-Arch Image
         uses: docker/build-push-action@v5
         with:
