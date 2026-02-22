@@ -205,4 +205,51 @@ mod inner {
             points,
         })
     }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct IpInfo {
+        pub ip: String,
+        pub country: Option<String>,
+        pub country_code: Option<String>,
+        pub city: Option<String>,
+        pub region: Option<String>,
+        pub isp: Option<String>,
+    }
+
+    pub async fn get_ip_info(pool: &PgPool, ip: &str) -> Result<IpInfo, sqlx::Error> {
+        let row = sqlx::query(
+            r#"
+            SELECT country, country_code, city, region, isp
+            FROM visitors
+            WHERE ip = $1
+            ORDER BY visited_at DESC
+            LIMIT 1
+            "#,
+        )
+        .bind(ip)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(match row {
+            Some(row) => {
+                use sqlx::Row;
+                IpInfo {
+                    ip: ip.to_string(),
+                    country: row.try_get("country").ok().flatten(),
+                    country_code: row.try_get("country_code").ok().flatten(),
+                    city: row.try_get("city").ok().flatten(),
+                    region: row.try_get("region").ok().flatten(),
+                    isp: row.try_get("isp").ok().flatten(),
+                }
+            }
+            None => IpInfo {
+                ip: ip.to_string(),
+                country: None,
+                country_code: None,
+                city: None,
+                region: None,
+                isp: None,
+            },
+        })
+    }
 }

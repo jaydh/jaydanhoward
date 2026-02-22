@@ -168,7 +168,7 @@ rust_binary(
     srcs = glob([
         "src/**/*.rs",
     ]),
-    compile_data = glob(["migrations/*.sql"]),
+    compile_data = glob(["migrations/*.sql"], allow_empty = True),
     crate_features = ["ssr"],
     crate_name = "jaydanhoward",
     edition = "2021",
@@ -198,7 +198,7 @@ rust_binary(
     srcs = glob([
         "src/**/*.rs",
     ]),
-    compile_data = glob(["migrations/*.sql"]),
+    compile_data = glob(["migrations/*.sql"], allow_empty = True),
     crate_features = ["ssr"],
     crate_name = "jaydanhoward",
     edition = "2021",
@@ -227,7 +227,7 @@ rust_binary(
     srcs = glob([
         "src/**/*.rs",
     ]),
-    compile_data = glob(["migrations/*.sql"]),
+    compile_data = glob(["migrations/*.sql"], allow_empty = True),
     crate_features = ["ssr"],
     crate_name = "jaydanhoward",
     edition = "2021",

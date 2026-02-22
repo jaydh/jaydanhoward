@@ -2,6 +2,62 @@ use leptos::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct IpInfo {
+    pub ip: String,
+    pub country: Option<String>,
+    pub country_code: Option<String>,
+    pub city: Option<String>,
+    pub region: Option<String>,
+    pub isp: Option<String>,
+}
+
+#[server(name = GetMyInfo, prefix = "/api", endpoint = "get_my_info")]
+pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
+    use actix_web::{web::Data, HttpRequest};
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let req = extract::<HttpRequest>()
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+
+    let ip = req
+        .connection_info()
+        .realip_remote_addr()
+        .unwrap_or("unknown")
+        .split(':')
+        .next()
+        .unwrap_or("unknown")
+        .to_string();
+
+    let pool = match extract::<Data<PgPool>>().await {
+        Ok(p) => p,
+        Err(_) => {
+            return Ok(IpInfo {
+                ip,
+                country: None,
+                country_code: None,
+                city: None,
+                region: None,
+                isp: None,
+            })
+        }
+    };
+
+    crate::db::get_ip_info(&pool, &ip)
+        .await
+        .map(|info| IpInfo {
+            ip: info.ip,
+            country: info.country,
+            country_code: info.country_code,
+            city: info.city,
+            region: info.region,
+            isp: info.isp,
+        })
+        .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CountryStat {
     pub country: String,
     pub country_code: String,
@@ -119,6 +175,48 @@ fn format_time_ago(minutes: i64) -> String {
 }
 
 #[component]
+fn YourVisit() -> impl IntoView {
+    let info = Resource::new(|| (), |_| get_my_info());
+
+    view! {
+        <Suspense fallback=|| ()>
+            {move || info.get().map(|result| match result {
+                Err(_) => view! { <div></div> }.into_any(),
+                Ok(info) => {
+                    let location = match (&info.city, &info.region, &info.country) {
+                        (Some(city), Some(region), _) => format!("{city}, {region}"),
+                        (Some(city), _, Some(country)) => format!("{city}, {country}"),
+                        (_, _, Some(country)) => country.clone(),
+                        _ => String::new(),
+                    };
+                    let flag = info.country_code.as_deref()
+                        .map(country_flag)
+                        .unwrap_or_default();
+                    view! {
+                        <div class="flex items-center gap-2 text-xs text-charcoal-lighter bg-surface border border-border rounded-lg px-3 py-2 font-mono">
+                            <span class="text-charcoal">"You: "</span>
+                            <span class="text-accent">{info.ip}</span>
+                            {if !location.is_empty() {
+                                view! {
+                                    <span class="text-charcoal-lighter">"·"</span>
+                                    <span>{flag}" "{location}</span>
+                                }.into_any()
+                            } else {
+                                view! { <span></span> }.into_any()
+                            }}
+                            {info.isp.map(|isp| view! {
+                                <span class="text-charcoal-lighter">"·"</span>
+                                <span class="truncate">{isp}</span>
+                            })}
+                        </div>
+                    }.into_any()
+                }
+            })}
+        </Suspense>
+    }
+}
+
+#[component]
 fn WorldMap(points: Vec<VisitorPoint>) -> impl IntoView {
     // Equirectangular projection: lon [-180,180] → x [0,360], lat [90,-90] → y [0,180]
     // x = lon + 180, y = 90 - lat
@@ -196,9 +294,12 @@ pub fn Visitors() -> impl IntoView {
 
     view! {
         <div class="w-full">
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center justify-between mb-4">
                 <h2 class="text-xl font-bold text-charcoal">"Visitors"</h2>
                 <span class="text-xs text-charcoal-lighter">"last 30 days"</span>
+            </div>
+            <div class="mb-6">
+                <YourVisit/>
             </div>
 
             <Suspense fallback=|| view! {
