@@ -37,11 +37,10 @@ bazel run jaydanhoward_image_arm64_push
 
 ### Dependencies
 ```bash
-# After modifying dependencies in WORKSPACE.bazel, repin lock files:
-# Update crates in crates_repository definitions in WORKSPACE.bazel
-# Then run:
-bazel sync --only=server_crates
-bazel sync --only=wasm_crates
+# After modifying Cargo.server.toml or Cargo.wasm.toml, repin lock files:
+# (bazel sync was removed in Bazel 9; use CARGO_BAZEL_REPIN instead)
+CARGO_BAZEL_REPIN=1 bazel fetch @server_crates//...
+CARGO_BAZEL_REPIN=1 bazel fetch @wasm_crates//...
 ```
 
 ## Architecture
