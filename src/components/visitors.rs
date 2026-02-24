@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub struct IpVisit {
     pub path: String,
     pub minutes_ago: i64,
+    pub visited_at: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -66,7 +67,7 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
             history: info
                 .history
                 .into_iter()
-                .map(|v| IpVisit { path: v.path, minutes_ago: v.minutes_ago })
+                .map(|v| IpVisit { path: v.path, minutes_ago: v.minutes_ago, visited_at: v.visited_at })
                 .collect(),
         })
         .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
@@ -117,6 +118,7 @@ pub struct RecentVisit {
     pub city: Option<String>,
     pub path: String,
     pub minutes_ago: i64,
+    pub visited_at: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -180,6 +182,7 @@ pub async fn get_visitor_stats() -> Result<VisitorStats, ServerFnError<String>> 
                     city: v.city,
                     path: v.path,
                     minutes_ago: v.minutes_ago,
+                    visited_at: v.visited_at,
                 })
                 .collect(),
             points: s
@@ -192,6 +195,19 @@ pub async fn get_visitor_stats() -> Result<VisitorStats, ServerFnError<String>> 
                 .collect(),
         })
         .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+}
+
+/// Returns `(ipv4, ipv6)` — both Some when the address is IPv4-mapped IPv6.
+fn split_ip(ip: &str) -> (Option<String>, Option<String>) {
+    use std::net::IpAddr;
+    match ip.parse::<IpAddr>() {
+        Ok(IpAddr::V4(v4)) => (Some(v4.to_string()), None),
+        Ok(IpAddr::V6(v6)) => match v6.to_ipv4_mapped() {
+            Some(v4) => (Some(v4.to_string()), Some(v6.to_string())),
+            None => (None, Some(v6.to_string())),
+        },
+        Err(_) => (Some(ip.to_string()), None),
+    }
 }
 
 fn country_flag(code: &str) -> String {
@@ -244,13 +260,15 @@ fn YourVisit() -> impl IntoView {
                         let flag = info.country_code.as_deref()
                             .map(country_flag)
                             .unwrap_or_default();
+                        let (ipv4, ipv6) = split_ip(&info.ip);
                         let history = info.history.clone();
                         view! {
                             <div class="bg-surface border border-border rounded-lg p-3 font-mono text-xs space-y-2">
                                 // Header row: IP · location · ISP · forget button
                                 <div class="flex items-center gap-2 text-charcoal-lighter flex-wrap">
                                     <span class="text-charcoal">"You: "</span>
-                                    <span class="text-accent">{info.ip}</span>
+                                    {ipv4.map(|v4| view! { <span class="text-accent">{v4}</span> })}
+                                    {ipv6.map(|v6| view! { <span class="text-charcoal-lighter opacity-60">{v6}</span> })}
                                     {if !location.is_empty() {
                                         view! {
                                             <span class="text-charcoal-lighter">"·"</span>
@@ -273,13 +291,14 @@ fn YourVisit() -> impl IntoView {
                                 </div>
                             // Visit history
                             {(!history.is_empty()).then(|| view! {
-                                <div class="space-y-1 pt-1 border-t border-border">
+                                <div class="space-y-1 pt-1 border-t border-border max-h-36 overflow-y-auto">
                                     {history.into_iter().map(|v| {
                                         let time = format_time_ago(v.minutes_ago);
+                                        let visited_at = v.visited_at.clone();
                                         view! {
                                             <div class="flex items-center gap-2 text-charcoal-lighter">
                                                 <span class="text-charcoal truncate flex-1">{v.path}</span>
-                                                <span class="flex-shrink-0 opacity-60">{time}</span>
+                                                <span class="flex-shrink-0 opacity-60" title={visited_at}>{time}</span>
                                             </div>
                                         }
                                     }).collect::<Vec<_>>()}
@@ -423,7 +442,7 @@ pub fn Visitors() -> impl IntoView {
                                         // Recent visitors
                                         <div class="bg-surface border border-border rounded-lg p-4">
                                             <h3 class="text-sm font-medium text-charcoal-lighter mb-3">"Recent Visitors"</h3>
-                                            <div class="space-y-2">
+                                            <div class="space-y-2 max-h-64 overflow-y-auto">
                                                 {recent.into_iter().map(|v| {
                                                     let flag = v.country_code.as_deref()
                                                         .map(country_flag)
@@ -434,11 +453,12 @@ pub fn Visitors() -> impl IntoView {
                                                         _ => "Unknown".to_string(),
                                                     };
                                                     let time = format_time_ago(v.minutes_ago);
+                                                    let visited_at = v.visited_at.clone();
                                                     view! {
                                                         <div class="flex items-center gap-2 text-sm">
                                                             <span class="text-base w-6 flex-shrink-0">{flag}</span>
                                                             <span class="text-charcoal flex-1 truncate">{location}</span>
-                                                            <span class="text-charcoal-lighter text-xs flex-shrink-0">{time}</span>
+                                                            <span class="text-charcoal-lighter text-xs flex-shrink-0" title={visited_at}>{time}</span>
                                                         </div>
                                                     }
                                                 }).collect::<Vec<_>>()}
