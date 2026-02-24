@@ -77,8 +77,25 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     // Startup conjunction screening: fetch TLEs for all groups and screen in background.
     // Runs regardless of DB availability — in-memory cache is always updated.
+    //
+    // Stagger strategy: use a deterministic FNV-1a hash of (hostname, group) mapped to
+    // 0–10 s.  Different pods hash to different delays for each group, so when multiple
+    // replicas race for the Postgres distributed lock they win *different* groups and
+    // screening work is spread across pods rather than all landing on pod-0.
     {
         use crate::components::conjunction::screen_and_store;
+
+        /// FNV-1a hash of two strings concatenated, result in 0..max_ms.
+        fn stagger_ms(a: &str, b: &str, max_ms: u64) -> u64 {
+            let mut h: u64 = 14_695_981_039_346_656_037;
+            for byte in a.bytes().chain(b.bytes()) {
+                h ^= byte as u64;
+                h = h.wrapping_mul(1_099_511_628_211);
+            }
+            h % max_ms
+        }
+
+        let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
 
         const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
 
@@ -87,11 +104,12 @@ pub async fn run() -> Result<(), std::io::Error> {
             let cache_clone = conjunction_cache.clone();
             let group_str = group.to_string();
             let client_clone = http_client.clone();
+            let hostname_clone = hostname.clone();
 
             tokio::spawn(async move {
-                // Small stagger to avoid thundering-herd on CelesTrak
-                let idx = GROUPS.iter().position(|g| *g == group_str).unwrap_or(0);
-                tokio::time::sleep(Duration::from_secs(idx as u64 * 3)).await;
+                // Hostname-keyed stagger: 0–10 s, unique per (pod, group) pair
+                let delay = stagger_ms(&hostname_clone, &group_str, 10_000);
+                tokio::time::sleep(Duration::from_millis(delay)).await;
 
                 let url = format!(
                     "https://celestrak.org/NORAD/elements/gp.php?GROUP={group_str}&FORMAT=tle"

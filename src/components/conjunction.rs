@@ -545,6 +545,56 @@ pub async fn get_conjunctions(
     Ok(vec![])
 }
 
+/// Clear all results and kick off fresh screenings for every group.
+///
+/// Uses TLEs already held in the TleCache (populated at startup / on first TLE
+/// fetch).  Groups with no cached TLEs are skipped.
+#[server(name = RetriggerConjunction, prefix = "/api", endpoint = "retrigger_conjunction")]
+pub async fn retrigger_conjunction() -> Result<(), ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
+
+    let pool_opt = extract::<Data<PgPool>>().await.ok();
+    let cache = extract::<Data<ConjunctionCache>>().await.ok();
+    let tle_cache = extract::<Data<crate::components::satellite_tracker::TleCache>>()
+        .await
+        .map_err(|_| ServerFnError::ServerError("TLE cache not available".into()))?;
+
+    // Cancel running DB screenings and clear in-memory cache for all groups
+    for &group in GROUPS {
+        if let Some(ref pool) = pool_opt {
+            let _ = crate::db::cancel_running_conjunction_screening(pool, group).await;
+        }
+        if let Some(ref c) = cache {
+            c.write().await.remove(group);
+        }
+    }
+
+    // Spawn a fresh screening for each group that has cached TLEs
+    for &group in GROUPS {
+        let tles = {
+            let r = tle_cache.read().await;
+            r.get(group).map(|(_, d)| d.clone())
+        };
+        let Some(tles) = tles else {
+            tracing::debug!("retrigger: no TLE cache for group={group}, skipping");
+            continue;
+        };
+
+        let pool_clone = pool_opt.clone();
+        let cache_clone = cache.clone();
+        let group_str = group.to_string();
+        tokio::spawn(async move {
+            screen_and_store(pool_clone, cache_clone, &group_str, &tles).await;
+        });
+    }
+
+    Ok(())
+}
+
 // ──────────────────────────────────────────────────────────────
 // Leptos component
 // ──────────────────────────────────────────────────────────────
@@ -638,9 +688,36 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
         });
     }
 
+    // SSR: placeholder retrigger handler
+    #[cfg(feature = "ssr")]
+    let on_retrigger = move |_: leptos::ev::MouseEvent| {};
+
+    // Client: calls server fn, resets local state
+    #[cfg(not(feature = "ssr"))]
+    let on_retrigger = move |_: leptos::ev::MouseEvent| {
+        set_status.set(None);
+        set_events.set(Vec::new());
+        set_loading_events.set(false);
+        set_events_loaded.set(false);
+        leptos::task::spawn_local(async move {
+            if let Err(e) = retrigger_conjunction().await {
+                web_sys::console::error_1(&format!("retrigger error: {e:?}").into());
+            }
+        });
+    };
+
     view! {
         <div class="w-full">
-            <ConjunctionStatusBadge status=status />
+            <div class="flex items-center justify-between mt-2">
+                <ConjunctionStatusBadge status=status />
+                <button
+                    class="text-xs text-muted hover:text-foreground border border-border \
+                           rounded px-2 py-1 transition-colors shrink-0"
+                    on:click=on_retrigger
+                >
+                    "Recalculate"
+                </button>
+            </div>
             <Show when=move || !events.get().is_empty()>
                 <ConjunctionTable events=events />
             </Show>
@@ -843,7 +920,7 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                 <table class="w-full text-sm border-collapse">
 
                     // Sticky header row
-                    <thead class="sticky top-0 bg-surface-alt z-10 border-b border-border">
+                    <thead class="sticky top-0 bg-gray z-10 border-b-2 border-border">
                         <tr>
                             <th class=th on:click=make_sort_click(SortCol::Tca)>
                                 "TCA" {make_sort_arrow(SortCol::Tca)}

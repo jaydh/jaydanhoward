@@ -360,6 +360,23 @@ mod inner {
         Ok(())
     }
 
+    /// Force-cancel any running screening for a group (used before manual retrigger).
+    pub async fn cancel_running_conjunction_screening(
+        pool: &PgPool,
+        group_name: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_screenings \
+             SET status = 'failed', completed_at = NOW(), \
+                 error_msg = 'cancelled by user retrigger' \
+             WHERE group_name = $1 AND status = 'running'",
+        )
+        .bind(group_name)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     /// Mark a screening as failed.
     pub async fn fail_conjunction_screening(
         pool: &PgPool,
