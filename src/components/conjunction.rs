@@ -36,9 +36,18 @@ pub enum ScreeningStatus {
 pub struct ConjunctionResult {
     pub group: String,
     pub status: ScreeningStatus,
-    /// Sorted by tca_unix_ms ascending
+    /// Sorted by tca_unix_ms ascending (may be partial during Running)
     pub events: Vec<ConjunctionEvent>,
 }
+
+// ──────────────────────────────────────────────────────────────
+// In-memory cache (SSR only) — used for dev (no DB) and as live
+// preview during screening on all deployments
+// ──────────────────────────────────────────────────────────────
+
+#[cfg(feature = "ssr")]
+pub type ConjunctionCache =
+    tokio::sync::RwLock<std::collections::HashMap<String, ConjunctionResult>>;
 
 // ──────────────────────────────────────────────────────────────
 // SSR-only: screening logic
@@ -245,8 +254,16 @@ pub mod screening {
     }
 
     /// Screen all pairs in a TLE group for conjunctions over the next 24 h.
-    /// Runs CPU-bound work with Rayon parallelism.
-    pub fn screen_group(tles: &[TleData]) -> (Vec<ConjunctionEvent>, ScreeningStats) {
+    ///
+    /// Processes anchor satellites sequentially so partial results can be streamed
+    /// via `tx` every `FLUSH_EVERY` anchors. Inner (j) pairs are parallelised with
+    /// Rayon so all cores are kept busy throughout.
+    pub fn screen_group(
+        tles: &[TleData],
+        tx: &tokio::sync::mpsc::UnboundedSender<Vec<ConjunctionEvent>>,
+    ) -> ScreeningStats {
+        const FLUSH_EVERY: usize = 50;
+
         let n = tles.len();
         let total_pairs = n * (n.saturating_sub(1)) / 2;
 
@@ -254,131 +271,202 @@ pub mod screening {
         let props: Vec<Option<SatProp>> = tles.iter().map(|t| SatProp::new(t)).collect();
 
         let pairs_after_hoots = AtomicUsize::new(0);
-
         let now_unix_ms = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_millis() as f64;
 
-        let mut events: Vec<ConjunctionEvent> = (0..n)
-            .into_par_iter()
-            .flat_map(|i| {
-                let props_ref = &props;
-                let tles_ref = tles;
-                let counter = &pairs_after_hoots;
+        let mut batch: Vec<ConjunctionEvent> = Vec::new();
+        let mut events_found = 0usize;
 
-                (i + 1..n)
-                    .into_par_iter()
-                    .flat_map(move |j| {
-                        if !hoots_pass(&tles_ref[i], &tles_ref[j]) {
-                            return vec![];
-                        }
-                        counter.fetch_add(1, Ordering::Relaxed);
-                        let pa = match props_ref[i].as_ref() {
-                            Some(p) => p,
-                            None => return vec![],
-                        };
-                        let pb = match props_ref[j].as_ref() {
-                            Some(p) => p,
-                            None => return vec![],
-                        };
-                        propagate_pair(pa, pb, now_unix_ms)
-                    })
-                    .collect::<Vec<_>>()
-            })
-            .collect();
+        for i in 0..n {
+            // Inner pairs for this anchor, parallelised via Rayon
+            let row_events: Vec<ConjunctionEvent> = (i + 1..n)
+                .into_par_iter()
+                .flat_map(|j| {
+                    if !hoots_pass(&tles[i], &tles[j]) {
+                        return vec![];
+                    }
+                    pairs_after_hoots.fetch_add(1, Ordering::Relaxed);
+                    let pa = match props[i].as_ref() {
+                        Some(p) => p,
+                        None => return vec![],
+                    };
+                    let pb = match props[j].as_ref() {
+                        Some(p) => p,
+                        None => return vec![],
+                    };
+                    propagate_pair(pa, pb, now_unix_ms)
+                })
+                .collect();
 
-        events.sort_by(|a, b| {
-            a.tca_unix_ms
-                .partial_cmp(&b.tca_unix_ms)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+            events_found += row_events.len();
+            batch.extend(row_events);
 
-        let stats = ScreeningStats {
+            // Flush a chunk to the async receiver every FLUSH_EVERY anchors (or at end)
+            if (i + 1) % FLUSH_EVERY == 0 || i == n - 1 {
+                if !batch.is_empty() {
+                    let _ = tx.send(std::mem::take(&mut batch));
+                }
+            }
+        }
+
+        ScreeningStats {
             total_pairs,
             pairs_after_hoots: pairs_after_hoots.load(Ordering::Relaxed),
-            events_found: events.len(),
+            events_found,
             elapsed_ms: 0, // filled in by caller
-        };
-
-        (events, stats)
+        }
     }
 }
 
 // ──────────────────────────────────────────────────────────────
-// screen_and_store: run screening and persist results to DB
+// screen_and_store: run screening, stream results to DB + cache
 // ──────────────────────────────────────────────────────────────
 
 #[cfg(feature = "ssr")]
 pub async fn screen_and_store(
-    pool: &sqlx::PgPool,
+    pool: Option<actix_web::web::Data<sqlx::PgPool>>,
+    cache: Option<actix_web::web::Data<ConjunctionCache>>,
     group: &str,
     tles: &[crate::components::satellite_tracker::TleData],
 ) {
-    use crate::db::{
-        complete_conjunction_screening, fail_conjunction_screening, insert_conjunction_events,
-        start_conjunction_screening,
-    };
     use std::time::Instant;
+    use tokio::sync::mpsc;
 
-    let screening_id = match start_conjunction_screening(pool, group).await {
-        Ok(Some(id)) => id,
-        Ok(None) => {
-            tracing::debug!("Conjunction screening for group={} already running on another replica, skipping", group);
-            return;
+    let started_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as f64;
+
+    // Mark Running in in-memory cache immediately so clients see live status
+    if let Some(ref c) = cache {
+        let mut w = c.write().await;
+        w.insert(
+            group.to_string(),
+            ConjunctionResult {
+                group: group.to_string(),
+                status: ScreeningStatus::Running { started_unix_ms: started_ms },
+                events: vec![],
+            },
+        );
+    }
+
+    // Claim a DB slot if a pool is available (distributed lock)
+    let screening_id: Option<i64> = if let Some(ref pool) = pool {
+        match crate::db::start_conjunction_screening(pool, group).await {
+            Ok(Some(id)) => Some(id),
+            Ok(None) => {
+                tracing::debug!(
+                    "Conjunction screening for group={} already running on another replica, skipping",
+                    group
+                );
+                // Remove the Running entry we just wrote — another replica has it
+                if let Some(ref c) = cache {
+                    c.write().await.remove(group);
+                }
+                return;
+            }
+            Err(e) => {
+                tracing::error!("Failed to start screening record for group={}: {}", group, e);
+                if let Some(ref c) = cache {
+                    c.write().await.remove(group);
+                }
+                return;
+            }
         }
-        Err(e) => {
-            tracing::error!("Failed to start screening record for group={}: {}", group, e);
-            return;
-        }
+    } else {
+        None
     };
 
     tracing::info!(
-        "Conjunction screening started: group={} satellites={} screening_id={}",
-        group,
-        tles.len(),
-        screening_id
+        "Conjunction screening started: group={group} satellites={} screening_id={screening_id:?}",
+        tles.len()
     );
 
+    // Channel: screening thread sends event chunks, async task consumes them
+    let (tx, mut rx) = mpsc::unbounded_channel::<Vec<ConjunctionEvent>>();
     let tles_owned = tles.to_vec();
     let t0 = Instant::now();
 
-    let result =
-        tokio::task::spawn_blocking(move || screening::screen_group(&tles_owned)).await;
+    let handle =
+        tokio::task::spawn_blocking(move || screening::screen_group(&tles_owned, &tx));
 
-    match result {
-        Ok((events, mut stats)) => {
-            stats.elapsed_ms = t0.elapsed().as_millis() as u64;
+    // Consume chunks as they arrive, updating DB and in-memory cache incrementally
+    let mut all_events: Vec<ConjunctionEvent> = Vec::new();
+    while let Some(chunk) = rx.recv().await {
+        // Insert partial events to DB if we have a slot
+        if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
+            if let Err(e) = crate::db::insert_conjunction_events(pool, id, &chunk).await {
+                tracing::warn!("Failed to insert partial conjunction events: {}", e);
+            }
+        }
+
+        all_events.extend(chunk);
+
+        // Update in-memory cache with accumulated events (sorted)
+        if let Some(ref c) = cache {
+            let mut sorted = all_events.clone();
+            sorted.sort_by(|a, b| {
+                a.tca_unix_ms
+                    .partial_cmp(&b.tca_unix_ms)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let mut w = c.write().await;
+            if let Some(result) = w.get_mut(group) {
+                result.events = sorted;
+            }
+        }
+    }
+
+    // Channel closed — screening complete; collect final stats
+    let elapsed_ms = t0.elapsed().as_millis() as u64;
+    match handle.await {
+        Ok(mut stats) => {
+            stats.elapsed_ms = elapsed_ms;
             tracing::info!(
-                "Conjunction screening complete: group={} events={} pairs_screened={} elapsed_ms={}",
-                group,
+                "Conjunction screening complete: group={group} events={} pairs_screened={} elapsed_ms={}",
                 stats.events_found,
                 stats.pairs_after_hoots,
                 stats.elapsed_ms
             );
 
-            if let Err(e) = insert_conjunction_events(pool, screening_id, &events).await {
-                tracing::error!("Failed to insert conjunction events: {}", e);
-                let _ = fail_conjunction_screening(pool, screening_id, &format!("{e}")).await;
-                return;
+            if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
+                if let Err(e) = crate::db::complete_conjunction_screening(
+                    pool,
+                    id,
+                    stats.total_pairs as i64,
+                    stats.pairs_after_hoots as i64,
+                    stats.events_found as i32,
+                    stats.elapsed_ms as i64,
+                )
+                .await
+                {
+                    tracing::error!("Failed to mark screening complete: {}", e);
+                }
             }
 
-            if let Err(e) = complete_conjunction_screening(
-                pool,
-                screening_id,
-                stats.total_pairs as i64,
-                stats.pairs_after_hoots as i64,
-                stats.events_found as i32,
-                stats.elapsed_ms as i64,
-            )
-            .await
-            {
-                tracing::error!("Failed to mark screening complete: {}", e);
+            // Update in-memory cache to Complete
+            if let Some(ref c) = cache {
+                let mut w = c.write().await;
+                if let Some(result) = w.get_mut(group) {
+                    result.status = ScreeningStatus::Complete { stats };
+                    // result.events already accumulated in the recv loop
+                }
             }
         }
         Err(e) => {
-            tracing::error!("Conjunction screening panicked: group={} {:?}", group, e);
-            let _ = fail_conjunction_screening(pool, screening_id, &format!("{e:?}")).await;
+            tracing::error!("Conjunction screening panicked: group={group} {e:?}");
+            if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
+                let _ =
+                    crate::db::fail_conjunction_screening(pool, id, &format!("{e:?}")).await;
+            }
+            if let Some(ref c) = cache {
+                let mut w = c.write().await;
+                if let Some(result) = w.get_mut(group) {
+                    result.status = ScreeningStatus::Failed(format!("{e:?}"));
+                }
+            }
         }
     }
 }
@@ -395,33 +483,42 @@ pub async fn get_conjunction_status(
     use leptos_actix::extract;
     use sqlx::PgPool;
 
-    let pool = match extract::<Data<PgPool>>().await {
-        Ok(p) => p,
-        Err(_) => return Ok(ScreeningStatus::Idle), // no DB configured
-    };
+    // Prefer DB when available
+    if let Ok(pool) = extract::<Data<PgPool>>().await {
+        let row = crate::db::get_latest_conjunction_screening(&pool, &group)
+            .await
+            .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
 
-    let row = crate::db::get_latest_conjunction_screening(&pool, &group)
-        .await
-        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
-
-    Ok(match row {
-        None => ScreeningStatus::Idle,
-        Some(r) => match r.status.as_str() {
-            "running" => ScreeningStatus::Running {
-                started_unix_ms: r.started_at.timestamp_millis() as f64,
-            },
-            "complete" => ScreeningStatus::Complete {
-                stats: ScreeningStats {
-                    total_pairs: r.total_pairs as usize,
-                    pairs_after_hoots: r.pairs_after_hoots as usize,
-                    events_found: r.events_found as usize,
-                    elapsed_ms: r.elapsed_ms as u64,
+        return Ok(match row {
+            None => ScreeningStatus::Idle,
+            Some(r) => match r.status.as_str() {
+                "running" => ScreeningStatus::Running {
+                    started_unix_ms: r.started_at.timestamp_millis() as f64,
                 },
+                "complete" => ScreeningStatus::Complete {
+                    stats: ScreeningStats {
+                        total_pairs: r.total_pairs as usize,
+                        pairs_after_hoots: r.pairs_after_hoots as usize,
+                        events_found: r.events_found as usize,
+                        elapsed_ms: r.elapsed_ms as u64,
+                    },
+                },
+                "failed" => ScreeningStatus::Failed(r.error_msg.unwrap_or_default()),
+                _ => ScreeningStatus::Idle,
             },
-            "failed" => ScreeningStatus::Failed(r.error_msg.unwrap_or_default()),
-            _ => ScreeningStatus::Idle,
-        },
-    })
+        });
+    }
+
+    // No DB: fall back to in-memory cache (dev mode)
+    if let Ok(cache) = extract::<Data<ConjunctionCache>>().await {
+        let r = cache.read().await;
+        return Ok(match r.get(&group) {
+            None => ScreeningStatus::Idle,
+            Some(result) => result.status.clone(),
+        });
+    }
+
+    Ok(ScreeningStatus::Idle)
 }
 
 #[server(name = GetConjunctions, prefix = "/api", endpoint = "get_conjunctions")]
@@ -432,14 +529,20 @@ pub async fn get_conjunctions(
     use leptos_actix::extract;
     use sqlx::PgPool;
 
-    let pool = match extract::<Data<PgPool>>().await {
-        Ok(p) => p,
-        Err(_) => return Ok(vec![]),
-    };
+    // Prefer DB when available (returns events for Running and Complete screenings)
+    if let Ok(pool) = extract::<Data<PgPool>>().await {
+        return crate::db::get_latest_conjunction_events(&pool, &group)
+            .await
+            .map_err(|e| ServerFnError::ServerError(format!("{e}")));
+    }
 
-    crate::db::get_latest_conjunction_events(&pool, &group)
-        .await
-        .map_err(|e| ServerFnError::ServerError(format!("{e}")))
+    // No DB: fall back to in-memory cache (dev mode)
+    if let Ok(cache) = extract::<Data<ConjunctionCache>>().await {
+        let r = cache.read().await;
+        return Ok(r.get(&group).map(|res| res.events.clone()).unwrap_or_default());
+    }
+
+    Ok(vec![])
 }
 
 // ──────────────────────────────────────────────────────────────
@@ -461,6 +564,9 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     let (events, set_events) = signal(Vec::<ConjunctionEvent>::new());
     #[cfg(not(feature = "ssr"))]
     let (loading_events, set_loading_events) = signal(false);
+    // Set to true once we've loaded the final events for a completed screening
+    #[cfg(not(feature = "ssr"))]
+    let (events_loaded, set_events_loaded) = signal(false);
 
     // ── Client-side polling ──────────────────────────────────
     #[cfg(not(feature = "ssr"))]
@@ -474,25 +580,40 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
             set_status.set(None);
             set_events.set(Vec::new());
             set_loading_events.set(false);
+            set_events_loaded.set(false);
 
             // Spawn an interval that polls status every 3 s
             let handle = set_interval_with_handle(
                 move || {
                     let g = current_group.clone();
                     leptos::task::spawn_local(async move {
+                        // Skip if an events fetch is already in flight
+                        if loading_events.get_untracked() {
+                            return;
+                        }
+
                         match get_conjunction_status(g.clone()).await {
                             Ok(s) => {
+                                let is_running = matches!(s, ScreeningStatus::Running { .. });
                                 let is_complete =
                                     matches!(s, ScreeningStatus::Complete { .. });
                                 set_status.set(Some(s));
 
-                                if is_complete && !loading_events.get_untracked() {
+                                // Fetch events while Running (live trickle) or once on Complete
+                                let already_done = events_loaded.get_untracked();
+                                if (is_running || (is_complete && !already_done)) {
                                     set_loading_events.set(true);
                                     match get_conjunctions(g).await {
-                                        Ok(ev) => set_events.set(ev),
+                                        Ok(ev) => {
+                                            set_events.set(ev);
+                                            if is_complete {
+                                                set_events_loaded.set(true);
+                                            }
+                                        }
                                         Err(e) => {
                                             web_sys::console::error_1(
-                                                &format!("get_conjunctions error: {:?}", e).into(),
+                                                &format!("get_conjunctions error: {e:?}")
+                                                    .into(),
                                             );
                                         }
                                     }
@@ -501,7 +622,7 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
                             }
                             Err(e) => {
                                 web_sys::console::warn_1(
-                                    &format!("get_conjunction_status error: {:?}", e).into(),
+                                    &format!("get_conjunction_status error: {e:?}").into(),
                                 );
                             }
                         }

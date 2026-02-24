@@ -1,5 +1,6 @@
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
+    use crate::components::conjunction::ConjunctionCache;
     use crate::components::satellite_tracker::TleCache;
     use crate::components::App;
     use crate::db::create_pool;
@@ -71,17 +72,19 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let world_map_data = web::Data::new(WorldMapSvg(world_map_svg));
     let tle_cache = web::Data::new(TleCache::new(std::collections::HashMap::new()));
+    let conjunction_cache =
+        web::Data::new(ConjunctionCache::new(std::collections::HashMap::new()));
 
     // Startup conjunction screening: fetch TLEs for all groups and screen in background.
-    // Runs only when Postgres is available so results are ready before the first client connects.
-    if let Some(startup_pool) = pool.clone() {
+    // Runs regardless of DB availability — in-memory cache is always updated.
+    {
         use crate::components::conjunction::screen_and_store;
-        use std::time::Duration;
 
         const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
 
         for &group in GROUPS {
-            let pool_clone = startup_pool.clone();
+            let pool_opt = pool.clone().map(web::Data::new);
+            let cache_clone = conjunction_cache.clone();
             let group_str = group.to_string();
             let client_clone = http_client.clone();
 
@@ -93,16 +96,26 @@ pub async fn run() -> Result<(), std::io::Error> {
                 let url = format!(
                     "https://celestrak.org/NORAD/elements/gp.php?GROUP={group_str}&FORMAT=tle"
                 );
-                log::info!("Startup screening: fetching TLEs for group={}", group_str);
+                log::info!("Startup screening: fetching TLEs for group={group_str}");
 
-                let resp = match client_clone.get(&url).timeout(Duration::from_secs(60)).send().await {
+                let resp = match client_clone
+                    .get(&url)
+                    .timeout(Duration::from_secs(60))
+                    .send()
+                    .await
+                {
                     Ok(r) if r.status().is_success() => r,
                     Ok(r) => {
-                        log::warn!("Startup screening: CelesTrak returned {} for group={}", r.status(), group_str);
+                        log::warn!(
+                            "Startup screening: CelesTrak returned {} for group={group_str}",
+                            r.status()
+                        );
                         return;
                     }
                     Err(e) => {
-                        log::warn!("Startup screening: TLE fetch failed for group={}: {}", group_str, e);
+                        log::warn!(
+                            "Startup screening: TLE fetch failed for group={group_str}: {e}"
+                        );
                         return;
                     }
                 };
@@ -110,7 +123,9 @@ pub async fn run() -> Result<(), std::io::Error> {
                 let text = match resp.text().await {
                     Ok(t) => t,
                     Err(e) => {
-                        log::warn!("Startup screening: failed to read TLE body for group={}: {}", group_str, e);
+                        log::warn!(
+                            "Startup screening: failed to read TLE body for group={group_str}: {e}"
+                        );
                         return;
                     }
                 };
@@ -131,8 +146,8 @@ pub async fn run() -> Result<(), std::io::Error> {
                     }
                 }
 
-                log::info!("Startup screening: {} TLEs for group={}", tles.len(), group_str);
-                screen_and_store(&pool_clone, &group_str, &tles).await;
+                log::info!("Startup screening: {} TLEs for group={group_str}", tles.len());
+                screen_and_store(pool_opt, Some(cache_clone), &group_str, &tles).await;
             });
         }
     }
@@ -195,6 +210,7 @@ pub async fn run() -> Result<(), std::io::Error> {
         }
         app = app.app_data(world_map_data.clone());
         app = app.app_data(tle_cache.clone());
+        app = app.app_data(conjunction_cache.clone());
 
         app
     })
