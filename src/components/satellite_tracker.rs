@@ -9,6 +9,11 @@ pub struct TleData {
     pub line2: String,
 }
 
+#[cfg(feature = "ssr")]
+pub type TleCache = tokio::sync::RwLock<
+    std::collections::HashMap<String, (std::time::Instant, Vec<TleData>)>,
+>;
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SatelliteGroup {
     pub group_name: String,
@@ -17,8 +22,10 @@ pub struct SatelliteGroup {
 
 #[server(name = GetTleData, prefix = "/api", endpoint = "get_tle_data")]
 pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<String>> {
-    // CelesTrak provides various satellite groups
-    // Popular groups: "starlink", "active", "stations", "visual", "gps-ops"
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use std::time::Duration;
+
     let url = match group.as_str() {
         "active" => "https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=tle",
         "starlink" => "https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle",
@@ -28,8 +35,22 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         _ => return Err(ServerFnError::ServerError(format!("Unknown group: {}", group))),
     };
 
+    let cache = extract::<Data<TleCache>>()
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+
+    // Return cached data if still fresh (6-hour TTL)
+    {
+        let read = cache.read().await;
+        if let Some((fetched_at, data)) = read.get(&group) {
+            if fetched_at.elapsed() < Duration::from_secs(6 * 3600) {
+                return Ok(data.clone());
+            }
+        }
+    }
+
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| ServerFnError::ServerError(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -51,9 +72,6 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         .await
         .map_err(|e| ServerFnError::ServerError(format!("Failed to read response: {}", e)))?;
 
-    // Parse TLE format (3 lines per satellite: name, line1, line2)
-    // Filter blank lines first to avoid misalignment from leading/trailing whitespace or
-    // any extra lines in the response.
     let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     let mut satellites = Vec::new();
 
@@ -68,6 +86,11 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
                 line2: chunk[2].trim().to_string(),
             });
         }
+    }
+
+    {
+        let mut write = cache.write().await;
+        write.insert(group, (std::time::Instant::now(), satellites.clone()));
     }
 
     Ok(satellites)

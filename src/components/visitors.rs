@@ -210,6 +210,19 @@ fn split_ip(ip: &str) -> (Option<String>, Option<String>) {
     }
 }
 
+#[component]
+fn TimeAgo(minutes: i64, timestamp: String) -> impl IntoView {
+    let time = format_time_ago(minutes);
+    view! {
+        <span class="relative group/time cursor-default flex-shrink-0">
+            <span class="opacity-60">{time}</span>
+            <span class="absolute bottom-full right-0 mb-1 px-2 py-0.5 rounded bg-gray-900 text-white text-xs whitespace-nowrap opacity-0 group-hover/time:opacity-100 transition-opacity pointer-events-none z-50">
+                {timestamp}
+            </span>
+        </span>
+    }
+}
+
 fn country_flag(code: &str) -> String {
     code.to_uppercase()
         .chars()
@@ -293,12 +306,10 @@ fn YourVisit() -> impl IntoView {
                             {(!history.is_empty()).then(|| view! {
                                 <div class="space-y-1 pt-1 border-t border-border max-h-36 overflow-y-auto">
                                     {history.into_iter().map(|v| {
-                                        let time = format_time_ago(v.minutes_ago);
-                                        let visited_at = v.visited_at.clone();
                                         view! {
                                             <div class="flex items-center gap-2 text-charcoal-lighter">
                                                 <span class="text-charcoal truncate flex-1">{v.path}</span>
-                                                <span class="flex-shrink-0 opacity-60" title={visited_at}>{time}</span>
+                                                <TimeAgo minutes={v.minutes_ago} timestamp={v.visited_at} />
                                             </div>
                                         }
                                     }).collect::<Vec<_>>()}
@@ -452,13 +463,11 @@ pub fn Visitors() -> impl IntoView {
                                                         (None, Some(country)) => country.clone(),
                                                         _ => "Unknown".to_string(),
                                                     };
-                                                    let time = format_time_ago(v.minutes_ago);
-                                                    let visited_at = v.visited_at.clone();
                                                     view! {
                                                         <div class="flex items-center gap-2 text-sm">
                                                             <span class="text-base w-6 flex-shrink-0">{flag}</span>
                                                             <span class="text-charcoal flex-1 truncate">{location}</span>
-                                                            <span class="text-charcoal-lighter text-xs flex-shrink-0" title={visited_at}>{time}</span>
+                                                            <TimeAgo minutes={v.minutes_ago} timestamp={v.visited_at} />
                                                         </div>
                                                     }
                                                 }).collect::<Vec<_>>()}

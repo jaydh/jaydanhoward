@@ -1,5 +1,6 @@
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
+    use crate::components::satellite_tracker::TleCache;
     use crate::components::App;
     use crate::db::create_pool;
     use crate::middleware::cache_control::CacheControl;
@@ -69,6 +70,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     log::info!("World map ready ({} bytes)", world_map_svg.len());
 
     let world_map_data = web::Data::new(WorldMapSvg(world_map_svg));
+    let tle_cache = web::Data::new(TleCache::new(std::collections::HashMap::new()));
 
     log::info!("Starting Server on {}", addr);
     HttpServer::new(move || {
@@ -127,6 +129,7 @@ pub async fn run() -> Result<(), std::io::Error> {
             app = app.app_data(web::Data::new(p.clone()));
         }
         app = app.app_data(world_map_data.clone());
+        app = app.app_data(tle_cache.clone());
 
         app
     })
