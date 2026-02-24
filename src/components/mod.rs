@@ -37,4 +37,5 @@ pub fn register_server_fns() {
     register_explicit::<flux_graph::GetFluxGraph>();
     register_explicit::<conjunction::GetConjunctionStatus>();
     register_explicit::<conjunction::GetConjunctions>();
+    register_explicit::<conjunction::RetriggerConjunction>();
 }
