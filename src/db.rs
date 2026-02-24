@@ -62,6 +62,7 @@ mod inner {
         pub city: Option<String>,
         pub path: String,
         pub minutes_ago: i64,
+        pub visited_at: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -167,6 +168,7 @@ mod inner {
                     city: row.try_get("city").ok(),
                     path: row.try_get("path").unwrap_or_default(),
                     minutes_ago,
+                    visited_at: visited_at.format("%Y-%m-%d %H:%M UTC").to_string(),
                 }
             })
             .collect();
@@ -210,6 +212,7 @@ mod inner {
     pub struct IpVisit {
         pub path: String,
         pub minutes_ago: i64,
+        pub visited_at: String,
     }
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,6 +275,7 @@ mod inner {
                 IpVisit {
                     path: row.try_get("path").unwrap_or_default(),
                     minutes_ago: (now - visited_at).num_minutes().max(0),
+                    visited_at: visited_at.format("%Y-%m-%d %H:%M UTC").to_string(),
                 }
             })
             .collect();
