@@ -90,7 +90,17 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
 
     {
         let mut write = cache.write().await;
-        write.insert(group, (std::time::Instant::now(), satellites.clone()));
+        write.insert(group.clone(), (std::time::Instant::now(), satellites.clone()));
+    }
+
+    // Spawn background conjunction screening for this group (DB-backed)
+    if let Ok(pool) = extract::<Data<sqlx::PgPool>>().await {
+        let tles_clone = satellites.clone();
+        let group_clone = group.clone();
+        tokio::spawn(async move {
+            crate::components::conjunction::screen_and_store(&pool, &group_clone, &tles_clone)
+                .await;
+        });
     }
 
     Ok(satellites)

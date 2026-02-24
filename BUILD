@@ -71,6 +71,8 @@ server_deps = [
     "@server_crates//:tracing-bunyan-formatter",
     "@server_crates//:tracing-log",
     "@server_crates//:tracing-subscriber",
+    "@server_crates//:sgp4",
+    "@server_crates//:rayon",
     "@rules_rust//tools/runfiles",
 ]
 

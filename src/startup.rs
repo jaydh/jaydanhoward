@@ -72,6 +72,71 @@ pub async fn run() -> Result<(), std::io::Error> {
     let world_map_data = web::Data::new(WorldMapSvg(world_map_svg));
     let tle_cache = web::Data::new(TleCache::new(std::collections::HashMap::new()));
 
+    // Startup conjunction screening: fetch TLEs for all groups and screen in background.
+    // Runs only when Postgres is available so results are ready before the first client connects.
+    if let Some(startup_pool) = pool.clone() {
+        use crate::components::conjunction::screen_and_store;
+        use std::time::Duration;
+
+        const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
+
+        for &group in GROUPS {
+            let pool_clone = startup_pool.clone();
+            let group_str = group.to_string();
+            let client_clone = http_client.clone();
+
+            tokio::spawn(async move {
+                // Small stagger to avoid thundering-herd on CelesTrak
+                let idx = GROUPS.iter().position(|g| *g == group_str).unwrap_or(0);
+                tokio::time::sleep(Duration::from_secs(idx as u64 * 3)).await;
+
+                let url = format!(
+                    "https://celestrak.org/NORAD/elements/gp.php?GROUP={group_str}&FORMAT=tle"
+                );
+                log::info!("Startup screening: fetching TLEs for group={}", group_str);
+
+                let resp = match client_clone.get(&url).timeout(Duration::from_secs(60)).send().await {
+                    Ok(r) if r.status().is_success() => r,
+                    Ok(r) => {
+                        log::warn!("Startup screening: CelesTrak returned {} for group={}", r.status(), group_str);
+                        return;
+                    }
+                    Err(e) => {
+                        log::warn!("Startup screening: TLE fetch failed for group={}: {}", group_str, e);
+                        return;
+                    }
+                };
+
+                let text = match resp.text().await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        log::warn!("Startup screening: failed to read TLE body for group={}: {}", group_str, e);
+                        return;
+                    }
+                };
+
+                use crate::components::satellite_tracker::TleData;
+                let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+                let mut tles: Vec<TleData> = Vec::new();
+                for chunk in lines.chunks(3) {
+                    if chunk.len() == 3
+                        && chunk[1].trim_start().starts_with("1 ")
+                        && chunk[2].trim_start().starts_with("2 ")
+                    {
+                        tles.push(TleData {
+                            name: chunk[0].trim().to_string(),
+                            line1: chunk[1].trim().to_string(),
+                            line2: chunk[2].trim().to_string(),
+                        });
+                    }
+                }
+
+                log::info!("Startup screening: {} TLEs for group={}", tles.len(), group_str);
+                screen_and_store(&pool_clone, &group_str, &tles).await;
+            });
+        }
+    }
+
     log::info!("Starting Server on {}", addr);
     HttpServer::new(move || {
         let routes = generate_route_list(App);
