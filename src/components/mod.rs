@@ -1,5 +1,6 @@
 mod about;
 mod app;
+pub mod conjunction;
 mod flux_graph;
 mod visitors;
 mod beliefs;
@@ -34,4 +35,6 @@ pub fn register_server_fns() {
     register_explicit::<visitors::GetVisitorStats>();
     register_explicit::<visitors::GetMyInfo>();
     register_explicit::<flux_graph::GetFluxGraph>();
+    register_explicit::<conjunction::GetConjunctionStatus>();
+    register_explicit::<conjunction::GetConjunctions>();
 }

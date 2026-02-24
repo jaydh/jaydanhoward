@@ -290,4 +290,203 @@ mod inner {
             .await?;
         Ok(())
     }
+
+    // ──────────────────────────────────────────────────────────────
+    // Conjunction screening DB functions
+    // ──────────────────────────────────────────────────────────────
+
+    /// Try to claim a screening slot for the given group.
+    ///
+    /// Returns `Some(id)` if this replica won the race, `None` if another replica is
+    /// already running it.
+    ///
+    /// Before attempting the insert, any `running` row older than `stale_threshold` is
+    /// marked `failed` (replica crash recovery) so it no longer blocks the unique index.
+    pub async fn start_conjunction_screening(
+        pool: &PgPool,
+        group_name: &str,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        // Expire stale locks: a job running for more than 3 hours is assumed dead.
+        sqlx::query(
+            "UPDATE conjunction_screenings \
+             SET status = 'failed', completed_at = NOW(), \
+                 error_msg = 'timed out (stale lock recovery)' \
+             WHERE group_name = $1 \
+               AND status = 'running' \
+               AND started_at < NOW() - INTERVAL '3 hours'",
+        )
+        .bind(group_name)
+        .execute(pool)
+        .await?;
+
+        // Atomically claim the slot. ON CONFLICT DO NOTHING means only one replica wins.
+        let id: Option<i64> = sqlx::query_scalar(
+            "INSERT INTO conjunction_screenings (group_name, status) \
+             VALUES ($1, 'running') \
+             ON CONFLICT DO NOTHING \
+             RETURNING id",
+        )
+        .bind(group_name)
+        .fetch_optional(pool)
+        .await?
+        .flatten();
+
+        Ok(id)
+    }
+
+    /// Mark a screening as complete and record stats.
+    pub async fn complete_conjunction_screening(
+        pool: &PgPool,
+        screening_id: i64,
+        total_pairs: i64,
+        pairs_after_hoots: i64,
+        events_found: i32,
+        elapsed_ms: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            r#"UPDATE conjunction_screenings
+               SET status = 'complete', completed_at = NOW(),
+                   total_pairs = $2, pairs_after_hoots = $3,
+                   events_found = $4, elapsed_ms = $5
+               WHERE id = $1"#,
+        )
+        .bind(screening_id)
+        .bind(total_pairs)
+        .bind(pairs_after_hoots)
+        .bind(events_found)
+        .bind(elapsed_ms)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Mark a screening as failed.
+    pub async fn fail_conjunction_screening(
+        pool: &PgPool,
+        screening_id: i64,
+        error_msg: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_screenings SET status = 'failed', completed_at = NOW(), error_msg = $2 WHERE id = $1",
+        )
+        .bind(screening_id)
+        .bind(error_msg)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Bulk insert conjunction events for a completed screening.
+    pub async fn insert_conjunction_events(
+        pool: &PgPool,
+        screening_id: i64,
+        events: &[crate::components::conjunction::ConjunctionEvent],
+    ) -> Result<(), sqlx::Error> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        // Build a single multi-row insert for efficiency.
+        let mut query = String::from(
+            "INSERT INTO conjunction_events (screening_id, sat_a, sat_b, tca_unix_ms, miss_distance_km, rel_velocity_km_s) VALUES ",
+        );
+        let mut params: Vec<String> = Vec::with_capacity(events.len());
+        for (i, _) in events.iter().enumerate() {
+            let base = i * 6;
+            params.push(format!(
+                "(${}, ${}, ${}, ${}, ${}, ${})",
+                base + 1,
+                base + 2,
+                base + 3,
+                base + 4,
+                base + 5,
+                base + 6
+            ));
+        }
+        query.push_str(&params.join(", "));
+
+        let mut q = sqlx::query(&query);
+        for e in events {
+            q = q
+                .bind(screening_id)
+                .bind(&e.sat_a)
+                .bind(&e.sat_b)
+                .bind(e.tca_unix_ms)
+                .bind(e.miss_distance_km)
+                .bind(e.rel_velocity_km_s);
+        }
+        q.execute(pool).await?;
+        Ok(())
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct ConjunctionScreeningRow {
+        #[allow(dead_code)]
+        pub id: i64,
+        pub status: String,
+        pub started_at: chrono::DateTime<Utc>,
+        pub total_pairs: i64,
+        pub pairs_after_hoots: i64,
+        pub events_found: i32,
+        pub elapsed_ms: i64,
+        pub error_msg: Option<String>,
+    }
+
+    /// Fetch the most recent screening record for a group.
+    pub async fn get_latest_conjunction_screening(
+        pool: &PgPool,
+        group_name: &str,
+    ) -> Result<Option<ConjunctionScreeningRow>, sqlx::Error> {
+        use sqlx::Row;
+        let row = sqlx::query(
+            r#"SELECT id, status, started_at, total_pairs, pairs_after_hoots, events_found, elapsed_ms, error_msg
+               FROM conjunction_screenings
+               WHERE group_name = $1
+               ORDER BY id DESC
+               LIMIT 1"#,
+        )
+        .bind(group_name)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(|r| ConjunctionScreeningRow {
+            id: r.try_get("id").unwrap_or(0),
+            status: r.try_get("status").unwrap_or_default(),
+            started_at: r.try_get("started_at").unwrap_or_else(|_| Utc::now()),
+            total_pairs: r.try_get("total_pairs").unwrap_or(0),
+            pairs_after_hoots: r.try_get("pairs_after_hoots").unwrap_or(0),
+            events_found: r.try_get("events_found").unwrap_or(0),
+            elapsed_ms: r.try_get("elapsed_ms").unwrap_or(0),
+            error_msg: r.try_get("error_msg").ok().flatten(),
+        }))
+    }
+
+    /// Fetch events for the latest completed screening of a group.
+    pub async fn get_latest_conjunction_events(
+        pool: &PgPool,
+        group_name: &str,
+    ) -> Result<Vec<crate::components::conjunction::ConjunctionEvent>, sqlx::Error> {
+        use sqlx::Row;
+        let rows = sqlx::query(
+            r#"SELECT ce.sat_a, ce.sat_b, ce.tca_unix_ms, ce.miss_distance_km, ce.rel_velocity_km_s
+               FROM conjunction_events ce
+               JOIN conjunction_screenings cs ON ce.screening_id = cs.id
+               WHERE cs.group_name = $1 AND cs.status = 'complete'
+               ORDER BY cs.id DESC, ce.tca_unix_ms ASC
+               LIMIT 500"#,
+        )
+        .bind(group_name)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(|r| crate::components::conjunction::ConjunctionEvent {
+                sat_a: r.try_get("sat_a").unwrap_or_default(),
+                sat_b: r.try_get("sat_b").unwrap_or_default(),
+                tca_unix_ms: r.try_get("tca_unix_ms").unwrap_or(0.0),
+                miss_distance_km: r.try_get("miss_distance_km").unwrap_or(0.0),
+                rel_velocity_km_s: r.try_get("rel_velocity_km_s").unwrap_or(0.0),
+            })
+            .collect())
+    }
 }

@@ -1,0 +1,811 @@
+#![allow(clippy::all)]
+use leptos::prelude::*;
+use serde::{Deserialize, Serialize};
+
+// ──────────────────────────────────────────────────────────────
+// Shared types (SSR + WASM)
+// ──────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ConjunctionEvent {
+    pub sat_a: String,
+    pub sat_b: String,
+    /// Unix timestamp (ms) of closest approach
+    pub tca_unix_ms: f64,
+    pub miss_distance_km: f32,
+    pub rel_velocity_km_s: f32,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ScreeningStats {
+    pub total_pairs: usize,
+    pub pairs_after_hoots: usize,
+    pub events_found: usize,
+    pub elapsed_ms: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum ScreeningStatus {
+    Idle,
+    Running { started_unix_ms: f64 },
+    Complete { stats: ScreeningStats },
+    Failed(String),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConjunctionResult {
+    pub group: String,
+    pub status: ScreeningStatus,
+    /// Sorted by tca_unix_ms ascending
+    pub events: Vec<ConjunctionEvent>,
+}
+
+// ──────────────────────────────────────────────────────────────
+// SSR-only: screening logic
+// ──────────────────────────────────────────────────────────────
+
+#[cfg(feature = "ssr")]
+pub mod screening {
+    use super::*;
+    use crate::components::satellite_tracker::TleData;
+    use rayon::prelude::*;
+    use sgp4::{Constants, Elements};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::SystemTime;
+
+    const MU: f64 = 398_600.4418; // km³/s²
+    const EARTH_RADIUS: f64 = 6_371.0; // km
+    const J2000_UNIX_MS: f64 = 946_728_000_000.0;
+    const STEP_MINUTES: f64 = 5.0;
+    const STEPS: usize = 288; // 24 h / 5 min
+    const STEP_MS: f64 = STEP_MINUTES * 60_000.0;
+    const MISS_THRESHOLD_KM: f64 = 10.0;
+    const HOOTS_BUFFER_KM: f64 = 30.0;
+
+    /// Parse perigee/apogee altitude (km) from TLE line 2 using the Hoots approximation.
+    fn altitude_band(line2: &str) -> (f64, f64) {
+        // Eccentricity: TLE cols 27-33 (1-indexed), i.e. bytes 26-32 (0-indexed); prepend "0."
+        let e: f64 = line2
+            .get(26..33)
+            .map(|s| format!("0.{}", s.trim()))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0);
+
+        // Mean motion (rev/day): TLE cols 53-63 (1-indexed), i.e. bytes 52-62 (0-indexed)
+        let n_rev_per_day: f64 = line2
+            .get(52..63)
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(15.0);
+
+        let n_rad_s = n_rev_per_day * 2.0 * std::f64::consts::PI / 86_400.0;
+        let a = (MU / (n_rad_s * n_rad_s)).cbrt();
+
+        let perigee = a * (1.0 - e) - EARTH_RADIUS;
+        let apogee = a * (1.0 + e) - EARTH_RADIUS;
+        (perigee, apogee)
+    }
+
+    /// Returns true if the two orbits have overlapping altitude bands (Hoots filter).
+    fn hoots_pass(a: &TleData, b: &TleData) -> bool {
+        // Standard TLE line 2 is 69 characters; we need at least 63 for mean motion field.
+        if a.line2.len() < 63 || b.line2.len() < 63 {
+            return false;
+        }
+        let (peri_a, apo_a) = altitude_band(&a.line2);
+        let (peri_b, apo_b) = altitude_band(&b.line2);
+        peri_a <= apo_b + HOOTS_BUFFER_KM && peri_b <= apo_a + HOOTS_BUFFER_KM
+    }
+
+    /// Lightweight SGP4 propagator wrapper (ECI positions only).
+    pub struct SatProp {
+        pub name: String,
+        constants: Constants,
+        epoch_j2000_years: f64,
+    }
+
+    // Safety: Constants contains only f64 fields; it is Send + Sync.
+    unsafe impl Send for SatProp {}
+    unsafe impl Sync for SatProp {}
+
+    impl SatProp {
+        pub fn new(tle: &TleData) -> Option<Self> {
+            let elements = Elements::from_tle(
+                Some(tle.name.clone()),
+                tle.line1.as_bytes(),
+                tle.line2.as_bytes(),
+            )
+            .ok()?;
+            let constants = Constants::from_elements(&elements).ok()?;
+            let epoch_j2000_years = elements.epoch();
+            Some(Self {
+                name: tle.name.clone(),
+                constants,
+                epoch_j2000_years,
+            })
+        }
+
+        /// ECI position (km) at the given Unix timestamp (ms).
+        fn eci_pos(&self, time_unix_ms: f64) -> Option<[f64; 3]> {
+            let minutes_j2000 = (time_unix_ms - J2000_UNIX_MS) / 60_000.0;
+            let epoch_minutes = self.epoch_j2000_years * 365.25 * 24.0 * 60.0;
+            let tsince = minutes_j2000 - epoch_minutes;
+            self.constants
+                .propagate(sgp4::MinutesSinceEpoch(tsince))
+                .ok()
+                .map(|p| p.position)
+        }
+    }
+
+    #[inline]
+    fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+        let dx = a[0] - b[0];
+        let dy = a[1] - b[1];
+        let dz = a[2] - b[2];
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+
+    /// Ternary search for TCA in [lo_ms, hi_ms] (minimise inter-satellite distance).
+    fn find_tca(a: &SatProp, b: &SatProp, mut lo: f64, mut hi: f64) -> f64 {
+        for _ in 0..24 {
+            let m1 = lo + (hi - lo) / 3.0;
+            let m2 = hi - (hi - lo) / 3.0;
+            let d1 = match (a.eci_pos(m1), b.eci_pos(m1)) {
+                (Some(pa), Some(pb)) => dist(&pa, &pb),
+                _ => f64::MAX,
+            };
+            let d2 = match (a.eci_pos(m2), b.eci_pos(m2)) {
+                (Some(pa), Some(pb)) => dist(&pa, &pb),
+                _ => f64::MAX,
+            };
+            if d1 < d2 {
+                hi = m2;
+            } else {
+                lo = m1;
+            }
+        }
+        (lo + hi) / 2.0
+    }
+
+    /// Propagate a single pair over 24 h, returning any close-approach events.
+    fn propagate_pair(
+        pa: &SatProp,
+        pb: &SatProp,
+        now_unix_ms: f64,
+    ) -> Vec<ConjunctionEvent> {
+        let mut pos_a = Vec::with_capacity(STEPS);
+        let mut pos_b = Vec::with_capacity(STEPS);
+
+        for i in 0..STEPS {
+            let t = now_unix_ms + i as f64 * STEP_MS;
+            match (pa.eci_pos(t), pb.eci_pos(t)) {
+                (Some(a), Some(b)) => {
+                    pos_a.push(a);
+                    pos_b.push(b);
+                }
+                _ => {
+                    // Use sentinel so indices stay aligned
+                    pos_a.push([f64::MAX, 0.0, 0.0]);
+                    pos_b.push([f64::MAX, 0.0, 0.0]);
+                }
+            }
+        }
+
+        let dists: Vec<f64> = pos_a
+            .iter()
+            .zip(pos_b.iter())
+            .map(|(a, b)| dist(a, b))
+            .collect();
+
+        let mut events = Vec::new();
+
+        for i in 1..dists.len().saturating_sub(1) {
+            // Local minimum below threshold
+            if dists[i] < MISS_THRESHOLD_KM
+                && dists[i] <= dists[i - 1]
+                && dists[i] <= dists[i + 1]
+            {
+                let t_lo = now_unix_ms + (i as f64 - 1.0) * STEP_MS;
+                let t_hi = now_unix_ms + (i as f64 + 1.0) * STEP_MS;
+                let tca_ms = find_tca(pa, pb, t_lo, t_hi);
+
+                let (tca_a, tca_b) = match (pa.eci_pos(tca_ms), pb.eci_pos(tca_ms)) {
+                    (Some(a), Some(b)) => (a, b),
+                    _ => continue,
+                };
+                let miss_km = dist(&tca_a, &tca_b) as f32;
+
+                // Relative velocity via finite difference (±30 s)
+                const DT_MS: f64 = 30_000.0;
+                let rel_vel = match (
+                    pa.eci_pos(tca_ms + DT_MS),
+                    pb.eci_pos(tca_ms + DT_MS),
+                    pa.eci_pos(tca_ms - DT_MS),
+                    pb.eci_pos(tca_ms - DT_MS),
+                ) {
+                    (Some(a1), Some(b1), Some(a0), Some(b0)) => {
+                        let vx = ((a1[0] - b1[0]) - (a0[0] - b0[0])) / (2.0 * DT_MS / 1000.0);
+                        let vy = ((a1[1] - b1[1]) - (a0[1] - b0[1])) / (2.0 * DT_MS / 1000.0);
+                        let vz = ((a1[2] - b1[2]) - (a0[2] - b0[2])) / (2.0 * DT_MS / 1000.0);
+                        (vx * vx + vy * vy + vz * vz).sqrt() as f32
+                    }
+                    _ => 0.0,
+                };
+
+                events.push(ConjunctionEvent {
+                    sat_a: pa.name.clone(),
+                    sat_b: pb.name.clone(),
+                    tca_unix_ms: tca_ms,
+                    miss_distance_km: miss_km,
+                    rel_velocity_km_s: rel_vel,
+                });
+            }
+        }
+
+        events
+    }
+
+    /// Screen all pairs in a TLE group for conjunctions over the next 24 h.
+    /// Runs CPU-bound work with Rayon parallelism.
+    pub fn screen_group(tles: &[TleData]) -> (Vec<ConjunctionEvent>, ScreeningStats) {
+        let n = tles.len();
+        let total_pairs = n * (n.saturating_sub(1)) / 2;
+
+        // Pre-build all propagators once.
+        let props: Vec<Option<SatProp>> = tles.iter().map(|t| SatProp::new(t)).collect();
+
+        let pairs_after_hoots = AtomicUsize::new(0);
+
+        let now_unix_ms = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as f64;
+
+        let mut events: Vec<ConjunctionEvent> = (0..n)
+            .into_par_iter()
+            .flat_map(|i| {
+                let props_ref = &props;
+                let tles_ref = tles;
+                let counter = &pairs_after_hoots;
+
+                (i + 1..n)
+                    .into_par_iter()
+                    .flat_map(move |j| {
+                        if !hoots_pass(&tles_ref[i], &tles_ref[j]) {
+                            return vec![];
+                        }
+                        counter.fetch_add(1, Ordering::Relaxed);
+                        let pa = match props_ref[i].as_ref() {
+                            Some(p) => p,
+                            None => return vec![],
+                        };
+                        let pb = match props_ref[j].as_ref() {
+                            Some(p) => p,
+                            None => return vec![],
+                        };
+                        propagate_pair(pa, pb, now_unix_ms)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        events.sort_by(|a, b| {
+            a.tca_unix_ms
+                .partial_cmp(&b.tca_unix_ms)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        let stats = ScreeningStats {
+            total_pairs,
+            pairs_after_hoots: pairs_after_hoots.load(Ordering::Relaxed),
+            events_found: events.len(),
+            elapsed_ms: 0, // filled in by caller
+        };
+
+        (events, stats)
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// screen_and_store: run screening and persist results to DB
+// ──────────────────────────────────────────────────────────────
+
+#[cfg(feature = "ssr")]
+pub async fn screen_and_store(
+    pool: &sqlx::PgPool,
+    group: &str,
+    tles: &[crate::components::satellite_tracker::TleData],
+) {
+    use crate::db::{
+        complete_conjunction_screening, fail_conjunction_screening, insert_conjunction_events,
+        start_conjunction_screening,
+    };
+    use std::time::Instant;
+
+    let screening_id = match start_conjunction_screening(pool, group).await {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            tracing::debug!("Conjunction screening for group={} already running on another replica, skipping", group);
+            return;
+        }
+        Err(e) => {
+            tracing::error!("Failed to start screening record for group={}: {}", group, e);
+            return;
+        }
+    };
+
+    tracing::info!(
+        "Conjunction screening started: group={} satellites={} screening_id={}",
+        group,
+        tles.len(),
+        screening_id
+    );
+
+    let tles_owned = tles.to_vec();
+    let t0 = Instant::now();
+
+    let result =
+        tokio::task::spawn_blocking(move || screening::screen_group(&tles_owned)).await;
+
+    match result {
+        Ok((events, mut stats)) => {
+            stats.elapsed_ms = t0.elapsed().as_millis() as u64;
+            tracing::info!(
+                "Conjunction screening complete: group={} events={} pairs_screened={} elapsed_ms={}",
+                group,
+                stats.events_found,
+                stats.pairs_after_hoots,
+                stats.elapsed_ms
+            );
+
+            if let Err(e) = insert_conjunction_events(pool, screening_id, &events).await {
+                tracing::error!("Failed to insert conjunction events: {}", e);
+                let _ = fail_conjunction_screening(pool, screening_id, &format!("{e}")).await;
+                return;
+            }
+
+            if let Err(e) = complete_conjunction_screening(
+                pool,
+                screening_id,
+                stats.total_pairs as i64,
+                stats.pairs_after_hoots as i64,
+                stats.events_found as i32,
+                stats.elapsed_ms as i64,
+            )
+            .await
+            {
+                tracing::error!("Failed to mark screening complete: {}", e);
+            }
+        }
+        Err(e) => {
+            tracing::error!("Conjunction screening panicked: group={} {:?}", group, e);
+            let _ = fail_conjunction_screening(pool, screening_id, &format!("{e:?}")).await;
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// Server functions
+// ──────────────────────────────────────────────────────────────
+
+#[server(name = GetConjunctionStatus, prefix = "/api", endpoint = "get_conjunction_status")]
+pub async fn get_conjunction_status(
+    group: String,
+) -> Result<ScreeningStatus, ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let pool = match extract::<Data<PgPool>>().await {
+        Ok(p) => p,
+        Err(_) => return Ok(ScreeningStatus::Idle), // no DB configured
+    };
+
+    let row = crate::db::get_latest_conjunction_screening(&pool, &group)
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+
+    Ok(match row {
+        None => ScreeningStatus::Idle,
+        Some(r) => match r.status.as_str() {
+            "running" => ScreeningStatus::Running {
+                started_unix_ms: r.started_at.timestamp_millis() as f64,
+            },
+            "complete" => ScreeningStatus::Complete {
+                stats: ScreeningStats {
+                    total_pairs: r.total_pairs as usize,
+                    pairs_after_hoots: r.pairs_after_hoots as usize,
+                    events_found: r.events_found as usize,
+                    elapsed_ms: r.elapsed_ms as u64,
+                },
+            },
+            "failed" => ScreeningStatus::Failed(r.error_msg.unwrap_or_default()),
+            _ => ScreeningStatus::Idle,
+        },
+    })
+}
+
+#[server(name = GetConjunctions, prefix = "/api", endpoint = "get_conjunctions")]
+pub async fn get_conjunctions(
+    group: String,
+) -> Result<Vec<ConjunctionEvent>, ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let pool = match extract::<Data<PgPool>>().await {
+        Ok(p) => p,
+        Err(_) => return Ok(vec![]),
+    };
+
+    crate::db::get_latest_conjunction_events(&pool, &group)
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))
+}
+
+// ──────────────────────────────────────────────────────────────
+// Leptos component
+// ──────────────────────────────────────────────────────────────
+
+#[component]
+pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) -> impl IntoView {
+    // SSR: provide default signals for view! macro (never written to on server)
+    #[cfg(feature = "ssr")]
+    let (status, _set_status) = signal(Option::<ScreeningStatus>::None);
+    #[cfg(feature = "ssr")]
+    let (events, _set_events) = signal(Vec::<ConjunctionEvent>::new());
+
+    // Client: mutable signals driven by polling
+    #[cfg(not(feature = "ssr"))]
+    let (status, set_status) = signal(Option::<ScreeningStatus>::None);
+    #[cfg(not(feature = "ssr"))]
+    let (events, set_events) = signal(Vec::<ConjunctionEvent>::new());
+    #[cfg(not(feature = "ssr"))]
+    let (loading_events, set_loading_events) = signal(false);
+
+    // ── Client-side polling ──────────────────────────────────
+    #[cfg(not(feature = "ssr"))]
+    {
+        use leptos::leptos_dom::helpers::set_interval_with_handle;
+        use std::time::Duration;
+
+        Effect::new(move |_| {
+            let current_group = group.get();
+            // Reset state when group changes
+            set_status.set(None);
+            set_events.set(Vec::new());
+            set_loading_events.set(false);
+
+            // Spawn an interval that polls status every 3 s
+            let handle = set_interval_with_handle(
+                move || {
+                    let g = current_group.clone();
+                    leptos::task::spawn_local(async move {
+                        match get_conjunction_status(g.clone()).await {
+                            Ok(s) => {
+                                let is_complete =
+                                    matches!(s, ScreeningStatus::Complete { .. });
+                                set_status.set(Some(s));
+
+                                if is_complete && !loading_events.get_untracked() {
+                                    set_loading_events.set(true);
+                                    match get_conjunctions(g).await {
+                                        Ok(ev) => set_events.set(ev),
+                                        Err(e) => {
+                                            web_sys::console::error_1(
+                                                &format!("get_conjunctions error: {:?}", e).into(),
+                                            );
+                                        }
+                                    }
+                                    set_loading_events.set(false);
+                                }
+                            }
+                            Err(e) => {
+                                web_sys::console::warn_1(
+                                    &format!("get_conjunction_status error: {:?}", e).into(),
+                                );
+                            }
+                        }
+                    });
+                },
+                Duration::from_secs(3),
+            );
+
+            // Cancel interval on cleanup
+            if let Ok(h) = handle {
+                on_cleanup(move || h.clear());
+            }
+        });
+    }
+
+    view! {
+        <div class="w-full">
+            <ConjunctionStatusBadge status=status />
+            <Show when=move || !events.get().is_empty()>
+                <ConjunctionTable events=events />
+            </Show>
+        </div>
+    }
+}
+
+#[component]
+fn ConjunctionStatusBadge(status: ReadSignal<Option<ScreeningStatus>>) -> impl IntoView {
+    view! {
+        <div class="text-sm text-muted mt-2">
+            {move || match status.get() {
+                None => view! { <span>"Conjunction screening: waiting for TLE data..."</span> }.into_any(),
+                Some(ScreeningStatus::Idle) => view! { <span>"Conjunction screening: idle"</span> }.into_any(),
+                Some(ScreeningStatus::Running { .. }) => {
+                    view! {
+                        <span class="flex items-center gap-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                            "Conjunction screening in progress..."
+                        </span>
+                    }
+                    .into_any()
+                }
+                Some(ScreeningStatus::Complete { stats }) => {
+                    view! {
+                        <span>
+                            {format!(
+                                "Screening complete — {} events found ({} pairs screened in {}ms)",
+                                stats.events_found,
+                                stats.pairs_after_hoots,
+                                stats.elapsed_ms,
+                            )}
+                        </span>
+                    }
+                    .into_any()
+                }
+                Some(ScreeningStatus::Failed(msg)) => {
+                    view! { <span class="text-red-500">{format!("Screening failed: {}", msg)}</span> }
+                        .into_any()
+                }
+            }}
+        </div>
+    }
+}
+
+// ── Sort helpers ──────────────────────────────────────────────
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum SortCol {
+    Tca,
+    SatA,
+    SatB,
+    Miss,
+    Vel,
+}
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum SortDir {
+    Asc,
+    Desc,
+}
+
+// ── Virtualized, sortable, filterable table ───────────────────
+
+#[component]
+fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView {
+    let (sort_col, set_sort_col) = signal(SortCol::Tca);
+    let (sort_dir, set_sort_dir) = signal(SortDir::Asc);
+    let (search, set_search) = signal(String::new());
+
+    // Scroll offset — only ever written client-side, but both builds define it
+    // so view! captures compile cleanly on SSR.
+    #[cfg(feature = "ssr")]
+    let (scroll_top, _set_scroll_top) = signal(0.0_f64);
+    #[cfg(not(feature = "ssr"))]
+    let (scroll_top, set_scroll_top) = signal(0.0_f64);
+
+    // Physical row height (px) — must match the <tr> style below.
+    const ROW_H: f64 = 32.0;
+    // Visible viewport height (px) — must match the container style below.
+    const CONTAINER_H: f64 = 380.0;
+    // Extra rows to render above/below the visible window.
+    const BUFFER: usize = 8;
+
+    // Derived: filtered + sorted list.
+    let processed = Memo::new(move |_| {
+        let mut evts = events.get();
+        let q = search.get().to_lowercase();
+        if !q.is_empty() {
+            evts.retain(|e| {
+                e.sat_a.to_lowercase().contains(&q) || e.sat_b.to_lowercase().contains(&q)
+            });
+        }
+        let col = sort_col.get();
+        let dir = sort_dir.get();
+        evts.sort_by(|a, b| {
+            use std::cmp::Ordering::Equal;
+            let ord = match col {
+                SortCol::Tca => a.tca_unix_ms.partial_cmp(&b.tca_unix_ms).unwrap_or(Equal),
+                SortCol::SatA => a.sat_a.cmp(&b.sat_a),
+                SortCol::SatB => a.sat_b.cmp(&b.sat_b),
+                SortCol::Miss => a
+                    .miss_distance_km
+                    .partial_cmp(&b.miss_distance_km)
+                    .unwrap_or(Equal),
+                SortCol::Vel => a
+                    .rel_velocity_km_s
+                    .partial_cmp(&b.rel_velocity_km_s)
+                    .unwrap_or(Equal),
+            };
+            if dir == SortDir::Desc { ord.reverse() } else { ord }
+        });
+        evts
+    });
+
+    // Factory for sort-click handlers — each call returns a fresh closure that
+    // captures the Copy signal handles, so we can generate one per column header.
+    let make_sort_click = move |col: SortCol| {
+        move |_: leptos::ev::MouseEvent| {
+            if sort_col.get_untracked() == col {
+                set_sort_dir
+                    .update(|d| *d = if *d == SortDir::Asc { SortDir::Desc } else { SortDir::Asc });
+            } else {
+                set_sort_col.set(col);
+                set_sort_dir.set(SortDir::Asc);
+            }
+        }
+    };
+
+    // Factory for reactive sort-arrow labels.
+    let make_sort_arrow = move |col: SortCol| {
+        move || -> &'static str {
+            if sort_col.get() == col {
+                if sort_dir.get() == SortDir::Asc { " ▲" } else { " ▼" }
+            } else {
+                " ⇅"
+            }
+        }
+    };
+
+    // Virtual window: derive the slice of rows to actually render + padding heights.
+    let virtual_window = Memo::new(move |_| {
+        let all = processed.get();
+        let n = all.len();
+        let top = scroll_top.get();
+        let start = ((top / ROW_H) as usize).saturating_sub(BUFFER);
+        let end = (((top + CONTAINER_H) / ROW_H) as usize + BUFFER).min(n);
+        let pad_top = (start as f64 * ROW_H) as u32;
+        let pad_bot = (n.saturating_sub(end) as f64 * ROW_H) as u32;
+        let slice = if start < n { all[start..end].to_vec() } else { vec![] };
+        (pad_top, pad_bot, slice, n)
+    });
+
+    let th = "py-2 px-3 text-left text-xs font-semibold text-muted \
+              cursor-pointer select-none whitespace-nowrap \
+              hover:text-foreground transition-colors";
+
+    view! {
+        <div class="mt-3 flex flex-col gap-2">
+
+            // ── Search + count ──────────────────────────────
+            <div class="flex items-center gap-3">
+                <input
+                    type="text"
+                    placeholder="Search by satellite name…"
+                    class="flex-1 bg-surface border border-border rounded-md px-3 py-1.5 \
+                           text-sm placeholder:text-muted \
+                           focus:outline-none focus:ring-1 focus:ring-border"
+                    prop:value=move || search.get()
+                    on:input=move |e| set_search.set(event_target_value(&e))
+                />
+                <span class="text-xs text-muted whitespace-nowrap shrink-0">
+                    {move || {
+                        let (_, _, _, n) = virtual_window.get();
+                        let total = events.get().len();
+                        if n == total { format!("{n} events") }
+                        else { format!("{n} / {total}") }
+                    }}
+                </span>
+            </div>
+
+            // ── Scrollable virtualized table ─────────────────
+            <div
+                class="overflow-y-auto border border-border rounded-lg"
+                style="height: 380px;"
+                on:scroll=move |e| {
+                    let _ = &e; // keep `e` live on SSR where the body below is compiled out
+                    #[cfg(not(feature = "ssr"))]
+                    {
+                        use wasm_bindgen::JsCast;
+                        if let Some(el) = e
+                            .target()
+                            .and_then(|t| t.dyn_into::<web_sys::Element>().ok())
+                        {
+                            set_scroll_top.set(el.scroll_top() as f64);
+                        }
+                    }
+                }
+            >
+                <table class="w-full text-sm border-collapse">
+
+                    // Sticky header row
+                    <thead class="sticky top-0 bg-surface-alt z-10 border-b border-border">
+                        <tr>
+                            <th class=th on:click=make_sort_click(SortCol::Tca)>
+                                "TCA" {make_sort_arrow(SortCol::Tca)}
+                            </th>
+                            <th class=th on:click=make_sort_click(SortCol::SatA)>
+                                "Satellite A" {make_sort_arrow(SortCol::SatA)}
+                            </th>
+                            <th class=th on:click=make_sort_click(SortCol::SatB)>
+                                "Satellite B" {make_sort_arrow(SortCol::SatB)}
+                            </th>
+                            <th class=th on:click=make_sort_click(SortCol::Miss)>
+                                "Miss km" {make_sort_arrow(SortCol::Miss)}
+                            </th>
+                            <th class=th on:click=make_sort_click(SortCol::Vel)>
+                                "Rel vel km/s" {make_sort_arrow(SortCol::Vel)}
+                            </th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        // Top spacer
+                        <tr style=move || {
+                            let h = virtual_window.get().0;
+                            if h > 0 { format!("height:{h}px") } else { "display:none".into() }
+                        }>
+                            <td colspan="5"></td>
+                        </tr>
+
+                        // Visible rows only
+                        <For
+                            each=move || virtual_window.get().2
+                            key=|e| {
+                                format!("{}-{}-{}", e.sat_a, e.sat_b, e.tca_unix_ms as u64)
+                            }
+                            children=|e| view! { <ConjunctionRow event=e /> }
+                        />
+
+                        // Bottom spacer
+                        <tr style=move || {
+                            let h = virtual_window.get().1;
+                            if h > 0 { format!("height:{h}px") } else { "display:none".into() }
+                        }>
+                            <td colspan="5"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn ConjunctionRow(event: ConjunctionEvent) -> impl IntoView {
+    let tca_rel = {
+        #[cfg(not(feature = "ssr"))]
+        {
+            let now_ms = js_sys::Date::now();
+            let delta_s = ((event.tca_unix_ms - now_ms) / 1000.0).max(0.0) as u64;
+            let h = delta_s / 3600;
+            let m = (delta_s % 3600) / 60;
+            format!("in {h}h {m:02}m")
+        }
+        #[cfg(feature = "ssr")]
+        {
+            let _ = event.tca_unix_ms; // suppress unused
+            String::new()
+        }
+    };
+
+    view! {
+        <tr
+            class="border-b border-border hover:bg-surface-alt transition-colors"
+            style="height:32px"
+        >
+            <td class="px-3 font-mono text-xs whitespace-nowrap">{tca_rel}</td>
+            <td class="px-3 font-mono text-xs whitespace-nowrap">{event.sat_a.clone()}</td>
+            <td class="px-3 font-mono text-xs whitespace-nowrap">{event.sat_b.clone()}</td>
+            <td class="px-3 font-mono text-xs whitespace-nowrap">
+                {format!("{:.3}", event.miss_distance_km)}
+            </td>
+            <td class="px-3 font-mono text-xs whitespace-nowrap">
+                {format!("{:.2}", event.rel_velocity_km_s)}
+            </td>
+        </tr>
+    }
+}
