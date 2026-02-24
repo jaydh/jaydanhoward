@@ -470,7 +470,7 @@ mod inner {
             r#"SELECT ce.sat_a, ce.sat_b, ce.tca_unix_ms, ce.miss_distance_km, ce.rel_velocity_km_s
                FROM conjunction_events ce
                JOIN conjunction_screenings cs ON ce.screening_id = cs.id
-               WHERE cs.group_name = $1 AND cs.status = 'complete'
+               WHERE cs.group_name = $1 AND cs.status IN ('complete', 'running')
                ORDER BY cs.id DESC, ce.tca_unix_ms ASC
                LIMIT 500"#,
         )
