@@ -36,11 +36,11 @@ pub fn About() -> impl IntoView {
                 "."
             </p>
             <p>
-                "I'm a software engineer at "
+                "Software engineer at "
                 <a href="https://www.astranis.com/" target="_blank" class="text-accent hover:underline transition-colors duration-200">
                     "Astranis"
                 </a>
-                ", a micro geostationary satellite company. I work on the network and payload software team, building tools to operate and monitor the satellite network."
+                " on the network and payload software team — tools to operate and monitor micro GEO satellites."
             </p>
         </div>
     }
