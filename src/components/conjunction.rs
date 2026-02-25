@@ -256,21 +256,32 @@ pub mod screening {
         events
     }
 
-    /// Screen all pairs in a TLE group for conjunctions over the next 24 h.
+    /// Screen satellite pairs for conjunctions over the next 24 h.
     ///
-    /// Processes anchor satellites sequentially so partial results can be streamed
-    /// via `tx` every `FLUSH_EVERY` anchors. Inner (j) pairs are parallelised with
-    /// Rayon so all cores are kept busy throughout.
+    /// Only pairs where the "A" satellite index is in `[sat_start, sat_end)` are
+    /// screened, so callers can split the TLE list into non-overlapping chunks and
+    /// process them in parallel across pods without double-counting any pair.
+    /// Pass `sat_start = 0, sat_end = tles.len()` for a full single-pod screening.
+    ///
+    /// Results are streamed via `tx` every `FLUSH_EVERY` anchors as
+    /// `(cumulative_pairs_after_hoots, event_batch)`.
     pub fn screen_group(
         tles: &[TleData],
         tx: &tokio::sync::mpsc::UnboundedSender<(usize, Vec<ConjunctionEvent>)>,
+        sat_start: usize,
+        sat_end: usize,
     ) -> ScreeningStats {
         const FLUSH_EVERY: usize = 50;
 
         let n = tles.len();
-        let total_pairs = n * (n.saturating_sub(1)) / 2;
+        let end = sat_end.min(n);
+        let total_pairs: usize = if sat_start < end {
+            (sat_start..end).map(|i| n.saturating_sub(i + 1)).sum()
+        } else {
+            0
+        };
 
-        // Pre-build all propagators once.
+        // Pre-build all propagators once (full array needed for the inner j loop).
         let props: Vec<Option<SatProp>> = tles.iter().map(|t| SatProp::new(t)).collect();
 
         let pairs_after_hoots = AtomicUsize::new(0);
@@ -282,8 +293,8 @@ pub mod screening {
         let mut batch: Vec<ConjunctionEvent> = Vec::new();
         let mut events_found = 0usize;
 
-        for i in 0..n {
-            // Inner pairs for this anchor, parallelised via Rayon
+        for i in sat_start..end {
+            // Inner pairs for this anchor, parallelised via Rayon.
             let row_events: Vec<ConjunctionEvent> = (i + 1..n)
                 .into_par_iter()
                 .flat_map(|j| {
@@ -306,9 +317,9 @@ pub mod screening {
             events_found += row_events.len();
             batch.extend(row_events);
 
-            // Flush a chunk every FLUSH_EVERY anchors (or at end), along with the
-            // cumulative pairs-after-HOOTS count so the receiver can show progress.
-            if (i + 1) % FLUSH_EVERY == 0 || i == n - 1 {
+            // Flush every FLUSH_EVERY anchors within this chunk, or at the last anchor.
+            let anchors_done = i - sat_start + 1;
+            if anchors_done % FLUSH_EVERY == 0 || i == end - 1 {
                 let cumul_pairs = pairs_after_hoots.load(Ordering::Relaxed);
                 let _ = tx.send((cumul_pairs, std::mem::take(&mut batch)));
             }
@@ -417,8 +428,9 @@ pub async fn screen_and_store(
     let tles_owned = tles.to_vec();
     let t0 = Instant::now();
 
+    let n = tles_owned.len();
     let handle =
-        tokio::task::spawn_blocking(move || screening::screen_group(&tles_owned, &tx));
+        tokio::task::spawn_blocking(move || screening::screen_group(&tles_owned, &tx, 0, n));
 
     // Consume chunks as they arrive, updating DB and in-memory cache incrementally
     let mut all_events: Vec<ConjunctionEvent> = Vec::new();
@@ -519,6 +531,111 @@ pub async fn screen_and_store(
                 if let Some(result) = w.get_mut(group) {
                     result.status = ScreeningStatus::Failed(format!("{e:?}"));
                 }
+            }
+        }
+    }
+}
+
+// ──────────────────────────────────────────────────────────────
+// screen_chunk: screen one DB-claimed satellite range
+// ──────────────────────────────────────────────────────────────
+
+#[cfg(feature = "ssr")]
+pub async fn screen_chunk(
+    pool: Option<actix_web::web::Data<sqlx::PgPool>>,
+    chunk: crate::db::ChunkInfo,
+    tles: &[crate::components::satellite_tracker::TleData],
+) {
+    use std::time::Instant;
+    use tokio::sync::mpsc;
+
+    let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
+    let t0 = Instant::now();
+    let chunk_id = chunk.chunk_id;
+    let screening_id = chunk.screening_id;
+    let sat_start = chunk.sat_start;
+    let sat_end = chunk.sat_end;
+    let group = chunk.group_name.clone();
+
+    tracing::info!(
+        "Chunk started: group={group} chunk={chunk_id} sats={sat_start}..{sat_end}"
+    );
+
+    let (tx, mut rx) = mpsc::unbounded_channel::<(usize, Vec<ConjunctionEvent>)>();
+    let tles_owned = tles.to_vec();
+
+    let handle = tokio::task::spawn_blocking(move || {
+        screening::screen_group(&tles_owned, &tx, sat_start, sat_end)
+    });
+
+    let mut all_events: Vec<ConjunctionEvent> = Vec::new();
+    let mut last_pairs: usize = 0;
+
+    while let Some((cumul_pairs, mut batch)) = rx.recv().await {
+        for e in &mut batch {
+            e.calculated_by = hostname.clone();
+        }
+
+        // Increment live progress on the parent screening (atomic add — safe for concurrent pods).
+        if let Some(ref p) = pool {
+            let delta = cumul_pairs.saturating_sub(last_pairs) as i64;
+            if delta > 0 {
+                if let Err(e) =
+                    crate::db::increment_conjunction_pairs_propagated(p, screening_id, delta).await
+                {
+                    tracing::warn!("Progress update failed for chunk={chunk_id}: {e}");
+                }
+            }
+        }
+        last_pairs = cumul_pairs;
+
+        // Stream events into DB immediately.
+        if let Some(ref p) = pool {
+            if !batch.is_empty() {
+                if let Err(e) =
+                    crate::db::insert_conjunction_events(p, screening_id, &batch).await
+                {
+                    tracing::warn!("Event insert failed for chunk={chunk_id}: {e}");
+                }
+            }
+        }
+
+        all_events.extend(batch);
+    }
+
+    match handle.await {
+        Ok(stats) => {
+            let elapsed = t0.elapsed().as_millis() as i64;
+            tracing::info!(
+                "Chunk complete: group={group} chunk={chunk_id} \
+                 pairs={} events={} elapsed={elapsed}ms",
+                stats.pairs_after_hoots,
+                all_events.len(),
+            );
+            if let Some(ref p) = pool {
+                match crate::db::complete_chunk(
+                    p,
+                    chunk_id,
+                    screening_id,
+                    stats.pairs_after_hoots as i64,
+                    all_events.len() as i32,
+                    elapsed,
+                )
+                .await
+                {
+                    Ok(true) => tracing::info!(
+                        "Screening complete (last chunk): group={group} screening={screening_id}"
+                    ),
+                    Ok(false) => {}
+                    Err(e) => tracing::error!("complete_chunk failed for {chunk_id}: {e}"),
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Chunk panicked: group={group} chunk={chunk_id}: {e:?}");
+            if let Some(ref p) = pool {
+                let _ = crate::db::fail_chunk(p, chunk_id, screening_id, "panic in screen_group")
+                    .await;
             }
         }
     }

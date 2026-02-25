@@ -295,6 +295,223 @@ mod inner {
     // Conjunction screening DB functions
     // ──────────────────────────────────────────────────────────────
 
+    // ── Chunk work-queue ─────────────────────────────────────────
+
+    /// Metadata returned when a pod claims a chunk.
+    #[derive(Debug)]
+    pub struct ChunkInfo {
+        pub chunk_id:    i64,
+        pub screening_id: i64,
+        pub group_name:  String,
+        #[allow(dead_code)]
+        pub chunk_idx:   i32,
+        pub sat_start:   usize,
+        pub sat_end:     usize,
+    }
+
+    /// Insert one `pending` chunk row per satellite range for a given screening.
+    /// `chunk_size` satellites per chunk; last chunk may be smaller.
+    pub async fn create_chunks(
+        pool: &PgPool,
+        screening_id: i64,
+        group_name: &str,
+        n_sats: usize,
+        chunk_size: usize,
+    ) -> Result<usize, sqlx::Error> {
+        if n_sats == 0 { return Ok(0); }
+        let chunk_size = chunk_size.max(1);
+        let n_chunks = n_sats.div_ceil(chunk_size);
+
+        let mut q = String::from(
+            "INSERT INTO conjunction_chunks \
+             (screening_id, group_name, chunk_idx, sat_start, sat_end) VALUES ",
+        );
+        let mut placeholders = Vec::with_capacity(n_chunks);
+        for i in 0..n_chunks {
+            let base = i * 5;
+            placeholders.push(format!(
+                "(${}, ${}, ${}, ${}, ${})",
+                base + 1, base + 2, base + 3, base + 4, base + 5
+            ));
+        }
+        q.push_str(&placeholders.join(", "));
+
+        let mut stmt = sqlx::query(&q);
+        for i in 0..n_chunks {
+            let sat_start = (i * chunk_size) as i32;
+            let sat_end   = (((i + 1) * chunk_size).min(n_sats)) as i32;
+            stmt = stmt
+                .bind(screening_id)
+                .bind(group_name)
+                .bind(i as i32)
+                .bind(sat_start)
+                .bind(sat_end);
+        }
+        stmt.execute(pool).await?;
+        Ok(n_chunks)
+    }
+
+    /// Atomically claim the next available chunk across all running screenings.
+    /// Uses `FOR UPDATE SKIP LOCKED` so concurrent pods never pick the same chunk.
+    pub async fn claim_next_chunk(
+        pool: &PgPool,
+        hostname: &str,
+    ) -> Result<Option<ChunkInfo>, sqlx::Error> {
+        use sqlx::Row;
+        let row = sqlx::query(
+            r#"UPDATE conjunction_chunks
+               SET status = 'running', claimed_by = $1, claimed_at = NOW()
+               WHERE id = (
+                   SELECT c.id
+                   FROM conjunction_chunks c
+                   JOIN conjunction_screenings s ON s.id = c.screening_id
+                   WHERE c.status = 'pending'
+                     AND s.status = 'running'
+                   ORDER BY c.screening_id ASC, c.chunk_idx ASC
+                   FOR UPDATE OF c SKIP LOCKED
+                   LIMIT 1
+               )
+               RETURNING id, screening_id, group_name, chunk_idx, sat_start, sat_end"#,
+        )
+        .bind(hostname)
+        .fetch_optional(pool)
+        .await?;
+
+        Ok(row.map(|r| ChunkInfo {
+            chunk_id:     r.try_get("id").unwrap_or(0),
+            screening_id: r.try_get("screening_id").unwrap_or(0),
+            group_name:   r.try_get("group_name").unwrap_or_default(),
+            chunk_idx:    r.try_get("chunk_idx").unwrap_or(0),
+            sat_start:    r.try_get::<i32, _>("sat_start").unwrap_or(0) as usize,
+            sat_end:      r.try_get::<i32, _>("sat_end").unwrap_or(0) as usize,
+        }))
+    }
+
+    /// Mark a chunk complete and roll up progress.
+    /// If this was the last pending/running chunk, marks the parent screening complete too.
+    /// Returns `true` when the parent screening was just completed.
+    pub async fn complete_chunk(
+        pool: &PgPool,
+        chunk_id: i64,
+        screening_id: i64,
+        pairs_screened: i64,
+        events_found: i32,
+        elapsed_ms: i64,
+    ) -> Result<bool, sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_chunks \
+             SET status = 'complete', completed_at = NOW(), \
+                 pairs_screened = $2, events_found = $3, elapsed_ms = $4 \
+             WHERE id = $1",
+        )
+        .bind(chunk_id)
+        .bind(pairs_screened)
+        .bind(events_found)
+        .bind(elapsed_ms)
+        .execute(pool)
+        .await?;
+
+        // Recompute pairs_after_hoots on the parent as the sum across all chunks.
+        sqlx::query(
+            "UPDATE conjunction_screenings \
+             SET pairs_after_hoots = (\
+                 SELECT COALESCE(SUM(pairs_screened), 0) \
+                 FROM conjunction_chunks WHERE screening_id = $1\
+             ) WHERE id = $1",
+        )
+        .bind(screening_id)
+        .execute(pool)
+        .await?;
+
+        // Complete parent if no chunks remain in a non-terminal state.
+        let all_done: bool = sqlx::query_scalar(
+            "SELECT NOT EXISTS(\
+                 SELECT 1 FROM conjunction_chunks \
+                 WHERE screening_id = $1 AND status NOT IN ('complete', 'failed')\
+             )",
+        )
+        .bind(screening_id)
+        .fetch_one(pool)
+        .await?;
+
+        if all_done {
+            sqlx::query(
+                "UPDATE conjunction_screenings \
+                 SET status = 'complete', completed_at = NOW(), \
+                     events_found = (SELECT COUNT(*) FROM conjunction_events WHERE screening_id = $1), \
+                     elapsed_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::BIGINT * 1000 \
+                 WHERE id = $1 AND status = 'running'",
+            )
+            .bind(screening_id)
+            .execute(pool)
+            .await?;
+        }
+
+        Ok(all_done)
+    }
+
+    /// Mark a chunk failed. Completes the parent screening if all chunks are terminal.
+    pub async fn fail_chunk(
+        pool: &PgPool,
+        chunk_id: i64,
+        screening_id: i64,
+        error: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_chunks \
+             SET status = 'failed', completed_at = NOW(), error_msg = $2 \
+             WHERE id = $1",
+        )
+        .bind(chunk_id)
+        .bind(error)
+        .execute(pool)
+        .await?;
+
+        let all_done: bool = sqlx::query_scalar(
+            "SELECT NOT EXISTS(\
+                 SELECT 1 FROM conjunction_chunks \
+                 WHERE screening_id = $1 AND status NOT IN ('complete', 'failed')\
+             )",
+        )
+        .bind(screening_id)
+        .fetch_one(pool)
+        .await?;
+
+        if all_done {
+            sqlx::query(
+                "UPDATE conjunction_screenings \
+                 SET status = 'complete', completed_at = NOW(), \
+                     events_found = (SELECT COUNT(*) FROM conjunction_events WHERE screening_id = $1), \
+                     elapsed_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::BIGINT * 1000 \
+                 WHERE id = $1 AND status = 'running'",
+            )
+            .bind(screening_id)
+            .execute(pool)
+            .await?;
+        }
+        Ok(())
+    }
+
+    /// Atomically increment pairs_after_hoots for live progress during chunk screening.
+    pub async fn increment_conjunction_pairs_propagated(
+        pool: &PgPool,
+        screening_id: i64,
+        increment: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_screenings \
+             SET pairs_after_hoots = pairs_after_hoots + $2 \
+             WHERE id = $1",
+        )
+        .bind(screening_id)
+        .bind(increment)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    // ── End chunk work-queue ─────────────────────────────────────
+
     /// Try to claim a screening slot for the given group.
     ///
     /// Returns `Some(id)` if this replica won the race, `None` if another replica is
@@ -493,19 +710,22 @@ mod inner {
         }
         // Build a single multi-row insert for efficiency.
         let mut query = String::from(
-            "INSERT INTO conjunction_events (screening_id, sat_a, sat_b, tca_unix_ms, miss_distance_km, rel_velocity_km_s) VALUES ",
+            "INSERT INTO conjunction_events \
+             (screening_id, sat_a, sat_b, tca_unix_ms, miss_distance_km, rel_velocity_km_s, calculated_by) \
+             VALUES ",
         );
         let mut params: Vec<String> = Vec::with_capacity(events.len());
         for (i, _) in events.iter().enumerate() {
-            let base = i * 6;
+            let base = i * 7;
             params.push(format!(
-                "(${}, ${}, ${}, ${}, ${}, ${})",
+                "(${}, ${}, ${}, ${}, ${}, ${}, ${})",
                 base + 1,
                 base + 2,
                 base + 3,
                 base + 4,
                 base + 5,
-                base + 6
+                base + 6,
+                base + 7
             ));
         }
         query.push_str(&params.join(", "));
@@ -518,7 +738,8 @@ mod inner {
                 .bind(&e.sat_b)
                 .bind(e.tca_unix_ms)
                 .bind(e.miss_distance_km)
-                .bind(e.rel_velocity_km_s);
+                .bind(e.rel_velocity_km_s)
+                .bind(&e.calculated_by);
         }
         q.execute(pool).await?;
         Ok(())
@@ -575,7 +796,7 @@ mod inner {
         use sqlx::Row;
         let rows = sqlx::query(
             r#"SELECT ce.sat_a, ce.sat_b, ce.tca_unix_ms, ce.miss_distance_km, ce.rel_velocity_km_s,
-                      cs.calculated_by
+                      ce.calculated_by
                FROM conjunction_events ce
                JOIN conjunction_screenings cs ON ce.screening_id = cs.id
                WHERE cs.id = (
