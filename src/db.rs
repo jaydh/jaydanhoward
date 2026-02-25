@@ -305,6 +305,7 @@ mod inner {
     pub async fn start_conjunction_screening(
         pool: &PgPool,
         group_name: &str,
+        calculated_by: &str,
     ) -> Result<Option<i64>, sqlx::Error> {
         // Expire stale locks: a job running for more than 3 hours is assumed dead.
         sqlx::query(
@@ -321,17 +322,25 @@ mod inner {
 
         // Atomically claim the slot. ON CONFLICT DO NOTHING means only one replica wins.
         let id: Option<i64> = sqlx::query_scalar(
-            "INSERT INTO conjunction_screenings (group_name, status) \
-             VALUES ($1, 'running') \
+            "INSERT INTO conjunction_screenings (group_name, status, calculated_by) \
+             VALUES ($1, 'running', $2) \
              ON CONFLICT DO NOTHING \
              RETURNING id",
         )
         .bind(group_name)
+        .bind(calculated_by)
         .fetch_optional(pool)
         .await?
         .flatten();
 
         Ok(id)
+    }
+
+    /// Query the size of the jaydanhoward database in bytes.
+    pub async fn get_db_size(pool: &PgPool) -> Result<i64, sqlx::Error> {
+        sqlx::query_scalar("SELECT pg_database_size('jaydanhoward')")
+            .fetch_one(pool)
+            .await
     }
 
     /// Mark a screening as complete and record stats.
@@ -484,12 +493,12 @@ mod inner {
     ) -> Result<Vec<crate::components::conjunction::ConjunctionEvent>, sqlx::Error> {
         use sqlx::Row;
         let rows = sqlx::query(
-            r#"SELECT ce.sat_a, ce.sat_b, ce.tca_unix_ms, ce.miss_distance_km, ce.rel_velocity_km_s
+            r#"SELECT ce.sat_a, ce.sat_b, ce.tca_unix_ms, ce.miss_distance_km, ce.rel_velocity_km_s,
+                      cs.calculated_by
                FROM conjunction_events ce
                JOIN conjunction_screenings cs ON ce.screening_id = cs.id
                WHERE cs.group_name = $1 AND cs.status IN ('complete', 'running')
-               ORDER BY cs.id DESC, ce.tca_unix_ms ASC
-               LIMIT 500"#,
+               ORDER BY cs.id DESC, ce.tca_unix_ms ASC"#,
         )
         .bind(group_name)
         .fetch_all(pool)
@@ -503,6 +512,7 @@ mod inner {
                 tca_unix_ms: r.try_get("tca_unix_ms").unwrap_or(0.0),
                 miss_distance_km: r.try_get("miss_distance_km").unwrap_or(0.0),
                 rel_velocity_km_s: r.try_get("rel_velocity_km_s").unwrap_or(0.0),
+                calculated_by: r.try_get("calculated_by").unwrap_or_default(),
             })
             .collect())
     }

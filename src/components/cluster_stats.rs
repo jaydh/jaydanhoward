@@ -15,6 +15,7 @@ pub struct ClusterMetrics {
     pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
+    pub db_size_bytes: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -44,6 +45,10 @@ async fn parse_prometheus_value(query: &str) -> Result<f64, ServerFnError<String
 
 #[server(name = GetClusterMetrics, prefix = "/api", endpoint = "get_cluster_metrics")]
 pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
     // Cluster CPU metrics
     let cpu_used = parse_prometheus_value(
         "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))"
@@ -91,6 +96,12 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
     ).await?;
 
+    let db_size_bytes = if let Ok(pool) = extract::<Data<PgPool>>().await {
+        crate::db::get_db_size(&pool).await.ok()
+    } else {
+        None
+    };
+
     Ok(ClusterMetrics {
         cpu_usage_percent: (cpu_used / cpu_total * 100.0).min(100.0),
         cpu_total_cores: cpu_total,
@@ -103,6 +114,7 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
+        db_size_bytes,
     })
 }
 
@@ -307,6 +319,14 @@ fn NodeCard(node: NodeMetric) -> impl IntoView {
     }
 }
 
+fn fmt_db_size(bytes: i64) -> String {
+    if bytes >= 1_073_741_824 {
+        format!("{:.1}G", bytes as f64 / 1_073_741_824.0)
+    } else {
+        format!("{:.0}M", bytes as f64 / 1_048_576.0)
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
@@ -504,7 +524,7 @@ pub fn ClusterStats() -> impl IntoView {
                     let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
 
                     view! {
-                        <div class="flex gap-6 mb-4 text-sm">
+                        <div class="flex gap-6 mb-4 text-sm flex-wrap">
                             <div class="flex items-baseline gap-2">
                                 <span class="text-2xl font-bold text-accent">{cluster.pod_count}</span>
                                 <span class="text-charcoal-lighter">"pods"</span>
@@ -515,6 +535,14 @@ pub fn ClusterStats() -> impl IntoView {
                                 </span>
                                 <span class="text-charcoal-lighter">"nodes"</span>
                             </div>
+                            {cluster.db_size_bytes.map(|bytes| view! {
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-2xl font-bold text-blue-500">
+                                        {fmt_db_size(bytes)}
+                                    </span>
+                                    <span class="text-charcoal-lighter">"DB"</span>
+                                </div>
+                            })}
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                             <LineChart
