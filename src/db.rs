@@ -301,6 +301,52 @@ mod inner {
     /// already running it.
     ///
     /// Before attempting the insert, any `running` row older than `stale_threshold` is
+    /// Like `start_conjunction_screening` but also skips groups that were completed
+    /// recently (within `recent_minutes`).  Used at startup so slow-starting pods
+    /// don't re-run groups that a faster sibling already finished.
+    pub async fn try_claim_conjunction_startup(
+        pool: &PgPool,
+        group_name: &str,
+        calculated_by: &str,
+        recent_minutes: i64,
+    ) -> Result<Option<i64>, sqlx::Error> {
+        // Expire stale running rows first (same crash-recovery logic).
+        sqlx::query(
+            "UPDATE conjunction_screenings \
+             SET status = 'failed', completed_at = NOW(), \
+                 error_msg = 'timed out (stale lock recovery)' \
+             WHERE group_name = $1 \
+               AND status = 'running' \
+               AND started_at < NOW() - INTERVAL '3 hours'",
+        )
+        .bind(group_name)
+        .execute(pool)
+        .await?;
+
+        // Atomically claim only when no other pod is running OR recently completed.
+        let id: Option<i64> = sqlx::query_scalar(
+            "INSERT INTO conjunction_screenings (group_name, status, calculated_by, total_pairs) \
+             SELECT $1, 'running', $2, 0 \
+             WHERE NOT EXISTS ( \
+                 SELECT 1 FROM conjunction_screenings \
+                 WHERE group_name = $1 \
+                   AND ( \
+                       status = 'running' \
+                       OR (status = 'complete' AND completed_at > NOW() - ($3 || ' minutes')::INTERVAL) \
+                   ) \
+             ) \
+             RETURNING id",
+        )
+        .bind(group_name)
+        .bind(calculated_by)
+        .bind(recent_minutes)
+        .fetch_optional(pool)
+        .await?
+        .flatten();
+
+        Ok(id)
+    }
+
     /// marked `failed` (replica crash recovery) so it no longer blocks the unique index.
     pub async fn start_conjunction_screening(
         pool: &PgPool,

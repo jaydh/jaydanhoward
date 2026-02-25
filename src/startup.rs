@@ -97,16 +97,15 @@ pub async fn run() -> Result<(), std::io::Error> {
             let hostname_clone = hostname.clone();
 
             tokio::spawn(async move {
-                // If a DB pool is available, claim the slot now — before fetching TLEs.
-                // Pods that lose the race (None) skip immediately with no wasted work.
+                // Claim the DB slot before fetching TLEs.  Uses the startup-specific
+                // claim that also blocks if another pod completed the group recently,
+                // preventing slow-starting pods from re-running already-finished groups.
                 let pre_claimed_id: Option<i64> = if let Some(ref p) = pool_opt {
-                    // We don't know total_pairs yet; use 0 as a placeholder — it gets
-                    // updated by screen_and_store once TLEs are parsed.
-                    match crate::db::start_conjunction_screening(p, &group_str, &hostname_clone, 0).await {
+                    match crate::db::try_claim_conjunction_startup(p, &group_str, &hostname_clone, 60).await {
                         Ok(Some(id)) => Some(id),
                         Ok(None) => {
                             log::debug!(
-                                "Startup screening: group={group_str} already claimed by another pod, skipping"
+                                "Startup screening: group={group_str} already running or recently completed, skipping"
                             );
                             return;
                         }
