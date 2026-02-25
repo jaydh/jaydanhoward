@@ -7,6 +7,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum ReadyStatus {
     Ready,
+    Reconciling,
     Failed,
     Suspended,
     Unknown,
@@ -16,6 +17,7 @@ impl ReadyStatus {
     fn dot_color(&self) -> &'static str {
         match self {
             Self::Ready => "#22c55e",
+            Self::Reconciling => "#3b82f6",
             Self::Failed => "#ef4444",
             Self::Suspended => "#f59e0b",
             Self::Unknown => "#6b7280",
@@ -24,6 +26,7 @@ impl ReadyStatus {
     fn label(&self) -> &'static str {
         match self {
             Self::Ready => "ready",
+            Self::Reconciling => "reconciling",
             Self::Failed => "failed",
             Self::Suspended => "suspended",
             Self::Unknown => "unknown",
@@ -320,8 +323,12 @@ fn parse_status(data: &serde_json::Value, suspended: bool) -> (ReadyStatus, Opti
     match ready {
         Some(c) => {
             let msg = c["message"].as_str().map(str::to_string);
+            let reason = c["reason"].as_str().unwrap_or("");
             let status = match c["status"].as_str().unwrap_or("Unknown") {
                 "True" => ReadyStatus::Ready,
+                "False" if matches!(reason, "Progressing" | "DependencyNotReady") => {
+                    ReadyStatus::Reconciling
+                }
                 "False" => ReadyStatus::Failed,
                 _ => ReadyStatus::Unknown,
             };
@@ -749,6 +756,7 @@ pub fn FluxGraphView() -> impl IntoView {
                                 <div class="flex items-center gap-4 text-xs text-charcoal-lighter">
                                     {[
                                         ("Ready", "#22c55e"),
+                                        ("Reconciling", "#3b82f6"),
                                         ("Failed", "#ef4444"),
                                         ("Suspended", "#f59e0b"),
                                         ("Unknown", "#6b7280"),
