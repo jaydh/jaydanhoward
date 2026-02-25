@@ -111,6 +111,20 @@ where
                 actix_web::http::header::HeaderValue::from_static("1; mode=block"),
             );
 
+            // Cross-Origin-Opener-Policy - Isolates the browsing context from cross-origin
+            // documents, preventing cross-origin window.opener access (Spectre mitigation)
+            headers.insert(
+                actix_web::http::header::HeaderName::from_static("cross-origin-opener-policy"),
+                actix_web::http::header::HeaderValue::from_static("same-origin"),
+            );
+
+            // Cross-Origin-Resource-Policy - Prevents other origins from reading this
+            // resource's response (protects against Spectre-style side-channel attacks)
+            headers.insert(
+                actix_web::http::header::HeaderName::from_static("cross-origin-resource-policy"),
+                actix_web::http::header::HeaderValue::from_static("same-origin"),
+            );
+
             Ok(res)
         })
     }

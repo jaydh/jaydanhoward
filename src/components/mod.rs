@@ -34,6 +34,7 @@ pub fn register_server_fns() {
     register_explicit::<satellite_tracker::GetTleData>();
     register_explicit::<visitors::GetVisitorStats>();
     register_explicit::<visitors::GetMyInfo>();
+    register_explicit::<visitors::ForgetMe>();
     register_explicit::<flux_graph::GetFluxGraph>();
     register_explicit::<conjunction::GetConjunctionStatus>();
     register_explicit::<conjunction::GetConjunctions>();

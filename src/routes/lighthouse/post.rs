@@ -80,10 +80,23 @@ pub async fn upload_lighthouse_report(
     request: HttpRequest,
     mut payload: Multipart,
 ) -> Result<HttpResponse, Error> {
-    log::info!("Recieved upload_lighthouse_report");
-    let credentials = basic_authentication(request.headers());
-    if credentials.is_err() {
-        return Ok(HttpResponse::BadRequest().finish());
+    log::info!("Received upload_lighthouse_report");
+    match basic_authentication(request.headers()) {
+        Ok(()) => {}
+        Err(LighthouseError::DisabledError()) => {
+            return Ok(HttpResponse::Forbidden().finish());
+        }
+        Err(e) => {
+            let ip = request
+                .connection_info()
+                .realip_remote_addr()
+                .unwrap_or("unknown")
+                .to_string();
+            log::warn!("Lighthouse auth failure from {ip}: {e}");
+            return Ok(HttpResponse::Unauthorized()
+                .insert_header(("WWW-Authenticate", "Basic realm=\"lighthouse\""))
+                .finish());
+        }
     }
 
     log::info!("Valid credentials upload_lighthouse_report");

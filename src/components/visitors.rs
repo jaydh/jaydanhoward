@@ -27,7 +27,7 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
 
     let req = extract::<HttpRequest>()
         .await
-        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+        .map_err(|_| ServerFnError::ServerError("Failed to extract request".into()))?;
 
     let ip = {
         let raw = req
@@ -70,7 +70,10 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
                 .map(|v| IpVisit { path: v.path, minutes_ago: v.minutes_ago, visited_at: v.visited_at })
                 .collect(),
         })
-        .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+        .map_err(|e| {
+            tracing::error!("get_my_info DB error: {e}");
+            ServerFnError::ServerError("Failed to retrieve visitor info".into())
+        })
 }
 
 #[server(name = ForgetMe, prefix = "/api", endpoint = "forget_me")]
@@ -97,11 +100,14 @@ pub async fn forget_me() -> Result<(), ServerFnError<String>> {
 
     let pool = extract::<Data<PgPool>>()
         .await
-        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+        .map_err(|_| ServerFnError::ServerError("Visitor tracking unavailable".into()))?;
 
     crate::db::delete_ip_visits(&pool, &ip)
         .await
-        .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+        .map_err(|e| {
+            tracing::error!("forget_me DB error: {e}");
+            ServerFnError::ServerError("Failed to delete visit records".into())
+        })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -194,7 +200,10 @@ pub async fn get_visitor_stats() -> Result<VisitorStats, ServerFnError<String>> 
                 })
                 .collect(),
         })
-        .map_err(|e| ServerFnError::ServerError(format!("DB error: {e}")))
+        .map_err(|e| {
+            tracing::error!("get_visitor_stats DB error: {e}");
+            ServerFnError::ServerError("Failed to retrieve visitor stats".into())
+        })
 }
 
 /// Returns `(ipv4, ipv6)` — both Some when the address is IPv4-mapped IPv6.
