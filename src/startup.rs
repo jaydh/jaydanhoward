@@ -75,106 +75,213 @@ pub async fn run() -> Result<(), std::io::Error> {
     let conjunction_cache =
         web::Data::new(ConjunctionCache::new(std::collections::HashMap::new()));
 
-    // Startup conjunction screening: fetch TLEs for all groups and screen in background.
-    // Runs regardless of DB availability — in-memory cache is always updated.
+    // Startup conjunction screening — chunk-based distributed approach.
     //
-    // Distribution: each pod immediately tries to claim each group via the Postgres
-    // distributed lock (INSERT … ON CONFLICT DO NOTHING).  Pods that lose the race
-    // skip TLE fetching entirely — no wasted bandwidth, no timing assumptions.
-    // With 3 pods and 5 groups the DB naturally distributes work ~2/2/1.
+    // Two phases run concurrently on every pod:
+    //
+    //   Coordinator (one task per group): races to claim the group via the Postgres
+    //   distributed lock.  The winner fetches TLEs, creates chunk rows in the DB,
+    //   and stores TLEs in the local TleCache.  Losers return immediately.
+    //
+    //   Worker (one task per pod): loops over claim_next_chunk(), fetching TLEs
+    //   on-demand if not already cached, then calls screen_chunk().  Exits after
+    //   10 consecutive seconds with no claimable chunks.
+    //
+    // Group sizes vary by 5 orders of magnitude (gps-ops: 496 pairs vs active: 104M),
+    // so distributing by chunk rather than by group keeps pods evenly loaded.
     {
-        use crate::components::conjunction::screen_and_store;
+        use crate::components::satellite_tracker::TleData;
+
+        const CHUNK_SIZE: usize = 500; // satellites per chunk; ~500 sats × ~14k = ~7M pairs
+        const GROUPS: [&str; 5] = ["stations", "gps-ops", "visual", "active", "starlink"];
 
         let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
 
-        const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
+        /// Parse a CelesTrak TLE text body into a Vec<TleData>.
+        fn parse_tles(text: &str) -> Vec<TleData> {
+            let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+            let mut tles = Vec::new();
+            for chunk in lines.chunks(3) {
+                if chunk.len() == 3
+                    && chunk[1].trim_start().starts_with("1 ")
+                    && chunk[2].trim_start().starts_with("2 ")
+                {
+                    tles.push(TleData {
+                        name:  chunk[0].trim().to_string(),
+                        line1: chunk[1].trim().to_string(),
+                        line2: chunk[2].trim().to_string(),
+                    });
+                }
+            }
+            tles
+        }
 
-        for &group in GROUPS {
-            let pool_opt = pool.clone().map(web::Data::new);
-            let cache_clone = conjunction_cache.clone();
-            let group_str = group.to_string();
-            let client_clone = http_client.clone();
-            let hostname_clone = hostname.clone();
+        /// Fetch TLEs for a group from CelesTrak; returns None on any error.
+        async fn fetch_tles(
+            client: &reqwest::Client,
+            group: &str,
+        ) -> Option<Vec<TleData>> {
+            let url = format!(
+                "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
+            );
+            let resp = client
+                .get(&url)
+                .timeout(Duration::from_secs(60))
+                .send()
+                .await
+                .ok()
+                .filter(|r| r.status().is_success())?;
+            let text = resp.text().await.ok()?;
+            let tles = parse_tles(&text);
+            if tles.is_empty() { None } else { Some(tles) }
+        }
+
+        // ── Coordinator tasks ────────────────────────────────────────
+        for group in GROUPS {
+            let pool_opt   = pool.clone().map(web::Data::new);
+            let tle_cache  = tle_cache.clone();
+            let client     = http_client.clone();
+            let hostname   = hostname.clone();
 
             tokio::spawn(async move {
-                // Claim the DB slot before fetching TLEs.  Uses the startup-specific
-                // claim that also blocks if another pod completed the group recently,
-                // preventing slow-starting pods from re-running already-finished groups.
-                let pre_claimed_id: Option<i64> = if let Some(ref p) = pool_opt {
-                    match crate::db::try_claim_conjunction_startup(p, &group_str, &hostname_clone, 60).await {
-                        Ok(Some(id)) => Some(id),
+                // Only the winning pod creates the screening + chunks.
+                let screening_id = match pool_opt.as_ref() {
+                    None => return, // no DB → skip (worker also exits early)
+                    Some(p) => match crate::db::try_claim_conjunction_startup(
+                        p, group, &hostname, 60,
+                    ).await {
+                        Ok(Some(id)) => id,
                         Ok(None) => {
-                            log::debug!(
-                                "Startup screening: group={group_str} already running or recently completed, skipping"
-                            );
+                            log::debug!("Coordinator: group={group} already claimed, skipping");
                             return;
                         }
                         Err(e) => {
-                            log::warn!(
-                                "Startup screening: DB claim failed for group={group_str}: {e}, proceeding without DB"
-                            );
-                            None
+                            log::warn!("Coordinator: DB claim failed for group={group}: {e}");
+                            return;
                         }
-                    }
-                } else {
-                    None
+                    },
                 };
 
-                let url = format!(
-                    "https://celestrak.org/NORAD/elements/gp.php?GROUP={group_str}&FORMAT=tle"
-                );
-                log::info!("Startup screening: fetching TLEs for group={group_str}");
+                log::info!("Coordinator: fetching TLEs for group={group}");
+                let tles = match fetch_tles(&client, group).await {
+                    Some(t) => t,
+                    None => {
+                        log::warn!("Coordinator: TLE fetch failed for group={group}");
+                        return;
+                    }
+                };
 
-                let resp = match client_clone
-                    .get(&url)
-                    .timeout(Duration::from_secs(60))
-                    .send()
-                    .await
+                let n = tles.len();
+                let total_pairs = n * n.saturating_sub(1) / 2;
+                log::info!("Coordinator: {n} TLEs ({total_pairs} pairs) for group={group}");
+
+                let p = pool_opt.as_ref().unwrap();
+                if let Err(e) =
+                    crate::db::update_conjunction_total_pairs(p, screening_id, total_pairs as i64)
+                        .await
                 {
-                    Ok(r) if r.status().is_success() => r,
-                    Ok(r) => {
-                        log::warn!(
-                            "Startup screening: CelesTrak returned {} for group={group_str}",
-                            r.status()
-                        );
-                        return;
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "Startup screening: TLE fetch failed for group={group_str}: {e}"
-                        );
-                        return;
-                    }
-                };
+                    log::warn!("Coordinator: total_pairs update failed for {group}: {e}");
+                }
 
-                let text = match resp.text().await {
-                    Ok(t) => t,
+                match crate::db::create_chunks(p, screening_id, group, n, CHUNK_SIZE).await {
+                    Ok(k) => log::info!("Coordinator: created {k} chunks for group={group}"),
                     Err(e) => {
-                        log::warn!(
-                            "Startup screening: failed to read TLE body for group={group_str}: {e}"
-                        );
+                        log::error!("Coordinator: create_chunks failed for {group}: {e}");
                         return;
-                    }
-                };
-
-                use crate::components::satellite_tracker::TleData;
-                let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-                let mut tles: Vec<TleData> = Vec::new();
-                for chunk in lines.chunks(3) {
-                    if chunk.len() == 3
-                        && chunk[1].trim_start().starts_with("1 ")
-                        && chunk[2].trim_start().starts_with("2 ")
-                    {
-                        tles.push(TleData {
-                            name: chunk[0].trim().to_string(),
-                            line1: chunk[1].trim().to_string(),
-                            line2: chunk[2].trim().to_string(),
-                        });
                     }
                 }
 
-                log::info!("Startup screening: {} TLEs for group={group_str}", tles.len());
-                screen_and_store(pool_opt, Some(cache_clone), &group_str, &tles, pre_claimed_id).await;
+                // Cache TLEs locally so this pod's worker avoids a redundant fetch.
+                tle_cache
+                    .write()
+                    .await
+                    .insert(group.to_string(), (std::time::Instant::now(), tles));
+            });
+        }
+
+        // ── Worker loop ──────────────────────────────────────────────
+        {
+            let pool_opt          = pool.clone().map(web::Data::new);
+            let tle_cache         = tle_cache.clone();
+            let client            = http_client.clone();
+            let hostname          = hostname.clone();
+
+            tokio::spawn(async move {
+                use crate::components::conjunction::screen_chunk;
+
+                let pool = match pool_opt {
+                    None    => return, // no DB → nothing to claim
+                    Some(p) => p,
+                };
+
+                // Small delay so coordinator tasks start their TLE fetches before
+                // the worker tries to claim (avoids a spurious idle timeout).
+                tokio::time::sleep(Duration::from_millis(500)).await;
+
+                let mut consecutive_idle: u32 = 0;
+
+                loop {
+                    match crate::db::claim_next_chunk(&pool, &hostname).await {
+                        Ok(Some(chunk)) => {
+                            consecutive_idle = 0;
+                            let group = chunk.group_name.clone();
+
+                            // Get TLEs from cache (set by coordinator) or fetch if
+                            // this group's coordinator ran on a different pod.
+                            let tles = {
+                                let cached = tle_cache
+                                    .read()
+                                    .await
+                                    .get(&group)
+                                    .map(|(_, t)| t.clone());
+
+                                if let Some(t) = cached {
+                                    t
+                                } else {
+                                    log::info!(
+                                        "Worker: fetching TLEs for group={group} (coordinator on another pod)"
+                                    );
+                                    match fetch_tles(&client, &group).await {
+                                        Some(t) => {
+                                            tle_cache.write().await.insert(
+                                                group.clone(),
+                                                (std::time::Instant::now(), t.clone()),
+                                            );
+                                            t
+                                        }
+                                        None => {
+                                            log::warn!(
+                                                "Worker: TLE fetch failed for group={group}, failing chunk"
+                                            );
+                                            let _ = crate::db::fail_chunk(
+                                                &pool,
+                                                chunk.chunk_id,
+                                                chunk.screening_id,
+                                                "TLE fetch failed",
+                                            )
+                                            .await;
+                                            continue;
+                                        }
+                                    }
+                                }
+                            };
+
+                            screen_chunk(Some(pool.clone()), chunk, &tles).await;
+                        }
+                        Ok(None) => {
+                            consecutive_idle += 1;
+                            if consecutive_idle >= 10 {
+                                log::debug!("Worker: no chunks for 10s, exiting");
+                                break;
+                            }
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                        Err(e) => {
+                            log::warn!("Worker: claim_next_chunk error: {e}");
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                        }
+                    }
+                }
             });
         }
     }
