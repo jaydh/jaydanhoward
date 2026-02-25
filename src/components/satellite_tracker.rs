@@ -152,6 +152,10 @@ pub fn SatelliteTracker() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     let (orbit_filter, set_orbit_filter) = signal(0b00111111_u8); // All types enabled
 
+    // Astranis satellite filter (NORAD IDs: 56371, 62454–62457)
+    #[cfg(not(feature = "ssr"))]
+    let (show_astranis, set_show_astranis) = signal(true);
+
     // Fetch TLE data when component mounts
     Effect::new(move |_| {
         set_loading.set(true);
@@ -343,8 +347,21 @@ pub fn SatelliteTracker() -> impl IntoView {
                                         if time_index < time_points.len() {
                                             let current_time = time_points[time_index];
 
+                                            const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+                                            let hide_astranis = !show_astranis.get_untracked();
+                                            let filtered_sats: Vec<satellite_calculations::Satellite>;
+                                            let sats_to_use: &[satellite_calculations::Satellite] = if hide_astranis {
+                                                filtered_sats = satellites.iter()
+                                                    .filter(|s| !ASTRANIS_IDS.contains(&s.norad_id))
+                                                    .cloned()
+                                                    .collect();
+                                                &filtered_sats
+                                            } else {
+                                                satellites
+                                            };
+
                                             // Calculate positions at this specific time
-                                            let positions = satellite_calculations::calculate_positions_at_time(satellites, current_time);
+                                            let positions = satellite_calculations::calculate_positions_at_time(sats_to_use, current_time);
                                             let filter = orbit_filter.get_untracked();
                                             let sat_positions: Vec<satellite_calculations::SatellitePosition> =
                                                 positions.into_iter().map(|(_, pos)| pos).filter(|pos| {
@@ -859,6 +876,22 @@ pub fn SatelliteTracker() -> impl IntoView {
                                         if (orbit_filter.get() >> 5) & 1 == 1 { "" } else { "line-through" }
                                     }>"HEO"</span>
                                 </button>
+                                <button
+                                    class=move || {
+                                        if show_astranis.get() {
+                                            "flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 transition-colors".to_string()
+                                        } else {
+                                            "flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 opacity-40 transition-colors".to_string()
+                                        }
+                                    }
+                                    on:click=move |_| set_show_astranis.update(|v| *v = !*v)
+                                    title="Toggle Astranis satellites (my sats!)"
+                                >
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(0, 220, 180);"></div>
+                                    <span class=move || {
+                                        if show_astranis.get() { "" } else { "line-through" }
+                                    }>"Astranis"</span>
+                                </button>
                             </div>
                         }
                     }
@@ -890,6 +923,10 @@ pub fn SatelliteTracker() -> impl IntoView {
                                 <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10">
                                     <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(204, 153, 255);"></div>
                                     <span>"HEO"</span>
+                                </div>
+                                <div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/10">
+                                    <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(0, 220, 180);"></div>
+                                    <span>"Astranis"</span>
                                 </div>
                             </div>
                         }
