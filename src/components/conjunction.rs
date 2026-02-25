@@ -29,7 +29,7 @@ pub struct ScreeningStats {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ScreeningStatus {
     Idle,
-    Running { started_unix_ms: f64 },
+    Running { started_unix_ms: f64, total_pairs: usize, pairs_propagated: usize },
     Complete { stats: ScreeningStats },
     Failed(String),
 }
@@ -263,7 +263,7 @@ pub mod screening {
     /// Rayon so all cores are kept busy throughout.
     pub fn screen_group(
         tles: &[TleData],
-        tx: &tokio::sync::mpsc::UnboundedSender<Vec<ConjunctionEvent>>,
+        tx: &tokio::sync::mpsc::UnboundedSender<(usize, Vec<ConjunctionEvent>)>,
     ) -> ScreeningStats {
         const FLUSH_EVERY: usize = 50;
 
@@ -306,11 +306,11 @@ pub mod screening {
             events_found += row_events.len();
             batch.extend(row_events);
 
-            // Flush a chunk to the async receiver every FLUSH_EVERY anchors (or at end)
+            // Flush a chunk every FLUSH_EVERY anchors (or at end), along with the
+            // cumulative pairs-after-HOOTS count so the receiver can show progress.
             if (i + 1) % FLUSH_EVERY == 0 || i == n - 1 {
-                if !batch.is_empty() {
-                    let _ = tx.send(std::mem::take(&mut batch));
-                }
+                let cumul_pairs = pairs_after_hoots.load(Ordering::Relaxed);
+                let _ = tx.send((cumul_pairs, std::mem::take(&mut batch)));
             }
         }
 
@@ -344,6 +344,9 @@ pub async fn screen_and_store(
         .unwrap_or_default()
         .as_millis() as f64;
 
+    let n = tles.len();
+    let total_pairs = n * n.saturating_sub(1) / 2;
+
     // Mark Running in in-memory cache immediately so clients see live status
     if let Some(ref c) = cache {
         let mut w = c.write().await;
@@ -351,7 +354,11 @@ pub async fn screen_and_store(
             group.to_string(),
             ConjunctionResult {
                 group: group.to_string(),
-                status: ScreeningStatus::Running { started_unix_ms: started_ms },
+                status: ScreeningStatus::Running {
+                    started_unix_ms: started_ms,
+                    total_pairs,
+                    pairs_propagated: 0,
+                },
                 events: vec![],
             },
         );
@@ -359,7 +366,7 @@ pub async fn screen_and_store(
 
     // Claim a DB slot if a pool is available (distributed lock)
     let screening_id: Option<i64> = if let Some(ref pool) = pool {
-        match crate::db::start_conjunction_screening(pool, group, &hostname).await {
+        match crate::db::start_conjunction_screening(pool, group, &hostname, total_pairs as i64).await {
             Ok(Some(id)) => Some(id),
             Ok(None) => {
                 tracing::debug!(
@@ -389,8 +396,8 @@ pub async fn screen_and_store(
         tles.len()
     );
 
-    // Channel: screening thread sends event chunks, async task consumes them
-    let (tx, mut rx) = mpsc::unbounded_channel::<Vec<ConjunctionEvent>>();
+    // Channel: screening thread sends (cumulative pairs propagated, event chunk)
+    let (tx, mut rx) = mpsc::unbounded_channel::<(usize, Vec<ConjunctionEvent>)>();
     let tles_owned = tles.to_vec();
     let t0 = Instant::now();
 
@@ -399,22 +406,37 @@ pub async fn screen_and_store(
 
     // Consume chunks as they arrive, updating DB and in-memory cache incrementally
     let mut all_events: Vec<ConjunctionEvent> = Vec::new();
-    while let Some(mut chunk) = rx.recv().await {
+    while let Some((pairs_propagated, mut chunk)) = rx.recv().await {
         // Stamp the node hostname on every event
         for e in &mut chunk {
             e.calculated_by = hostname.clone();
         }
 
+        // Update pairs_propagated in DB so the status poll can show live progress
+        if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
+            if let Err(e) = crate::db::update_conjunction_pairs_propagated(
+                pool,
+                id,
+                pairs_propagated as i64,
+            )
+            .await
+            {
+                tracing::warn!("Failed to update pairs propagated: {}", e);
+            }
+        }
+
         // Insert partial events to DB if we have a slot
         if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
-            if let Err(e) = crate::db::insert_conjunction_events(pool, id, &chunk).await {
-                tracing::warn!("Failed to insert partial conjunction events: {}", e);
+            if !chunk.is_empty() {
+                if let Err(e) = crate::db::insert_conjunction_events(pool, id, &chunk).await {
+                    tracing::warn!("Failed to insert partial conjunction events: {}", e);
+                }
             }
         }
 
         all_events.extend(chunk);
 
-        // Update in-memory cache with accumulated events (sorted)
+        // Update in-memory cache with accumulated events (sorted) and live pair count
         if let Some(ref c) = cache {
             let mut sorted = all_events.clone();
             sorted.sort_by(|a, b| {
@@ -425,6 +447,11 @@ pub async fn screen_and_store(
             let mut w = c.write().await;
             if let Some(result) = w.get_mut(group) {
                 result.events = sorted;
+                if let ScreeningStatus::Running { pairs_propagated: ref mut pp, .. } =
+                    result.status
+                {
+                    *pp = pairs_propagated;
+                }
             }
         }
     }
@@ -504,6 +531,8 @@ pub async fn get_conjunction_status(
             Some(r) => match r.status.as_str() {
                 "running" => ScreeningStatus::Running {
                     started_unix_ms: r.started_at.timestamp_millis() as f64,
+                    total_pairs: r.total_pairs as usize,
+                    pairs_propagated: r.pairs_after_hoots as usize,
                 },
                 "complete" => ScreeningStatus::Complete {
                     stats: ScreeningStats {
@@ -524,7 +553,16 @@ pub async fn get_conjunction_status(
         let r = cache.read().await;
         return Ok(match r.get(&group) {
             None => ScreeningStatus::Idle,
-            Some(result) => result.status.clone(),
+            Some(result) => match &result.status {
+                ScreeningStatus::Running { started_unix_ms, total_pairs, pairs_propagated } => {
+                    ScreeningStatus::Running {
+                        started_unix_ms: *started_unix_ms,
+                        total_pairs: *total_pairs,
+                        pairs_propagated: *pairs_propagated,
+                    }
+                }
+                other => other.clone(),
+            },
         });
     }
 
@@ -624,9 +662,6 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     let (events, set_events) = signal(Vec::<ConjunctionEvent>::new());
     #[cfg(not(feature = "ssr"))]
     let (loading_events, set_loading_events) = signal(false);
-    // Set to true once we've loaded the final events for a completed screening
-    #[cfg(not(feature = "ssr"))]
-    let (events_loaded, set_events_loaded) = signal(false);
 
     // ── Client-side polling ──────────────────────────────────
     #[cfg(not(feature = "ssr"))]
@@ -640,35 +675,28 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
             set_status.set(None);
             set_events.set(Vec::new());
             set_loading_events.set(false);
-            set_events_loaded.set(false);
 
             // Spawn an interval that polls status every 3 s
             let handle = set_interval_with_handle(
                 move || {
                     let g = current_group.clone();
                     leptos::task::spawn_local(async move {
-                        // Skip if an events fetch is already in flight
-                        if loading_events.get_untracked() {
-                            return;
-                        }
-
+                        // Always poll status — never block this on events loading
                         match get_conjunction_status(g.clone()).await {
                             Ok(s) => {
-                                let is_running = matches!(s, ScreeningStatus::Running { .. });
+                                let is_running =
+                                    matches!(s, ScreeningStatus::Running { .. });
                                 let is_complete =
                                     matches!(s, ScreeningStatus::Complete { .. });
                                 set_status.set(Some(s));
 
-                                // Fetch events while Running (live trickle) or once on Complete
-                                let already_done = events_loaded.get_untracked();
-                                if (is_running || (is_complete && !already_done)) {
+                                // Fetch events during Running (trickle) and on Complete,
+                                // but skip if a fetch is already in flight
+                                if (is_running || is_complete) && !loading_events.get_untracked() {
                                     set_loading_events.set(true);
                                     match get_conjunctions(g).await {
                                         Ok(ev) => {
                                             set_events.set(ev);
-                                            if is_complete {
-                                                set_events_loaded.set(true);
-                                            }
                                         }
                                         Err(e) => {
                                             web_sys::console::error_1(
@@ -708,7 +736,6 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
         set_status.set(None);
         set_events.set(Vec::new());
         set_loading_events.set(false);
-        set_events_loaded.set(false);
         leptos::task::spawn_local(async move {
             if let Err(e) = retrigger_conjunction().await {
                 web_sys::console::error_1(&format!("retrigger error: {e:?}").into());
@@ -719,7 +746,7 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     view! {
         <div class="w-full">
             <div class="flex items-center justify-between mt-2">
-                <ConjunctionStatusBadge status=status events=events />
+                <ConjunctionStatusBadge status=status />
                 <button
                     class="text-xs text-muted hover:text-foreground border border-border \
                            rounded px-2 py-1 transition-colors shrink-0"
@@ -728,7 +755,7 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
                     "Recalculate"
                 </button>
             </div>
-            <Show when=move || !events.get().is_empty()>
+            <Show when=move || matches!(status.get(), Some(ScreeningStatus::Running { .. } | ScreeningStatus::Complete { .. }))>
                 <ConjunctionTable events=events />
             </Show>
         </div>
@@ -760,10 +787,7 @@ fn fmt_duration(ms: u64) -> String {
 }
 
 #[component]
-fn ConjunctionStatusBadge(
-    status: ReadSignal<Option<ScreeningStatus>>,
-    events: ReadSignal<Vec<ConjunctionEvent>>,
-) -> impl IntoView {
+fn ConjunctionStatusBadge(status: ReadSignal<Option<ScreeningStatus>>) -> impl IntoView {
     let chip = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs \
                 bg-gray border border-border font-mono";
 
@@ -780,14 +804,7 @@ fn ConjunctionStatusBadge(
                 Some(ScreeningStatus::Running { .. }) => view! {
                     <span class="flex items-center gap-2">
                         <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-                        {move || {
-                            let n = events.get().len();
-                            if n > 0 {
-                                format!("Screening in progress… {} events so far", fmt_count(n))
-                            } else {
-                                "Screening in progress…".to_string()
-                            }
-                        }}
+                        "Screening in progress…"
                     </span>
                 }.into_any(),
                 Some(ScreeningStatus::Complete { .. }) => view! {
@@ -801,36 +818,34 @@ fn ConjunctionStatusBadge(
                 }.into_any(),
             }}
 
-            // ── Stats chips (Complete only) ───────────────────
-            {move || {
-                let Some(ScreeningStatus::Complete { stats }) = status.get() else {
-                    return view! { <span></span> }.into_any();
-                };
-                let hoots_pct = if stats.total_pairs > 0 {
-                    let eliminated = stats.total_pairs.saturating_sub(stats.pairs_after_hoots);
-                    format!("{:.1}%", eliminated as f64 / stats.total_pairs as f64 * 100.0)
-                } else {
-                    "—".to_string()
-                };
-                view! {
+            // ── Stats chips (Running + Complete) ─────────────
+            {move || match status.get() {
+                Some(ScreeningStatus::Running { total_pairs, pairs_propagated, .. }) => view! {
                     <div class="flex flex-wrap gap-1.5">
-                        <span class=chip>
-                            "pairs " {fmt_count(stats.total_pairs)}
-                        </span>
-                        <span class=chip>
-                            "hoots ↓" {hoots_pct}
-                        </span>
-                        <span class=chip>
-                            "propagated " {fmt_count(stats.pairs_after_hoots)}
-                        </span>
-                        <span class=chip>
-                            "events " {fmt_count(stats.events_found)}
-                        </span>
-                        <span class=chip>
-                            "time " {fmt_duration(stats.elapsed_ms)}
-                        </span>
+                        <span class=chip>"pairs " {fmt_count(total_pairs)}</span>
+                        {(pairs_propagated > 0).then(|| view! {
+                            <span class=chip>"propagated " {fmt_count(pairs_propagated)}</span>
+                        })}
                     </div>
-                }.into_any()
+                }.into_any(),
+                Some(ScreeningStatus::Complete { stats }) => {
+                    let hoots_pct = if stats.total_pairs > 0 {
+                        let eliminated = stats.total_pairs.saturating_sub(stats.pairs_after_hoots);
+                        format!("{:.1}%", eliminated as f64 / stats.total_pairs as f64 * 100.0)
+                    } else {
+                        "—".to_string()
+                    };
+                    view! {
+                        <div class="flex flex-wrap gap-1.5">
+                            <span class=chip>"pairs " {fmt_count(stats.total_pairs)}</span>
+                            <span class=chip>"hoots ↓" {hoots_pct}</span>
+                            <span class=chip>"propagated " {fmt_count(stats.pairs_after_hoots)}</span>
+                            <span class=chip>"events " {fmt_count(stats.events_found)}</span>
+                            <span class=chip>"time " {fmt_duration(stats.elapsed_ms)}</span>
+                        </div>
+                    }.into_any()
+                },
+                _ => view! { <span></span> }.into_any(),
             }}
         </div>
     }

@@ -306,6 +306,7 @@ mod inner {
         pool: &PgPool,
         group_name: &str,
         calculated_by: &str,
+        total_pairs: i64,
     ) -> Result<Option<i64>, sqlx::Error> {
         // Expire stale locks: a job running for more than 3 hours is assumed dead.
         sqlx::query(
@@ -322,13 +323,14 @@ mod inner {
 
         // Atomically claim the slot. ON CONFLICT DO NOTHING means only one replica wins.
         let id: Option<i64> = sqlx::query_scalar(
-            "INSERT INTO conjunction_screenings (group_name, status, calculated_by) \
-             VALUES ($1, 'running', $2) \
+            "INSERT INTO conjunction_screenings (group_name, status, calculated_by, total_pairs) \
+             VALUES ($1, 'running', $2, $3) \
              ON CONFLICT DO NOTHING \
              RETURNING id",
         )
         .bind(group_name)
         .bind(calculated_by)
+        .bind(total_pairs)
         .fetch_optional(pool)
         .await?
         .flatten();
@@ -341,6 +343,22 @@ mod inner {
         sqlx::query_scalar("SELECT pg_database_size('jaydanhoward')")
             .fetch_one(pool)
             .await
+    }
+
+    /// Update the live pairs-propagated count on a running screening.
+    pub async fn update_conjunction_pairs_propagated(
+        pool: &PgPool,
+        screening_id: i64,
+        pairs_after_hoots: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_screenings SET pairs_after_hoots = $2 WHERE id = $1",
+        )
+        .bind(screening_id)
+        .bind(pairs_after_hoots)
+        .execute(pool)
+        .await?;
+        Ok(())
     }
 
     /// Mark a screening as complete and record stats.
@@ -464,7 +482,8 @@ mod inner {
     ) -> Result<Option<ConjunctionScreeningRow>, sqlx::Error> {
         use sqlx::Row;
         let row = sqlx::query(
-            r#"SELECT id, status, started_at, total_pairs, pairs_after_hoots, events_found, elapsed_ms, error_msg
+            r#"SELECT id, status, started_at, total_pairs, pairs_after_hoots,
+                      events_found, elapsed_ms, error_msg
                FROM conjunction_screenings
                WHERE group_name = $1
                ORDER BY id DESC
@@ -497,8 +516,13 @@ mod inner {
                       cs.calculated_by
                FROM conjunction_events ce
                JOIN conjunction_screenings cs ON ce.screening_id = cs.id
-               WHERE cs.group_name = $1 AND cs.status IN ('complete', 'running')
-               ORDER BY cs.id DESC, ce.tca_unix_ms ASC"#,
+               WHERE cs.id = (
+                   SELECT id FROM conjunction_screenings
+                   WHERE group_name = $1 AND status IN ('complete', 'running')
+                   ORDER BY id DESC
+                   LIMIT 1
+               )
+               ORDER BY ce.tca_unix_ms ASC"#,
         )
         .bind(group_name)
         .fetch_all(pool)
