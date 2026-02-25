@@ -78,22 +78,12 @@ pub async fn run() -> Result<(), std::io::Error> {
     // Startup conjunction screening: fetch TLEs for all groups and screen in background.
     // Runs regardless of DB availability — in-memory cache is always updated.
     //
-    // Stagger strategy: use a deterministic FNV-1a hash of (hostname, group) mapped to
-    // 0–10 s.  Different pods hash to different delays for each group, so when multiple
-    // replicas race for the Postgres distributed lock they win *different* groups and
-    // screening work is spread across pods rather than all landing on pod-0.
+    // Distribution: each pod immediately tries to claim each group via the Postgres
+    // distributed lock (INSERT … ON CONFLICT DO NOTHING).  Pods that lose the race
+    // skip TLE fetching entirely — no wasted bandwidth, no timing assumptions.
+    // With 3 pods and 5 groups the DB naturally distributes work ~2/2/1.
     {
         use crate::components::conjunction::screen_and_store;
-
-        /// FNV-1a hash of two strings concatenated, result in 0..max_ms.
-        fn stagger_ms(a: &str, b: &str, max_ms: u64) -> u64 {
-            let mut h: u64 = 14_695_981_039_346_656_037;
-            for byte in a.bytes().chain(b.bytes()) {
-                h ^= byte as u64;
-                h = h.wrapping_mul(1_099_511_628_211);
-            }
-            h % max_ms
-        }
 
         let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
 
@@ -107,9 +97,29 @@ pub async fn run() -> Result<(), std::io::Error> {
             let hostname_clone = hostname.clone();
 
             tokio::spawn(async move {
-                // Hostname-keyed stagger: 0–10 s, unique per (pod, group) pair
-                let delay = stagger_ms(&hostname_clone, &group_str, 10_000);
-                tokio::time::sleep(Duration::from_millis(delay)).await;
+                // If a DB pool is available, claim the slot now — before fetching TLEs.
+                // Pods that lose the race (None) skip immediately with no wasted work.
+                let pre_claimed_id: Option<i64> = if let Some(ref p) = pool_opt {
+                    // We don't know total_pairs yet; use 0 as a placeholder — it gets
+                    // updated by screen_and_store once TLEs are parsed.
+                    match crate::db::start_conjunction_screening(p, &group_str, &hostname_clone, 0).await {
+                        Ok(Some(id)) => Some(id),
+                        Ok(None) => {
+                            log::debug!(
+                                "Startup screening: group={group_str} already claimed by another pod, skipping"
+                            );
+                            return;
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "Startup screening: DB claim failed for group={group_str}: {e}, proceeding without DB"
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
 
                 let url = format!(
                     "https://celestrak.org/NORAD/elements/gp.php?GROUP={group_str}&FORMAT=tle"
@@ -165,7 +175,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                 }
 
                 log::info!("Startup screening: {} TLEs for group={group_str}", tles.len());
-                screen_and_store(pool_opt, Some(cache_clone), &group_str, &tles).await;
+                screen_and_store(pool_opt, Some(cache_clone), &group_str, &tles, pre_claimed_id).await;
             });
         }
     }
