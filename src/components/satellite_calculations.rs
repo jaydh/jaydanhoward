@@ -15,6 +15,7 @@ pub struct SatellitePosition {
 #[derive(Clone)]
 pub struct Satellite {
     pub name: String,
+    pub norad_id: u32,
     constants: Constants,
     epoch_j2000_years: f64,
     inclination_deg: f64,
@@ -40,8 +41,14 @@ impl Satellite {
         // elements.inclination is already in degrees per the sgp4 crate API
         let inclination_deg = elements.inclination;
 
+        // NORAD catalog number: TLE line1 chars 2–6 (0-indexed)
+        let norad_id = line1.get(2..7)
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap_or(0);
+
         Ok(Self {
             name,
+            norad_id,
             constants,
             epoch_j2000_years,
             inclination_deg,
