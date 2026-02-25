@@ -14,6 +14,8 @@ pub struct ConjunctionEvent {
     pub tca_unix_ms: f64,
     pub miss_distance_km: f32,
     pub rel_velocity_km_s: f32,
+    /// Hostname of the node that calculated this event
+    pub calculated_by: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -246,6 +248,7 @@ pub mod screening {
                     tca_unix_ms: tca_ms,
                     miss_distance_km: miss_km,
                     rel_velocity_km_s: rel_vel,
+                    calculated_by: String::new(), // filled in by screen_and_store
                 });
             }
         }
@@ -334,6 +337,8 @@ pub async fn screen_and_store(
     use std::time::Instant;
     use tokio::sync::mpsc;
 
+    let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
+
     let started_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -354,7 +359,7 @@ pub async fn screen_and_store(
 
     // Claim a DB slot if a pool is available (distributed lock)
     let screening_id: Option<i64> = if let Some(ref pool) = pool {
-        match crate::db::start_conjunction_screening(pool, group).await {
+        match crate::db::start_conjunction_screening(pool, group, &hostname).await {
             Ok(Some(id)) => Some(id),
             Ok(None) => {
                 tracing::debug!(
@@ -394,7 +399,12 @@ pub async fn screen_and_store(
 
     // Consume chunks as they arrive, updating DB and in-memory cache incrementally
     let mut all_events: Vec<ConjunctionEvent> = Vec::new();
-    while let Some(chunk) = rx.recv().await {
+    while let Some(mut chunk) = rx.recv().await {
+        // Stamp the node hostname on every event
+        for e in &mut chunk {
+            e.calculated_by = hostname.clone();
+        }
+
         // Insert partial events to DB if we have a slot
         if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
             if let Err(e) = crate::db::insert_conjunction_events(pool, id, &chunk).await {
@@ -425,10 +435,10 @@ pub async fn screen_and_store(
         Ok(mut stats) => {
             stats.elapsed_ms = elapsed_ms;
             tracing::info!(
-                "Conjunction screening complete: group={group} events={} pairs_screened={} elapsed_ms={}",
+                "Conjunction screening complete: group={group} events={} pairs_screened={} elapsed={}",
                 stats.events_found,
                 stats.pairs_after_hoots,
-                stats.elapsed_ms
+                fmt_duration(stats.elapsed_ms)
             );
 
             if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
@@ -709,7 +719,7 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     view! {
         <div class="w-full">
             <div class="flex items-center justify-between mt-2">
-                <ConjunctionStatusBadge status=status />
+                <ConjunctionStatusBadge status=status events=events />
                 <button
                     class="text-xs text-muted hover:text-foreground border border-border \
                            rounded px-2 py-1 transition-colors shrink-0"
@@ -725,39 +735,102 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     }
 }
 
+// ── Stat formatters ───────────────────────────────────────────
+
+fn fmt_count(n: usize) -> String {
+    if n >= 1_000_000 {
+        format!("{:.1}M", n as f64 / 1_000_000.0)
+    } else if n >= 1_000 {
+        format!("{:.1}K", n as f64 / 1_000.0)
+    } else {
+        n.to_string()
+    }
+}
+
+fn fmt_duration(ms: u64) -> String {
+    if ms >= 60_000 {
+        let m = ms / 60_000;
+        let s = (ms % 60_000) / 1_000;
+        format!("{m}m {s:02}s")
+    } else if ms >= 1_000 {
+        format!("{:.1}s", ms as f64 / 1_000.0)
+    } else {
+        format!("{ms}ms")
+    }
+}
+
 #[component]
-fn ConjunctionStatusBadge(status: ReadSignal<Option<ScreeningStatus>>) -> impl IntoView {
+fn ConjunctionStatusBadge(
+    status: ReadSignal<Option<ScreeningStatus>>,
+    events: ReadSignal<Vec<ConjunctionEvent>>,
+) -> impl IntoView {
+    let chip = "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs \
+                bg-gray border border-border font-mono";
+
     view! {
-        <div class="text-sm text-muted mt-2">
+        <div class="text-sm text-muted flex flex-col gap-1.5">
+            // ── Status line ──────────────────────────────────
             {move || match status.get() {
-                None => view! { <span>"Conjunction screening: waiting for TLE data..."</span> }.into_any(),
-                Some(ScreeningStatus::Idle) => view! { <span>"Conjunction screening: idle"</span> }.into_any(),
-                Some(ScreeningStatus::Running { .. }) => {
-                    view! {
-                        <span class="flex items-center gap-2">
-                            <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-                            "Conjunction screening in progress..."
+                None => view! {
+                    <span>"Conjunction screening: waiting for TLE data..."</span>
+                }.into_any(),
+                Some(ScreeningStatus::Idle) => view! {
+                    <span>"Conjunction screening: idle"</span>
+                }.into_any(),
+                Some(ScreeningStatus::Running { .. }) => view! {
+                    <span class="flex items-center gap-2">
+                        <span class="inline-block w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                        {move || {
+                            let n = events.get().len();
+                            if n > 0 {
+                                format!("Screening in progress… {} events so far", fmt_count(n))
+                            } else {
+                                "Screening in progress…".to_string()
+                            }
+                        }}
+                    </span>
+                }.into_any(),
+                Some(ScreeningStatus::Complete { .. }) => view! {
+                    <span class="flex items-center gap-1.5">
+                        <span class="inline-block w-2 h-2 rounded-full bg-green-400"></span>
+                        "Screening complete"
+                    </span>
+                }.into_any(),
+                Some(ScreeningStatus::Failed(msg)) => view! {
+                    <span class="text-red-500">{format!("Screening failed: {}", msg)}</span>
+                }.into_any(),
+            }}
+
+            // ── Stats chips (Complete only) ───────────────────
+            {move || {
+                let Some(ScreeningStatus::Complete { stats }) = status.get() else {
+                    return view! { <span></span> }.into_any();
+                };
+                let hoots_pct = if stats.total_pairs > 0 {
+                    let eliminated = stats.total_pairs.saturating_sub(stats.pairs_after_hoots);
+                    format!("{:.1}%", eliminated as f64 / stats.total_pairs as f64 * 100.0)
+                } else {
+                    "—".to_string()
+                };
+                view! {
+                    <div class="flex flex-wrap gap-1.5">
+                        <span class=chip>
+                            "pairs " {fmt_count(stats.total_pairs)}
                         </span>
-                    }
-                    .into_any()
-                }
-                Some(ScreeningStatus::Complete { stats }) => {
-                    view! {
-                        <span>
-                            {format!(
-                                "Screening complete — {} events found ({} pairs screened in {}ms)",
-                                stats.events_found,
-                                stats.pairs_after_hoots,
-                                stats.elapsed_ms,
-                            )}
+                        <span class=chip>
+                            "hoots ↓" {hoots_pct}
                         </span>
-                    }
-                    .into_any()
-                }
-                Some(ScreeningStatus::Failed(msg)) => {
-                    view! { <span class="text-red-500">{format!("Screening failed: {}", msg)}</span> }
-                        .into_any()
-                }
+                        <span class=chip>
+                            "propagated " {fmt_count(stats.pairs_after_hoots)}
+                        </span>
+                        <span class=chip>
+                            "events " {fmt_count(stats.events_found)}
+                        </span>
+                        <span class=chip>
+                            "time " {fmt_duration(stats.elapsed_ms)}
+                        </span>
+                    </div>
+                }.into_any()
             }}
         </div>
     }
@@ -772,6 +845,7 @@ enum SortCol {
     SatB,
     Miss,
     Vel,
+    Node,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -827,6 +901,7 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                     .rel_velocity_km_s
                     .partial_cmp(&b.rel_velocity_km_s)
                     .unwrap_or(Equal),
+                SortCol::Node => a.calculated_by.cmp(&b.calculated_by),
             };
             if dir == SortDir::Desc { ord.reverse() } else { ord }
         });
@@ -937,6 +1012,9 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                             <th class=th on:click=make_sort_click(SortCol::Vel)>
                                 "Rel vel km/s" {make_sort_arrow(SortCol::Vel)}
                             </th>
+                            <th class=th on:click=make_sort_click(SortCol::Node)>
+                                "Node" {make_sort_arrow(SortCol::Node)}
+                            </th>
                         </tr>
                     </thead>
 
@@ -946,7 +1024,7 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                             let h = virtual_window.get().0;
                             if h > 0 { format!("height:{h}px") } else { "display:none".into() }
                         }>
-                            <td colspan="5"></td>
+                            <td colspan="6"></td>
                         </tr>
 
                         // Visible rows only
@@ -963,7 +1041,7 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                             let h = virtual_window.get().1;
                             if h > 0 { format!("height:{h}px") } else { "display:none".into() }
                         }>
-                            <td colspan="5"></td>
+                            <td colspan="6"></td>
                         </tr>
                     </tbody>
                 </table>
@@ -1003,6 +1081,9 @@ fn ConjunctionRow(event: ConjunctionEvent) -> impl IntoView {
             </td>
             <td class="px-3 font-mono text-xs whitespace-nowrap">
                 {format!("{:.2}", event.rel_velocity_km_s)}
+            </td>
+            <td class="px-3 font-mono text-xs whitespace-nowrap text-muted">
+                {event.calculated_by.clone()}
             </td>
         </tr>
     }

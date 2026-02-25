@@ -1,5 +1,7 @@
+use actix_web::web::Data;
 use actix_web_lab::sse::{self, Sse};
 use serde::Serialize;
+use sqlx::PgPool;
 use std::time::Duration;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -20,6 +22,7 @@ pub struct ClusterMetrics {
     pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
+    pub db_size_bytes: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -46,7 +49,7 @@ async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
     }
 }
 
-async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
+async fn fetch_cluster_metrics(pool: Option<&PgPool>) -> Result<ClusterMetrics, anyhow::Error> {
     // Cluster CPU metrics
     let cpu_used = parse_prometheus_value(
         "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))"
@@ -94,6 +97,12 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
     ).await?;
 
+    let db_size_bytes = if let Some(pool) = pool {
+        crate::db::get_db_size(pool).await.ok()
+    } else {
+        None
+    };
+
     Ok(ClusterMetrics {
         cpu_usage_percent: (cpu_used / cpu_total * 100.0).min(100.0),
         cpu_total_cores: cpu_total,
@@ -106,6 +115,7 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
+        db_size_bytes,
     })
 }
 
@@ -174,11 +184,13 @@ async fn fetch_node_metrics() -> Result<Vec<NodeMetric>, anyhow::Error> {
     Ok(nodes.into_values().collect())
 }
 
-pub async fn metrics_stream() -> impl actix_web::Responder {
+pub async fn metrics_stream(pool: Option<Data<PgPool>>) -> impl actix_web::Responder {
     let stream = IntervalStream::new(interval(Duration::from_secs(5)))
-        .then(|_| async {
+        .then(move |_| {
+            let pool = pool.clone();
+            async move {
             // Fetch both cluster and node metrics
-            let cluster_metrics = fetch_cluster_metrics().await.ok();
+            let cluster_metrics = fetch_cluster_metrics(pool.as_deref().map(|v| &**v)).await.ok();
             let node_metrics = fetch_node_metrics().await.unwrap_or_default();
 
             let update = MetricsUpdate {
@@ -194,7 +206,7 @@ pub async fn metrics_stream() -> impl actix_web::Responder {
                     Ok(sse::Event::Data(sse::Data::new("{}")))
                 }
             }
-        })
+        }})
         .filter_map(|result| match result {
             Ok(event) => Some(Ok::<_, actix_web::Error>(event)),
             Err(e) => {
