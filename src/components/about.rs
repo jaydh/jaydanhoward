@@ -40,7 +40,7 @@ pub fn About() -> impl IntoView {
                 <a href="https://www.astranis.com/" target="_blank" class="text-accent hover:underline transition-colors duration-200">
                     "Astranis"
                 </a>
-                ", building satellites. I work on everything from UI and monitoring for Satcom payloads to running production clusters and planning disaster recovery."
+                ", a micro geostationary satellite company. I work on the network and payload software team, building tools to operate and monitor the satellite network."
             </p>
         </div>
     }
