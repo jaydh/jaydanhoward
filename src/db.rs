@@ -361,6 +361,22 @@ mod inner {
         Ok(())
     }
 
+    /// Update total_pairs once TLEs have been fetched (called after pre-claim).
+    pub async fn update_conjunction_total_pairs(
+        pool: &PgPool,
+        screening_id: i64,
+        total_pairs: i64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conjunction_screenings SET total_pairs = $2 WHERE id = $1",
+        )
+        .bind(screening_id)
+        .bind(total_pairs)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     /// Mark a screening as complete and record stats.
     pub async fn complete_conjunction_screening(
         pool: &PgPool,

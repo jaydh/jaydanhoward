@@ -333,6 +333,9 @@ pub async fn screen_and_store(
     cache: Option<actix_web::web::Data<ConjunctionCache>>,
     group: &str,
     tles: &[crate::components::satellite_tracker::TleData],
+    // Some(id) = slot already claimed by caller (startup path, claim-first).
+    // None = let this function attempt the claim (manual retrigger path).
+    pre_claimed_id: Option<i64>,
 ) {
     use std::time::Instant;
     use tokio::sync::mpsc;
@@ -364,8 +367,12 @@ pub async fn screen_and_store(
         );
     }
 
-    // Claim a DB slot if a pool is available (distributed lock)
-    let screening_id: Option<i64> = if let Some(ref pool) = pool {
+    // Claim a DB slot if a pool is available (distributed lock).
+    // If a pre_claimed_id was supplied by the caller, use it directly — the slot is
+    // already held and we skip the INSERT to avoid a spurious conflict.
+    let screening_id: Option<i64> = if let Some(id) = pre_claimed_id {
+        Some(id)
+    } else if let Some(ref pool) = pool {
         match crate::db::start_conjunction_screening(pool, group, &hostname, total_pairs as i64).await {
             Ok(Some(id)) => Some(id),
             Ok(None) => {
@@ -390,6 +397,15 @@ pub async fn screen_and_store(
     } else {
         None
     };
+
+    // If we pre-claimed with total_pairs=0, patch it now that we know the real count.
+    if pre_claimed_id.is_some() {
+        if let (Some(ref pool), Some(id)) = (&pool, screening_id) {
+            if let Err(e) = crate::db::update_conjunction_total_pairs(pool, id, total_pairs as i64).await {
+                tracing::warn!("Failed to update total_pairs for screening_id={id}: {e}");
+            }
+        }
+    }
 
     tracing::info!(
         "Conjunction screening started: group={group} satellites={} screening_id={screening_id:?}",
@@ -636,7 +652,7 @@ pub async fn retrigger_conjunction() -> Result<(), ServerFnError<String>> {
         let cache_clone = cache.clone();
         let group_str = group.to_string();
         tokio::spawn(async move {
-            screen_and_store(pool_clone, cache_clone, &group_str, &tles).await;
+            screen_and_store(pool_clone, cache_clone, &group_str, &tles, None).await;
         });
     }
 
