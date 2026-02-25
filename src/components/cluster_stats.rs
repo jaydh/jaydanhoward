@@ -610,7 +610,7 @@ fn LineChart(
         .enumerate()
         .map(|(i, &val)| {
             let x = (i as f64 / (data.len() - 1).max(1) as f64) * 100.0;
-            let y = 100.0 - ((val - min_val) / range * 100.0);
+            let y = 30.0 - ((val - min_val) / range * 30.0);
             (x, y)
         })
         .collect();
@@ -666,7 +666,7 @@ fn StackedAreaChart(
         .enumerate()
         .map(|(i, &val)| {
             let x = (i as f64 / (data_rx.len() - 1).max(1) as f64) * 100.0;
-            let y = 100.0 - (val / max_val * 100.0);
+            let y = 30.0 - (val / max_val * 30.0);
             (x, y)
         })
         .collect();
@@ -676,7 +676,7 @@ fn StackedAreaChart(
         .enumerate()
         .map(|(i, &val)| {
             let x = (i as f64 / (data_tx.len() - 1).max(1) as f64) * 100.0;
-            let y = 100.0 - (val / max_val * 100.0);
+            let y = 30.0 - (val / max_val * 30.0);
             (x, y)
         })
         .collect();
@@ -686,7 +686,7 @@ fn StackedAreaChart(
         for (x, y) in points_rx.iter().skip(1) {
             d.push_str(&format!(" L {} {}", x, y));
         }
-        d.push_str(" L 100 100 L 0 100 Z");
+        d.push_str(" L 100 30 L 0 30 Z");
         d
     } else {
         String::new()
@@ -697,7 +697,7 @@ fn StackedAreaChart(
         for (x, y) in points_tx.iter().skip(1) {
             d.push_str(&format!(" L {} {}", x, y));
         }
-        d.push_str(" L 100 100 L 0 100 Z");
+        d.push_str(" L 100 30 L 0 30 Z");
         d
     } else {
         String::new()
