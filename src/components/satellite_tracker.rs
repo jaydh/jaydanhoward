@@ -72,19 +72,49 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         .await
         .map_err(|e| ServerFnError::ServerError(format!("Failed to read response: {}", e)))?;
 
-    let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-    let mut satellites = Vec::new();
+    let parse_tle_text = |text: &str| -> Vec<TleData> {
+        let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+        let mut out = Vec::new();
+        for chunk in lines.chunks(3) {
+            if chunk.len() == 3
+                && chunk[1].trim_start().starts_with("1 ")
+                && chunk[2].trim_start().starts_with("2 ")
+            {
+                out.push(TleData {
+                    name:  chunk[0].trim().to_string(),
+                    line1: chunk[1].trim().to_string(),
+                    line2: chunk[2].trim().to_string(),
+                });
+            }
+        }
+        out
+    };
 
-    for chunk in lines.chunks(3) {
-        if chunk.len() == 3
-            && chunk[1].trim_start().starts_with("1 ")
-            && chunk[2].trim_start().starts_with("2 ")
-        {
-            satellites.push(TleData {
-                name: chunk[0].trim().to_string(),
-                line1: chunk[1].trim().to_string(),
-                line2: chunk[2].trim().to_string(),
-            });
+    let mut satellites = parse_tle_text(&text);
+
+    // CelesTrak's "active" group omits some Astranis satellites (they appear in "geo"
+    // or in high-eccentricity transfer orbits not covered by any standard group).
+    // Fetch any missing ones individually by CATNR and merge them in.
+    if group == "active" {
+        const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+        let present: std::collections::HashSet<u32> = satellites
+            .iter()
+            .filter_map(|s| s.line1.get(2..7)?.trim().parse::<u32>().ok())
+            .collect();
+        for &id in ASTRANIS_IDS {
+            if present.contains(&id) {
+                continue;
+            }
+            let url = format!(
+                "https://celestrak.org/NORAD/elements/gp.php?CATNR={id}&FORMAT=tle"
+            );
+            if let Ok(resp) = client.get(&url).send().await {
+                if resp.status().is_success() {
+                    if let Ok(body) = resp.text().await {
+                        satellites.extend(parse_tle_text(&body));
+                    }
+                }
+            }
         }
     }
 
