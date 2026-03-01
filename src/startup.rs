@@ -92,7 +92,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     {
         use crate::components::satellite_tracker::TleData;
 
-        const CHUNK_SIZE: usize = 500; // satellites per chunk; ~500 sats × ~14k = ~7M pairs
+        const CHUNK_SIZE: usize = 50; // satellites per chunk; ~50 sats → ~240 chunks for active group
         const GROUPS: [&str; 5] = ["stations", "gps-ops", "visual", "active", "starlink"];
 
         let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
@@ -137,74 +137,89 @@ pub async fn run() -> Result<(), std::io::Error> {
         }
 
         // ── Coordinator tasks ────────────────────────────────────────
+        // One persistent task per group. Loops every SCREENING_INTERVAL so all pods
+        // participate in every hourly cycle, not just the one that started first.
+        const SCREENING_INTERVAL_SECS: u64 = 60 * 60; // matches recent_minutes=60 gate
+
         for group in GROUPS {
-            let pool_opt   = pool.clone().map(web::Data::new);
-            let tle_cache  = tle_cache.clone();
-            let client     = http_client.clone();
-            let hostname   = hostname.clone();
+            let pool_opt  = pool.clone().map(web::Data::new);
+            let tle_cache = tle_cache.clone();
+            let client    = http_client.clone();
+            let hostname  = hostname.clone();
 
             tokio::spawn(async move {
-                // Only the winning pod creates the screening + chunks.
-                let screening_id = match pool_opt.as_ref() {
-                    None => return, // no DB → skip (worker also exits early)
-                    Some(p) => match crate::db::try_claim_conjunction_startup(
-                        p, group, &hostname, 60,
+                let pool = match pool_opt {
+                    None => return, // no DB → skip
+                    Some(p) => p,
+                };
+
+                loop {
+                    // Race to claim the screening slot; only one pod wins per cycle.
+                    let screening_id = match crate::db::try_claim_conjunction_startup(
+                        &pool, group, &hostname, 60,
                     ).await {
                         Ok(Some(id)) => id,
                         Ok(None) => {
-                            log::debug!("Coordinator: group={group} already claimed, skipping");
-                            return;
+                            log::debug!("Coordinator: group={group} already claimed this cycle");
+                            tokio::time::sleep(Duration::from_secs(SCREENING_INTERVAL_SECS)).await;
+                            continue;
                         }
                         Err(e) => {
                             log::warn!("Coordinator: DB claim failed for group={group}: {e}");
-                            return;
+                            tokio::time::sleep(Duration::from_secs(30)).await;
+                            continue;
                         }
-                    },
-                };
+                    };
 
-                log::info!("Coordinator: fetching TLEs for group={group}");
-                let tles = match fetch_tles(&client, group).await {
-                    Some(t) => t,
-                    None => {
-                        log::warn!("Coordinator: TLE fetch failed for group={group}");
-                        return;
+                    log::info!("Coordinator: fetching TLEs for group={group}");
+                    let tles = match fetch_tles(&client, group).await {
+                        Some(t) => t,
+                        None => {
+                            log::warn!("Coordinator: TLE fetch failed for group={group}");
+                            tokio::time::sleep(Duration::from_secs(SCREENING_INTERVAL_SECS)).await;
+                            continue;
+                        }
+                    };
+
+                    let n = tles.len();
+                    let total_pairs = n * n.saturating_sub(1) / 2;
+                    log::info!("Coordinator: {n} TLEs ({total_pairs} pairs) for group={group}");
+
+                    if let Err(e) =
+                        crate::db::update_conjunction_total_pairs(&pool, screening_id, total_pairs as i64)
+                            .await
+                    {
+                        log::warn!("Coordinator: total_pairs update failed for {group}: {e}");
                     }
-                };
 
-                let n = tles.len();
-                let total_pairs = n * n.saturating_sub(1) / 2;
-                log::info!("Coordinator: {n} TLEs ({total_pairs} pairs) for group={group}");
+                    match crate::db::create_chunks(&pool, screening_id, group, n, CHUNK_SIZE).await {
+                        Ok(k) => log::info!("Coordinator: created {k} chunks for group={group}"),
+                        Err(e) => {
+                            log::error!("Coordinator: create_chunks failed for {group}: {e}");
+                            tokio::time::sleep(Duration::from_secs(SCREENING_INTERVAL_SECS)).await;
+                            continue;
+                        }
+                    }
 
-                let p = pool_opt.as_ref().unwrap();
-                if let Err(e) =
-                    crate::db::update_conjunction_total_pairs(p, screening_id, total_pairs as i64)
+                    // Cache TLEs locally so this pod's worker avoids a redundant fetch.
+                    tle_cache
+                        .write()
                         .await
-                {
-                    log::warn!("Coordinator: total_pairs update failed for {group}: {e}");
-                }
+                        .insert(group.to_string(), (std::time::Instant::now(), tles));
 
-                match crate::db::create_chunks(p, screening_id, group, n, CHUNK_SIZE).await {
-                    Ok(k) => log::info!("Coordinator: created {k} chunks for group={group}"),
-                    Err(e) => {
-                        log::error!("Coordinator: create_chunks failed for {group}: {e}");
-                        return;
-                    }
+                    tokio::time::sleep(Duration::from_secs(SCREENING_INTERVAL_SECS)).await;
                 }
-
-                // Cache TLEs locally so this pod's worker avoids a redundant fetch.
-                tle_cache
-                    .write()
-                    .await
-                    .insert(group.to_string(), (std::time::Instant::now(), tles));
             });
         }
 
         // ── Worker loop ──────────────────────────────────────────────
+        // Persistent — never exits, so each pod stays in the work pool across all
+        // future screening cycles. Sleeps 15s when idle to avoid DB pressure.
         {
-            let pool_opt          = pool.clone().map(web::Data::new);
-            let tle_cache         = tle_cache.clone();
-            let client            = http_client.clone();
-            let hostname          = hostname.clone();
+            let pool_opt  = pool.clone().map(web::Data::new);
+            let tle_cache = tle_cache.clone();
+            let client    = http_client.clone();
+            let hostname  = hostname.clone();
 
             tokio::spawn(async move {
                 use crate::components::conjunction::screen_chunk;
@@ -214,20 +229,17 @@ pub async fn run() -> Result<(), std::io::Error> {
                     Some(p) => p,
                 };
 
-                // Small delay so coordinator tasks start their TLE fetches before
-                // the worker tries to claim (avoids a spurious idle timeout).
+                // Small delay so coordinator tasks have started their TLE fetches
+                // before the worker tries to claim on the first cycle.
                 tokio::time::sleep(Duration::from_millis(500)).await;
-
-                let mut consecutive_idle: u32 = 0;
 
                 loop {
                     match crate::db::claim_next_chunk(&pool, &hostname).await {
                         Ok(Some(chunk)) => {
-                            consecutive_idle = 0;
                             let group = chunk.group_name.clone();
 
-                            // Get TLEs from cache (set by coordinator) or fetch if
-                            // this group's coordinator ran on a different pod.
+                            // Use cached TLEs (set by coordinator) or fetch if the
+                            // winning coordinator ran on a different pod.
                             let tles = {
                                 let cached = tle_cache
                                     .read()
@@ -269,16 +281,12 @@ pub async fn run() -> Result<(), std::io::Error> {
                             screen_chunk(Some(pool.clone()), chunk, &tles).await;
                         }
                         Ok(None) => {
-                            consecutive_idle += 1;
-                            if consecutive_idle >= 10 {
-                                log::debug!("Worker: no chunks for 10s, exiting");
-                                break;
-                            }
-                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            // No pending chunks — sleep before polling again.
+                            tokio::time::sleep(Duration::from_secs(15)).await;
                         }
                         Err(e) => {
                             log::warn!("Worker: claim_next_chunk error: {e}");
-                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            tokio::time::sleep(Duration::from_secs(30)).await;
                         }
                     }
                 }
