@@ -328,9 +328,117 @@ fn fmt_db_size(bytes: i64) -> String {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CephStatus {
+    pub health: u32, // 0=OK, 1=WARN, 2=ERR
+    pub mon_quorum: u32,
+    pub mon_total: u32,
+    pub osd_up: u32,
+    pub osd_in: u32,
+    pub osd_total: u32,
+    pub pg_active: u32,
+    pub pg_clean: u32,
+    pub pg_total: u32,
+    pub pool_count: u32,
+    pub read_mbps: f64,
+    pub write_mbps: f64,
+    pub read_iops: f64,
+    pub write_iops: f64,
+}
+
+#[server(name = GetCephStatus, prefix = "/api", endpoint = "get_ceph_status")]
+pub async fn get_ceph_status() -> Result<CephStatus, ServerFnError<String>> {
+    let health = parse_prometheus_value("ceph_health_status").await.unwrap_or(0.0) as u32;
+    let mon_quorum = parse_prometheus_value("sum(ceph_mon_quorum_status == 1)").await.unwrap_or(0.0) as u32;
+    let mon_total = parse_prometheus_value("count(ceph_mon_quorum_status)").await.unwrap_or(0.0) as u32;
+    let osd_up = parse_prometheus_value("count(ceph_osd_up == 1)").await.unwrap_or(0.0) as u32;
+    let osd_in = parse_prometheus_value("count(ceph_osd_in == 1)").await.unwrap_or(0.0) as u32;
+    let osd_total = parse_prometheus_value("count(ceph_osd_up)").await.unwrap_or(0.0) as u32;
+    let pg_active = parse_prometheus_value("ceph_pg_active").await.unwrap_or(0.0) as u32;
+    let pg_clean = parse_prometheus_value("ceph_pg_clean").await.unwrap_or(0.0) as u32;
+    let pg_total = parse_prometheus_value("ceph_pg_total").await.unwrap_or(0.0) as u32;
+    let pool_count = parse_prometheus_value("count(ceph_pool_objects_total)").await.unwrap_or(0.0) as u32;
+    let read_mbps = parse_prometheus_value("sum(irate(ceph_osd_op_r_out_bytes[5m])) / 1024 / 1024").await.unwrap_or(0.0);
+    let write_mbps = parse_prometheus_value("sum(irate(ceph_osd_op_w_in_bytes[5m])) / 1024 / 1024").await.unwrap_or(0.0);
+    let read_iops = parse_prometheus_value("sum(irate(ceph_osd_op_r[5m]))").await.unwrap_or(0.0);
+    let write_iops = parse_prometheus_value("sum(irate(ceph_osd_op_w[5m]))").await.unwrap_or(0.0);
+    Ok(CephStatus {
+        health, mon_quorum, mon_total, osd_up, osd_in, osd_total,
+        pg_active, pg_clean, pg_total, pool_count,
+        read_mbps, write_mbps, read_iops, write_iops,
+    })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
+    pub ceph: Option<CephStatus>,
+}
+
+#[component]
+fn CephStatusPanel(ceph: CephStatus) -> impl IntoView {
+    let health = ceph.health;
+    let mon_quorum = ceph.mon_quorum;
+    let mon_total = ceph.mon_total;
+    let osd_up = ceph.osd_up;
+    let osd_in = ceph.osd_in;
+    let osd_total = ceph.osd_total;
+    let pg_active = ceph.pg_active;
+    let pg_clean = ceph.pg_clean;
+    let pg_total = ceph.pg_total;
+    let pool_count = ceph.pool_count;
+    let read_mbps = ceph.read_mbps;
+    let write_mbps = ceph.write_mbps;
+    let read_iops = ceph.read_iops;
+    let write_iops = ceph.write_iops;
+
+    let (health_label, health_class) = match health {
+        0 => ("HEALTH_OK", "text-green-500"),
+        1 => ("HEALTH_WARN", "text-yellow-500"),
+        _ => ("HEALTH_ERR", "text-red-500"),
+    };
+
+    let all_clean = pg_total > 0 && pg_active == pg_total && pg_clean == pg_total;
+
+    view! {
+        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-xs font-medium text-charcoal-lighter">"Ceph"</h3>
+                <span class={"text-xs font-mono font-semibold ".to_string() + health_class}>{health_label}</span>
+            </div>
+            <div class="font-mono text-xs space-y-1.5 text-charcoal">
+                <div class="flex gap-2">
+                    <span class="text-charcoal-lighter w-20 shrink-0">"services"</span>
+                    <span>
+                        "mon " {mon_quorum} "/" {mon_total} " quorum  "
+                        "osd " {osd_up} "/" {osd_total} " up, " {osd_in} " in"
+                    </span>
+                </div>
+                {(pool_count > 0 || pg_total > 0).then(move || {
+                    let pg_status = if all_clean {
+                        format!("{} active+clean", pg_total)
+                    } else {
+                        format!("{} active, {} clean / {} total", pg_active, pg_clean, pg_total)
+                    };
+                    view! {
+                        <div class="flex gap-2">
+                            <span class="text-charcoal-lighter w-20 shrink-0">"data"</span>
+                            <span>{format!("{} pools  {}", pool_count, pg_status)}</span>
+                        </div>
+                    }
+                })}
+                {(read_mbps > 0.001 || write_mbps > 0.001 || read_iops > 0.0 || write_iops > 0.0).then(move || view! {
+                    <div class="flex gap-2">
+                        <span class="text-charcoal-lighter w-20 shrink-0">"io"</span>
+                        <span>
+                            {format!("{:.1} MiB/s rd  {:.1} MiB/s wr  {:.0} op/s rd  {:.0} op/s wr",
+                                read_mbps, write_mbps, read_iops, write_iops)}
+                        </span>
+                    </div>
+                })}
+            </div>
+        </div>
+    }
 }
 
 #[component]
@@ -339,6 +447,8 @@ pub fn ClusterStats() -> impl IntoView {
 
     let (cluster_metrics, set_cluster_metrics) = signal(None::<ClusterMetrics>);
     let (node_metrics, set_node_metrics) = signal(Vec::<NodeMetric>::new());
+    #[allow(unused_variables)]
+    let (ceph_status, set_ceph_status) = signal(None::<CephStatus>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -440,6 +550,7 @@ pub fn ClusterStats() -> impl IntoView {
                                 update_history!(set_network_tx_history, cluster.network_tx_mbps);
                             }
                             set_node_metrics.set(update.nodes);
+                            set_ceph_status.set(update.ceph);
                             set_error.set(None);
                         }
                         Err(e) => {
@@ -487,6 +598,9 @@ pub fn ClusterStats() -> impl IntoView {
             }
             if let Ok(nodes) = get_node_metrics().await {
                 set_node_metrics.set(nodes);
+            }
+            if let Ok(ceph) = get_ceph_status().await {
+                set_ceph_status.set(Some(ceph));
             }
         });
     });
@@ -589,6 +703,10 @@ pub fn ClusterStats() -> impl IntoView {
                         </div>
                     </div>
                 })
+            }}
+
+            {move || {
+                ceph_status.get().map(|ceph| view! { <CephStatusPanel ceph=ceph /> })
             }}
         </div>
     }

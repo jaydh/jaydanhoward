@@ -34,9 +34,28 @@ pub struct NodeMetric {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct CephStatus {
+    pub health: u32,
+    pub mon_quorum: u32,
+    pub mon_total: u32,
+    pub osd_up: u32,
+    pub osd_in: u32,
+    pub osd_total: u32,
+    pub pg_active: u32,
+    pub pg_clean: u32,
+    pub pg_total: u32,
+    pub pool_count: u32,
+    pub read_mbps: f64,
+    pub write_mbps: f64,
+    pub read_iops: f64,
+    pub write_iops: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
+    pub ceph: Option<CephStatus>,
 }
 
 async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
@@ -184,18 +203,42 @@ async fn fetch_node_metrics() -> Result<Vec<NodeMetric>, anyhow::Error> {
     Ok(nodes.into_values().collect())
 }
 
+async fn fetch_ceph_status() -> CephStatus {
+    let health = parse_prometheus_value("ceph_health_status").await.unwrap_or(0.0) as u32;
+    let mon_quorum = parse_prometheus_value("sum(ceph_mon_quorum_status == 1)").await.unwrap_or(0.0) as u32;
+    let mon_total = parse_prometheus_value("count(ceph_mon_quorum_status)").await.unwrap_or(0.0) as u32;
+    let osd_up = parse_prometheus_value("count(ceph_osd_up == 1)").await.unwrap_or(0.0) as u32;
+    let osd_in = parse_prometheus_value("count(ceph_osd_in == 1)").await.unwrap_or(0.0) as u32;
+    let osd_total = parse_prometheus_value("count(ceph_osd_up)").await.unwrap_or(0.0) as u32;
+    let pg_active = parse_prometheus_value("ceph_pg_active").await.unwrap_or(0.0) as u32;
+    let pg_clean = parse_prometheus_value("ceph_pg_clean").await.unwrap_or(0.0) as u32;
+    let pg_total = parse_prometheus_value("ceph_pg_total").await.unwrap_or(0.0) as u32;
+    let pool_count = parse_prometheus_value("count(ceph_pool_objects_total)").await.unwrap_or(0.0) as u32;
+    let read_mbps = parse_prometheus_value("sum(irate(ceph_osd_op_r_out_bytes[5m])) / 1024 / 1024").await.unwrap_or(0.0);
+    let write_mbps = parse_prometheus_value("sum(irate(ceph_osd_op_w_in_bytes[5m])) / 1024 / 1024").await.unwrap_or(0.0);
+    let read_iops = parse_prometheus_value("sum(irate(ceph_osd_op_r[5m]))").await.unwrap_or(0.0);
+    let write_iops = parse_prometheus_value("sum(irate(ceph_osd_op_w[5m]))").await.unwrap_or(0.0);
+    CephStatus {
+        health, mon_quorum, mon_total, osd_up, osd_in, osd_total,
+        pg_active, pg_clean, pg_total, pool_count,
+        read_mbps, write_mbps, read_iops, write_iops,
+    }
+}
+
 pub async fn metrics_stream(pool: Option<Data<PgPool>>) -> impl actix_web::Responder {
     let stream = IntervalStream::new(interval(Duration::from_secs(5)))
         .then(move |_| {
             let pool = pool.clone();
             async move {
-            // Fetch both cluster and node metrics
+            // Fetch cluster, node, and ceph metrics
             let cluster_metrics = fetch_cluster_metrics(pool.as_deref().map(|v| &**v)).await.ok();
             let node_metrics = fetch_node_metrics().await.unwrap_or_default();
+            let ceph = fetch_ceph_status().await;
 
             let update = MetricsUpdate {
                 cluster: cluster_metrics,
                 nodes: node_metrics,
+                ceph: Some(ceph),
             };
 
             // Serialize to JSON and create SSE event
