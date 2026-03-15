@@ -1053,140 +1053,161 @@ pub fn ClusterStats() -> impl IntoView {
         });
     });
 
+    let (active_tab, set_active_tab) = signal("overview");
+
+    let tab_class = move |name: &'static str| {
+        if active_tab.get() == name {
+            "px-4 py-2 text-sm font-medium border-b-2 border-accent text-charcoal"
+        } else {
+            "px-4 py-2 text-sm text-charcoal-lighter hover:text-charcoal border-b-2 border-transparent"
+        }
+    };
+
     view! {
         <div class="w-full bg-gray py-6 px-4 rounded-xl mb-8">
+
+            // ── Header ────────────────────────────────────────────────────────
             <div class="flex items-center justify-between mb-4">
-                <h2 class="text-xl font-bold text-charcoal">
-                    "Homelab Cluster"
-                </h2>
+                <h2 class="text-xl font-bold text-charcoal">"Homelab Cluster"</h2>
                 <div class="text-right">
                     <span class="text-xs text-green-600">"● Live"</span>
-                    {move || {
-                        last_refresh.get().map(|time| view! {
-                            <span class="text-xs text-charcoal-lighter ml-2">{time}</span>
-                        })
-                    }}
+                    {move || last_refresh.get().map(|t| view! {
+                        <span class="text-xs text-charcoal-lighter ml-2">{t}</span>
+                    })}
                 </div>
             </div>
 
-            {move || {
-                error.get().map(|err| view! {
-                    <div class="text-center text-red-500 p-4 mb-4">
-                        <p>"Connection error: " {err}</p>
-                    </div>
-                })
-            }}
+            {move || error.get().map(|err| view! {
+                <div class="text-center text-red-500 p-4 mb-4">
+                    <p>"Connection error: " {err}</p>
+                </div>
+            })}
 
-            {move || {
-                if let Some(cluster) = cluster_metrics.get() {
-                    let cpu_hist = cpu_history.get().iter().copied().collect::<Vec<_>>();
-                    let mem_hist = memory_history.get().iter().copied().collect::<Vec<_>>();
-                    let disk_hist = disk_history.get().iter().copied().collect::<Vec<_>>();
-                    let rx_hist = network_rx_history.get().iter().copied().collect::<Vec<_>>();
-                    let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
-
-                    view! {
-                        <div class="flex gap-6 mb-4 text-sm flex-wrap">
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-bold text-accent">{cluster.pod_count}</span>
-                                <span class="text-charcoal-lighter">"pods"</span>
-                            </div>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-2xl font-bold text-green-600">
-                                    {cluster.healthy_node_count} "/" {cluster.node_count}
-                                </span>
-                                <span class="text-charcoal-lighter">"nodes"</span>
-                            </div>
-                            {cluster.db_info.map(|info| {
-                                let total: i64 = info.databases.iter().map(|d| d.size_bytes).sum();
-                                view! {
-                                    <div class="flex flex-col gap-0.5">
-                                        <div class="flex items-baseline gap-2">
-                                            <span class="text-2xl font-bold text-blue-500">
-                                                {fmt_db_size(total)}
+            // ── Summary badges (always visible) ───────────────────────────────
+            {move || cluster_metrics.get().map(|cluster| {
+                view! {
+                    <div class="flex gap-6 mb-4 text-sm flex-wrap">
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-2xl font-bold text-accent">{cluster.pod_count}</span>
+                            <span class="text-charcoal-lighter">"pods"</span>
+                        </div>
+                        <div class="flex items-baseline gap-2">
+                            <span class="text-2xl font-bold text-green-600">
+                                {cluster.healthy_node_count} "/" {cluster.node_count}
+                            </span>
+                            <span class="text-charcoal-lighter">"nodes"</span>
+                        </div>
+                        {cluster.db_info.map(|info| {
+                            let total: i64 = info.databases.iter().map(|d| d.size_bytes).sum();
+                            view! {
+                                <div class="flex flex-col gap-0.5">
+                                    <div class="flex items-baseline gap-2">
+                                        <span class="text-2xl font-bold text-blue-500">
+                                            {fmt_db_size(total)}
+                                        </span>
+                                        {info.pvc_capacity_bytes.map(|cap| view! {
+                                            <span class="text-charcoal-lighter">
+                                                "/ " {fmt_db_size(cap)}
                                             </span>
-                                            {info.pvc_capacity_bytes.map(|cap| view! {
-                                                <span class="text-charcoal-lighter">
-                                                    "/ " {fmt_db_size(cap)}
-                                                </span>
-                                            })}
-                                            <span class="text-charcoal-lighter">"DB"</span>
-                                        </div>
-                                        <div class="flex gap-3 text-xs text-charcoal-light">
-                                            {info.databases.into_iter().map(|db| view! {
-                                                <span>
-                                                    {db.name} ": " {fmt_db_size(db.size_bytes)}
-                                                </span>
-                                            }).collect::<Vec<_>>()}
-                                        </div>
+                                        })}
+                                        <span class="text-charcoal-lighter">"DB"</span>
                                     </div>
-                                }
+                                    <div class="flex gap-3 text-xs text-charcoal-light">
+                                        {info.databases.into_iter().map(|db| view! {
+                                            <span>{db.name} ": " {fmt_db_size(db.size_bytes)}</span>
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                </div>
+                            }
+                        })}
+                    </div>
+                }
+            })}
+
+            // ── Tab bar ───────────────────────────────────────────────────────
+            <div class="flex border-b border-border mb-4">
+                <button class=move || tab_class("overview") on:click=move |_| set_active_tab.set("overview")>"Overview"</button>
+                <button class=move || tab_class("storage")  on:click=move |_| set_active_tab.set("storage") >"Storage"</button>
+                <button class=move || tab_class("network")  on:click=move |_| set_active_tab.set("network") >"Network"</button>
+                <button class=move || tab_class("audit")    on:click=move |_| set_active_tab.set("audit")   >"AI Audit"</button>
+            </div>
+
+            // ── Tab: Overview ─────────────────────────────────────────────────
+            {move || (active_tab.get() == "overview").then(|| {
+                if cluster_metrics.get().is_some() {
+                    let cpu_hist  = cpu_history.get().iter().copied().collect::<Vec<_>>();
+                    let mem_hist  = memory_history.get().iter().copied().collect::<Vec<_>>();
+                    let disk_hist = disk_history.get().iter().copied().collect::<Vec<_>>();
+                    let rx_hist   = network_rx_history.get().iter().copied().collect::<Vec<_>>();
+                    let tx_hist   = network_tx_history.get().iter().copied().collect::<Vec<_>>();
+                    view! {
+                        <div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                                <LineChart data=cpu_hist  title="CPU Usage".to_string()     color="#ef4444".to_string() />
+                                <LineChart data=mem_hist  title="Memory Usage".to_string()  color="#3b82f6".to_string() />
+                                <LineChart data=disk_hist title="Storage Usage".to_string() color="#8b5cf6".to_string() />
+                            </div>
+                            <StackedAreaChart data_rx=rx_hist data_tx=tx_hist title="Network".to_string() />
+                            {(!node_metrics.get().is_empty()).then(|| view! {
+                                <div class="mt-4">
+                                    <h3 class="text-sm font-medium text-charcoal-lighter mb-2">"Nodes"</h3>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                        <For
+                                            each=move || node_metrics.get()
+                                            key=|node| node.name.clone()
+                                            children=move |node| view! { <NodeCard node=node /> }
+                                        />
+                                    </div>
+                                </div>
                             })}
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-                            <LineChart
-                                data=cpu_hist
-                                title="CPU Usage".to_string()
-                                color="#ef4444".to_string()
-                            />
-                            <LineChart
-                                data=mem_hist
-                                title="Memory Usage".to_string()
-                                color="#3b82f6".to_string()
-                            />
-                            <LineChart
-                                data=disk_hist
-                                title="Storage Usage".to_string()
-                                color="#8b5cf6".to_string()
-                            />
-                        </div>
-                        <StackedAreaChart
-                            data_rx=rx_hist
-                            data_tx=tx_hist
-                            title="Network".to_string()
-                        />
                     }.into_any()
                 } else {
                     view! {
                         <p class="text-center text-charcoal-light">"Connecting to metrics stream..."</p>
                     }.into_any()
                 }
-            }}
+            })}
 
-            {move || {
-                (!node_metrics.get().is_empty()).then(|| view! {
-                    <div class="mt-4">
-                        <h3 class="text-sm font-medium text-charcoal-lighter mb-2">"Nodes"</h3>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            <For
-                                each=move || node_metrics.get()
-                                key=|node| node.name.clone()
-                                children=move |node| {
-                                    view! { <NodeCard node=node /> }
-                                }
-                            />
-                        </div>
-                    </div>
-                })
-            }}
+            // ── Tab: Storage ──────────────────────────────────────────────────
+            {move || (active_tab.get() == "storage").then(|| {
+                if let Some(ceph) = ceph_status.get() {
+                    view! { <CephStatusPanel ceph=ceph /> }.into_any()
+                } else {
+                    view! {
+                        <p class="text-center text-charcoal-light py-8">"No Ceph data yet..."</p>
+                    }.into_any()
+                }
+            })}
 
-            {move || {
-                ceph_status.get().map(|ceph| view! { <CephStatusPanel ceph=ceph /> })
-            }}
-
-            {move || {
+            // ── Tab: Network ──────────────────────────────────────────────────
+            {move || (active_tab.get() == "network").then(|| {
                 let insights = network_insights.get();
-                (!insights.is_empty()).then(|| view! {
-                    <NetworkInsightsPanel insights=insights />
-                })
-            }}
+                if insights.is_empty() {
+                    view! {
+                        <p class="text-center text-charcoal-light py-8">
+                            "No spike events recorded yet."
+                        </p>
+                    }.into_any()
+                } else {
+                    view! { <NetworkInsightsPanel insights=insights /> }.into_any()
+                }
+            })}
 
-            {move || {
+            // ── Tab: AI Audit ─────────────────────────────────────────────────
+            {move || (active_tab.get() == "audit").then(|| {
                 let entries = audit_log.get();
-                (!entries.is_empty()).then(|| view! {
-                    <ClaudeAuditPanel entries=entries />
-                })
-            }}
+                if entries.is_empty() {
+                    view! {
+                        <p class="text-center text-charcoal-light py-8">
+                            "No Claude API calls recorded yet."
+                        </p>
+                    }.into_any()
+                } else {
+                    view! { <ClaudeAuditPanel entries=entries /> }.into_any()
+                }
+            })}
+
         </div>
     }
 }
