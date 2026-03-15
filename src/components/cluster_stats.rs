@@ -513,6 +513,25 @@ pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SpikeConfig {
+    pub multiplier: f64,
+    pub floor_mbps: f64,
+}
+
+#[server(name = GetSpikeConfig, prefix = "/api", endpoint = "get_spike_config")]
+pub async fn get_spike_config() -> Result<SpikeConfig, ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let pool = extract::<Data<PgPool>>().await
+        .map_err(|_| ServerFnError::ServerError("no db".into()))?;
+
+    let (multiplier, floor_mbps) = crate::db::load_spike_config(&pool).await;
+    Ok(SpikeConfig { multiplier, floor_mbps })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct FluxResource {
     pub kind: String,
     pub namespace: String,
@@ -975,6 +994,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (audit_log, set_audit_log) = signal(Vec::<ClaudeAuditEntry>::new());
     #[allow(unused_variables)]
     let (gitops, set_gitops) = signal(Vec::<FluxResource>::new());
+    #[allow(unused_variables)]
+    let (spike_config, set_spike_config) = signal(None::<SpikeConfig>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1028,6 +1049,9 @@ pub fn ClusterStats() -> impl IntoView {
             }
             if let Ok(resources) = get_gitops_status().await {
                 set_gitops.set(resources);
+            }
+            if let Ok(cfg) = get_spike_config().await {
+                set_spike_config.set(Some(cfg));
             }
         });
     });
@@ -1305,15 +1329,39 @@ pub fn ClusterStats() -> impl IntoView {
             // ── Tab: Network ──────────────────────────────────────────────────
             {move || (active_tab.get() == "network").then(|| {
                 let insights = network_insights.get();
-                if insights.is_empty() {
-                    view! {
-                        <p class="text-center text-charcoal-light py-8">
-                            "No spike events recorded yet."
-                        </p>
-                    }.into_any()
-                } else {
-                    view! { <NetworkInsightsPanel insights=insights /> }.into_any()
-                }
+                let cfg = spike_config.get();
+                view! {
+                    <div>
+                        // Spike detector config
+                        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mb-2">
+                            <h3 class="text-xs font-medium text-charcoal-lighter mb-2">"Spike Detector"</h3>
+                            {match cfg {
+                                Some(c) => view! {
+                                    <div class="flex gap-6 text-xs font-mono">
+                                        <span>
+                                            <span class="text-charcoal-lighter">"threshold  "</span>
+                                            <span class="text-charcoal font-semibold">{format!("{:.1}x", c.multiplier)} " above baseline"</span>
+                                        </span>
+                                        <span>
+                                            <span class="text-charcoal-lighter">"floor  "</span>
+                                            <span class="text-charcoal font-semibold">{format!("{:.0} Mbps", c.floor_mbps)}</span>
+                                        </span>
+                                    </div>
+                                }.into_any(),
+                                None => view! { <p class="text-xs text-charcoal-lighter">"Loading..."</p> }.into_any(),
+                            }}
+                        </div>
+                        {if insights.is_empty() {
+                            view! {
+                                <p class="text-center text-charcoal-light py-8">
+                                    "No spike events recorded yet."
+                                </p>
+                            }.into_any()
+                        } else {
+                            view! { <NetworkInsightsPanel insights=insights /> }.into_any()
+                        }}
+                    </div>
+                }.into_any()
             })}
 
             // ── Tab: GitOps ───────────────────────────────────────────────────

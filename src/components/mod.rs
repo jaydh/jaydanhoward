@@ -32,6 +32,7 @@ pub fn register_server_fns() {
     register_explicit::<cluster_stats::GetHistoricalMetrics>();
     register_explicit::<cluster_stats::GetCephStatus>();
     register_explicit::<cluster_stats::GetNetworkInsights>();
+    register_explicit::<cluster_stats::GetSpikeConfig>();
     register_explicit::<cluster_stats::GetClaudeAuditLog>();
     register_explicit::<cluster_stats::GetGitOpsStatus>();
     register_explicit::<satellite_tracker::GetTleData>();
