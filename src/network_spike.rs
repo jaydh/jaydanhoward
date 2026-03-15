@@ -84,6 +84,7 @@ mod inner {
     pub async fn explain_spike(
         spike_tx_mbps: f64,
         baseline_tx_mbps: f64,
+        pool: Option<&sqlx::PgPool>,
     ) -> Result<(Vec<PodTraffic>, String, u8), anyhow::Error> {
         use crate::prometheus_client::query_prometheus;
 
@@ -213,21 +214,61 @@ mod inner {
             fmt_pod_rows(&rx_data),
         );
 
+        const MODEL: &str = "claude-haiku-4-5-20251001";
+
         let client = reqwest::Client::new();
-        let res = client
+        let api_result = client
             .post("https://api.anthropic.com/v1/messages")
             .header("x-api-key", &api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&serde_json::json!({
-                "model": "claude-haiku-4-5-20251001",
-                "max_tokens": 256,
+                "model": MODEL,
+                "max_tokens": 512,
                 "messages": [{"role": "user", "content": prompt}]
             }))
             .send()
             .await?
             .json::<serde_json::Value>()
-            .await?;
+            .await;
 
+        // Write audit log regardless of success/failure.
+        match &api_result {
+            Ok(res) => {
+                let raw_text = res["content"][0]["text"].as_str().unwrap_or("").to_string();
+                let input_tokens = res["usage"]["input_tokens"].as_i64().map(|v| v as i32);
+                let output_tokens = res["usage"]["output_tokens"].as_i64().map(|v| v as i32);
+                if let Some(p) = pool {
+                    let _ = crate::db::insert_claude_audit(
+                        p,
+                        "network_spike",
+                        MODEL,
+                        &prompt,
+                        Some(&raw_text),
+                        input_tokens,
+                        output_tokens,
+                        None,
+                    )
+                    .await;
+                }
+            }
+            Err(e) => {
+                if let Some(p) = pool {
+                    let _ = crate::db::insert_claude_audit(
+                        p,
+                        "network_spike",
+                        MODEL,
+                        &prompt,
+                        None,
+                        None,
+                        None,
+                        Some(&e.to_string()),
+                    )
+                    .await;
+                }
+            }
+        }
+
+        let res = api_result?;
         let raw = res["content"][0]["text"]
             .as_str()
             .unwrap_or("{}")

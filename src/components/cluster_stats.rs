@@ -514,6 +514,45 @@ pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClaudeAuditEntry {
+    pub id: i64,
+    pub occurred_at: String,
+    pub context: String,
+    pub model: String,
+    pub prompt: String,
+    pub response: Option<String>,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
+    pub error: Option<String>,
+}
+
+#[server(name = GetClaudeAuditLog, prefix = "/api", endpoint = "get_claude_audit_log")]
+pub async fn get_claude_audit_log() -> Result<Vec<ClaudeAuditEntry>, ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let pool = extract::<Data<PgPool>>().await
+        .map_err(|_| ServerFnError::ServerError("no db".into()))?;
+
+    let rows = crate::db::get_recent_claude_audits(&pool, 20)
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    Ok(rows.into_iter().map(|r| ClaudeAuditEntry {
+        id: r.id,
+        occurred_at: r.occurred_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+        context: r.context,
+        model: r.model,
+        prompt: r.prompt,
+        response: r.response,
+        input_tokens: r.input_tokens,
+        output_tokens: r.output_tokens,
+        error: r.error,
+    }).collect())
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
@@ -573,6 +612,84 @@ fn NetworkInsightsPanel(insights: Vec<NetworkInsight>) -> impl IntoView {
                             <p class="text-xs text-charcoal leading-relaxed">
                                 {insight.explanation}
                             </p>
+                        </div>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn ClaudeAuditPanel(entries: Vec<ClaudeAuditEntry>) -> impl IntoView {
+    let (expanded, set_expanded) = signal(None::<i64>);
+
+    view! {
+        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
+            <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Claude API Audit"</h3>
+            <div class="space-y-2">
+                {entries.into_iter().map(|entry| {
+                    let id = entry.id;
+                    let is_error = entry.error.is_some();
+                    let tokens = match (entry.input_tokens, entry.output_tokens) {
+                        (Some(i), Some(o)) => format!("{i}→{o} tok"),
+                        _ => String::new(),
+                    };
+                    let response_preview = entry.response.as_deref()
+                        .map(|r| {
+                            // Extract explanation from JSON if present, else show raw
+                            serde_json::from_str::<serde_json::Value>(r)
+                                .ok()
+                                .and_then(|v| v["explanation"].as_str().map(|s| s.to_string()))
+                                .unwrap_or_else(|| r.chars().take(120).collect::<String>())
+                        })
+                        .or_else(|| entry.error.as_deref().map(|e| format!("error: {e}")))
+                        .unwrap_or_default();
+                    let prompt = entry.prompt.clone();
+                    let full_response = entry.response.clone().unwrap_or_default();
+
+                    view! {
+                        <div class=move || format!(
+                            "border-l-2 pl-3 {}",
+                            if is_error { "border-red-500" } else { "border-blue-400" }
+                        )>
+                            <div class="flex items-center gap-2 text-xs">
+                                <span class="font-mono text-charcoal-lighter">{entry.occurred_at}</span>
+                                <span class="text-blue-400">{entry.context}</span>
+                                <span class="text-charcoal-lighter">{entry.model}</span>
+                                {(!tokens.is_empty()).then(|| view! {
+                                    <span class="text-charcoal-lighter ml-auto">{tokens}</span>
+                                })}
+                                <button
+                                    class="text-charcoal-lighter hover:text-charcoal ml-1"
+                                    on:click=move |_| set_expanded.update(|v| {
+                                        *v = if *v == Some(id) { None } else { Some(id) };
+                                    })
+                                >
+                                    {move || if expanded.get() == Some(id) { "▲" } else { "▼" }}
+                                </button>
+                            </div>
+                            <p class="text-xs text-charcoal mt-0.5 leading-relaxed line-clamp-2">
+                                {response_preview}
+                            </p>
+                            {move || (expanded.get() == Some(id)).then(|| view! {
+                                <div class="mt-2 space-y-2">
+                                    <div>
+                                        <p class="text-xs font-medium text-charcoal-lighter mb-1">"Prompt"</p>
+                                        <pre class="text-xs text-charcoal bg-background rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                            {prompt.clone()}
+                                        </pre>
+                                    </div>
+                                    {(!full_response.is_empty()).then(|| view! {
+                                        <div>
+                                            <p class="text-xs font-medium text-charcoal-lighter mb-1">"Raw response"</p>
+                                            <pre class="text-xs text-charcoal bg-background rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-32 overflow-y-auto">
+                                                {full_response.clone()}
+                                            </pre>
+                                        </div>
+                                    })}
+                                </div>
+                            })}
                         </div>
                     }
                 }).collect::<Vec<_>>()}
@@ -752,6 +869,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (ceph_status, set_ceph_status) = signal(None::<CephStatus>);
     #[allow(unused_variables)]
     let (network_insights, set_network_insights) = signal(Vec::<NetworkInsight>::new());
+    #[allow(unused_variables)]
+    let (audit_log, set_audit_log) = signal(Vec::<ClaudeAuditEntry>::new());
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -794,11 +913,14 @@ pub fn ClusterStats() -> impl IntoView {
         };
     }
 
-    // Load recent insights on mount
+    // Load recent insights and audit log on mount
     Effect::new(move |_| {
         leptos::task::spawn_local(async move {
             if let Ok(insights) = get_network_insights().await {
                 set_network_insights.set(insights);
+            }
+            if let Ok(entries) = get_claude_audit_log().await {
+                set_audit_log.set(entries);
             }
         });
     });
@@ -924,6 +1046,9 @@ pub fn ClusterStats() -> impl IntoView {
             }
             if let Ok(insights) = get_network_insights().await {
                 set_network_insights.set(insights);
+            }
+            if let Ok(entries) = get_claude_audit_log().await {
+                set_audit_log.set(entries);
             }
         });
     });
@@ -1053,6 +1178,13 @@ pub fn ClusterStats() -> impl IntoView {
                 let insights = network_insights.get();
                 (!insights.is_empty()).then(|| view! {
                     <NetworkInsightsPanel insights=insights />
+                })
+            }}
+
+            {move || {
+                let entries = audit_log.get();
+                (!entries.is_empty()).then(|| view! {
+                    <ClaudeAuditPanel entries=entries />
                 })
             }}
         </div>

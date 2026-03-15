@@ -361,7 +361,7 @@ pub async fn metrics_stream(
                     let pool_opt = pool.clone();
                     let detector_ref = spike_detector.clone();
                     tokio::spawn(async move {
-                        match crate::network_spike::explain_spike(spike_mbps, baseline_mbps).await {
+                        match crate::network_spike::explain_spike(spike_mbps, baseline_mbps, pool_opt.as_deref().map(|v| &**v)).await {
                             Ok((pods, explanation, significance)) => {
                                 tracing::info!(
                                     "Spike significance={significance}/10, \

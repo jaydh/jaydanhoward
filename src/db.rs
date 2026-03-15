@@ -871,6 +871,77 @@ mod inner {
         }).collect())
     }
 
+    pub struct ClaudeAuditRow {
+        pub id: i64,
+        pub occurred_at: chrono::DateTime<chrono::Utc>,
+        pub context: String,
+        pub model: String,
+        pub prompt: String,
+        pub response: Option<String>,
+        pub input_tokens: Option<i32>,
+        pub output_tokens: Option<i32>,
+        pub error: Option<String>,
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn insert_claude_audit(
+        pool: &PgPool,
+        context: &str,
+        model: &str,
+        prompt: &str,
+        response: Option<&str>,
+        input_tokens: Option<i32>,
+        output_tokens: Option<i32>,
+        error: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO claude_audit_log \
+             (context, model, prompt, response, input_tokens, output_tokens, error) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        )
+        .bind(context)
+        .bind(model)
+        .bind(prompt)
+        .bind(response)
+        .bind(input_tokens)
+        .bind(output_tokens)
+        .bind(error)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_recent_claude_audits(
+        pool: &PgPool,
+        limit: i64,
+    ) -> Result<Vec<ClaudeAuditRow>, sqlx::Error> {
+        let rows = sqlx::query(
+            "SELECT id, occurred_at, context, model, prompt, response, \
+                    input_tokens, output_tokens, error \
+             FROM claude_audit_log \
+             ORDER BY occurred_at DESC \
+             LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .iter()
+            .map(|r| ClaudeAuditRow {
+                id: r.try_get("id").unwrap_or(0),
+                occurred_at: r.try_get("occurred_at").unwrap_or_default(),
+                context: r.try_get("context").unwrap_or_default(),
+                model: r.try_get("model").unwrap_or_default(),
+                prompt: r.try_get("prompt").unwrap_or_default(),
+                response: r.try_get("response").ok().flatten(),
+                input_tokens: r.try_get("input_tokens").ok().flatten(),
+                output_tokens: r.try_get("output_tokens").ok().flatten(),
+                error: r.try_get("error").ok().flatten(),
+            })
+            .collect())
+    }
+
     /// Try to atomically claim the right to explain a spike in the current
     /// 5-minute bucket. Returns true if this pod won the race, false if another
     /// pod already claimed it (or on DB error).
