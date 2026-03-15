@@ -871,6 +871,21 @@ mod inner {
         }).collect())
     }
 
+    /// Try to atomically claim the right to explain a spike in the current
+    /// 5-minute bucket. Returns true if this pod won the race, false if another
+    /// pod already claimed it (or on DB error).
+    pub async fn try_claim_spike(pool: &PgPool) -> bool {
+        let result = sqlx::query(
+            "INSERT INTO spike_claims (bucket) \
+             VALUES (date_trunc('5 minutes', NOW())) \
+             ON CONFLICT DO NOTHING",
+        )
+        .execute(pool)
+        .await;
+
+        matches!(result, Ok(r) if r.rows_affected() == 1)
+    }
+
     /// Load the persisted spike detector thresholds, falling back to defaults.
     pub async fn load_spike_config(pool: &PgPool) -> (f64, f64) {
         let row = sqlx::query(

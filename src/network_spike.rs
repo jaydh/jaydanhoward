@@ -4,17 +4,17 @@ pub use inner::*;
 #[cfg(feature = "ssr")]
 mod inner {
     use std::collections::VecDeque;
-    use std::time::{Duration, Instant};
 
     use serde::{Deserialize, Serialize};
 
     /// Rolling-window spike detector for cluster network tx.
     /// Window size and thresholds are tuned dynamically via Claude feedback.
+    /// Cooldown / dedup is handled by the DB (spike_claims table), not in-memory,
+    /// so multiple HA replicas don't each fire a separate explanation.
     pub struct NetworkSpikeDetector {
         tx_window: VecDeque<f64>,
         window_capacity: usize,
         min_samples: usize,
-        last_spike_at: Option<Instant>,
         pub multiplier: f64,
         pub floor_mbps: f64,
     }
@@ -34,7 +34,6 @@ mod inner {
                 tx_window: VecDeque::with_capacity(window_capacity),
                 window_capacity,
                 min_samples,
-                last_spike_at: None,
                 multiplier,
                 floor_mbps,
             }
@@ -60,14 +59,6 @@ mod inner {
                 return None;
             }
 
-            // 5-minute cooldown so one sustained event doesn't spam.
-            if let Some(last) = self.last_spike_at {
-                if last.elapsed() < Duration::from_secs(300) {
-                    return None;
-                }
-            }
-
-            self.last_spike_at = Some(Instant::now());
             Some((tx_mbps, baseline))
         }
 

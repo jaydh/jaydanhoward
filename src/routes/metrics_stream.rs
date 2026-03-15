@@ -348,6 +348,16 @@ pub async fn metrics_stream(
             if let Some(ref c) = cluster_metrics {
                 let spike = spike_detector.lock().await.check(c.network_tx_mbps);
                 if let Some((spike_mbps, baseline_mbps)) = spike {
+                    // Only one pod should explain a spike — atomically claim the
+                    // 5-minute bucket in the DB. If another replica already claimed
+                    // it, skip.
+                    let claimed = if let Some(ref p) = pool {
+                        crate::db::try_claim_spike(p).await
+                    } else {
+                        true // no DB → single pod, always proceed
+                    };
+
+                    if claimed {
                     let pool_opt = pool.clone();
                     let detector_ref = spike_detector.clone();
                     tokio::spawn(async move {
@@ -393,6 +403,7 @@ pub async fn metrics_stream(
                             Err(e) => tracing::warn!("Failed to explain network spike: {}", e),
                         }
                     });
+                    } // if claimed
                 }
             }
 
