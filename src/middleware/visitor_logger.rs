@@ -167,7 +167,7 @@ async fn record_visit(pool: PgPool, http_client: reqwest::Client, ip: String, pa
 
     let geo: Option<GeoResponse> = async {
         let resp = http_client
-            .get(format!("http://ip-api.com/json/{ip}?fields=status,country,countryCode,regionName,city,lat,lon,isp"))
+            .get(format!("https://ip-api.com/json/{ip}?fields=status,country,countryCode,regionName,city,lat,lon,isp"))
             .send()
             .await
             .ok()?;
