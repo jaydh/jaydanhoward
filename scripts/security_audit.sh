@@ -20,7 +20,21 @@ fi
 
 # RUSTSEC-2023-0071: Marvin Attack timing side-channel in rsa crate, pulled in
 # transitively by sqlx-core for Postgres SCRAM auth. No upstream fix available.
-IGNORE_FLAGS="--ignore RUSTSEC-2023-0071"
+#
+# Unmaintained transitive deps — no fix available upstream; ignoring until
+# the relevant upstream crates are updated:
+#
+# RUSTSEC-2024-0436: paste — unmaintained, pulled in by Leptos (tachys/reactive_graph/actix-service)
+# RUSTSEC-2024-0370: proc-macro-error — unmaintained, pulled in by rstml → leptos_macro
+# RUSTSEC-2025-0134: rustls-pemfile — unmaintained, pulled in by reqwest and kube-client
+# RUSTSEC-2024-0384: instant — unmaintained, pulled in by three-d (WASM only); three-d is at latest
+# RUSTSEC-2022-0081: json — unmaintained, pulled in by satkit (WASM only); major version upgrade needed
+IGNORE_FLAGS="--ignore RUSTSEC-2023-0071 \
+  --ignore RUSTSEC-2024-0436 \
+  --ignore RUSTSEC-2024-0370 \
+  --ignore RUSTSEC-2025-0134 \
+  --ignore RUSTSEC-2024-0384 \
+  --ignore RUSTSEC-2022-0081"
 
 echo "Running cargo-audit on server dependencies..."
 "$CARGO_AUDIT" audit $AUDIT_FLAGS $IGNORE_FLAGS --file Cargo.server.lock

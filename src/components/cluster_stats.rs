@@ -330,17 +330,35 @@ fn fmt_db_size(bytes: i64) -> String {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CephStatus {
     pub health: u32, // 0=OK, 1=WARN, 2=ERR
+    // Services
     pub mon_quorum: u32,
     pub mon_total: u32,
+    pub mgr_active: u32,
+    pub mgr_standby: u32,
+    pub mds_up: u32,
+    pub mds_standby: u32,
     pub osd_up: u32,
     pub osd_in: u32,
     pub osd_total: u32,
-    pub pg_active: u32,
-    pub pg_clean: u32,
-    pub pg_total: u32,
+    pub rgw_count: u32,
+    // Data
+    pub volumes_healthy: u32,
+    pub volumes_total: u32,
     pub pool_count: u32,
-    pub read_mbps: f64,
-    pub write_mbps: f64,
+    pub pg_total: u32,
+    pub pg_clean: u32,
+    pub pg_degraded: u32,
+    pub pg_recovering: u32,
+    pub pg_remapped: u32,
+    pub pg_scrubbing: u32,
+    pub pg_deep_scrub: u32,
+    pub objects_count: f64,
+    pub data_used_bytes: f64,
+    pub data_avail_bytes: f64,
+    pub data_total_bytes: f64,
+    // IO (raw bytes/sec)
+    pub read_bytes_per_sec: f64,
+    pub write_bytes_per_sec: f64,
     pub read_iops: f64,
     pub write_iops: f64,
 }
@@ -348,23 +366,68 @@ pub struct CephStatus {
 #[server(name = GetCephStatus, prefix = "/api", endpoint = "get_ceph_status")]
 pub async fn get_ceph_status() -> Result<CephStatus, ServerFnError<String>> {
     let health = parse_prometheus_value("ceph_health_status").await.unwrap_or(0.0) as u32;
+
+    // MON
     let mon_quorum = parse_prometheus_value("sum(ceph_mon_quorum_status == 1)").await.unwrap_or(0.0) as u32;
     let mon_total = parse_prometheus_value("count(ceph_mon_quorum_status)").await.unwrap_or(0.0) as u32;
+
+    // MGR
+    let mgr_active = parse_prometheus_value("sum(ceph_mgr_status == 1)").await.unwrap_or(0.0) as u32;
+    let mgr_standby = parse_prometheus_value("sum(ceph_mgr_status == 0)").await.unwrap_or(0.0) as u32;
+
+    // MDS
+    let mds_up = parse_prometheus_value("count(ceph_mds_metadata{fs_state=\"up:active\"})").await.unwrap_or(0.0) as u32;
+    let mds_standby = parse_prometheus_value("count(ceph_mds_metadata{fs_state=~\"up:standby.*\"})").await.unwrap_or(0.0) as u32;
+
+    // OSD
     let osd_up = parse_prometheus_value("count(ceph_osd_up == 1)").await.unwrap_or(0.0) as u32;
     let osd_in = parse_prometheus_value("count(ceph_osd_in == 1)").await.unwrap_or(0.0) as u32;
     let osd_total = parse_prometheus_value("count(ceph_osd_up)").await.unwrap_or(0.0) as u32;
-    let pg_active = parse_prometheus_value("ceph_pg_active").await.unwrap_or(0.0) as u32;
-    let pg_clean = parse_prometheus_value("ceph_pg_clean").await.unwrap_or(0.0) as u32;
-    let pg_total = parse_prometheus_value("ceph_pg_total").await.unwrap_or(0.0) as u32;
-    let pool_count = parse_prometheus_value("count(ceph_pool_objects_total)").await.unwrap_or(0.0) as u32;
-    let read_mbps = parse_prometheus_value("sum(irate(ceph_osd_op_r_out_bytes[5m])) / 1024 / 1024").await.unwrap_or(0.0);
-    let write_mbps = parse_prometheus_value("sum(irate(ceph_osd_op_w_in_bytes[5m])) / 1024 / 1024").await.unwrap_or(0.0);
+
+    // RGW
+    let rgw_count = parse_prometheus_value("count(ceph_rgw_metadata)").await.unwrap_or(0.0) as u32;
+
+    // Volumes (CephFS)
+    let volumes_total = parse_prometheus_value("count(ceph_fs_metadata)").await.unwrap_or(0.0) as u32;
+    let volumes_healthy = volumes_total; // assume healthy if metric is present
+
+    // Pools and PGs — use osdmap metrics for accurate counts
+    let pool_count = parse_prometheus_value("ceph_osdmap_num_pools").await.unwrap_or(0.0) as u32;
+    let pg_total = parse_prometheus_value("ceph_osdmap_num_pg").await.unwrap_or(0.0) as u32;
+    let pg_clean = parse_prometheus_value("ceph_pg_state{state=\"active+clean\"}").await.unwrap_or(0.0) as u32;
+    let pg_degraded = parse_prometheus_value("sum(ceph_pg_state{state=~\".*degraded.*\"})").await.unwrap_or(0.0) as u32;
+    let pg_recovering = parse_prometheus_value("sum(ceph_pg_state{state=~\".*recovering.*\"})").await.unwrap_or(0.0) as u32;
+    let pg_remapped = parse_prometheus_value("sum(ceph_pg_state{state=~\".*remapped.*\"})").await.unwrap_or(0.0) as u32;
+    let pg_scrubbing = parse_prometheus_value("sum(ceph_pg_state{state=~\".*scrubbing(?!\\\\+deep).*\"})").await.unwrap_or(0.0) as u32;
+    let pg_deep_scrub = parse_prometheus_value("sum(ceph_pg_state{state=~\".*scrubbing\\\\+deep.*\"})").await.unwrap_or(0.0) as u32;
+
+    // Objects
+    let objects_count = parse_prometheus_value("sum(ceph_pool_objects_total)").await.unwrap_or(0.0);
+
+    // Data usage (raw bytes)
+    let data_used_bytes = parse_prometheus_value("ceph_cluster_total_used_bytes").await.unwrap_or(0.0);
+    let data_total_bytes = parse_prometheus_value("ceph_cluster_total_bytes").await.unwrap_or(0.0);
+    let data_avail_bytes = (data_total_bytes - data_used_bytes).max(0.0);
+
+    // IO — raw bytes/sec and iops
+    let read_bytes_per_sec = parse_prometheus_value("sum(irate(ceph_osd_op_r_out_bytes[5m]))").await.unwrap_or(0.0);
+    let write_bytes_per_sec = parse_prometheus_value("sum(irate(ceph_osd_op_w_in_bytes[5m]))").await.unwrap_or(0.0);
     let read_iops = parse_prometheus_value("sum(irate(ceph_osd_op_r[5m]))").await.unwrap_or(0.0);
     let write_iops = parse_prometheus_value("sum(irate(ceph_osd_op_w[5m]))").await.unwrap_or(0.0);
+
     Ok(CephStatus {
-        health, mon_quorum, mon_total, osd_up, osd_in, osd_total,
-        pg_active, pg_clean, pg_total, pool_count,
-        read_mbps, write_mbps, read_iops, write_iops,
+        health,
+        mon_quorum, mon_total,
+        mgr_active, mgr_standby,
+        mds_up, mds_standby,
+        osd_up, osd_in, osd_total,
+        rgw_count,
+        volumes_healthy, volumes_total,
+        pool_count, pg_total, pg_clean,
+        pg_degraded, pg_recovering, pg_remapped, pg_scrubbing, pg_deep_scrub,
+        objects_count,
+        data_used_bytes, data_avail_bytes, data_total_bytes,
+        read_bytes_per_sec, write_bytes_per_sec, read_iops, write_iops,
     })
 }
 
@@ -375,20 +438,63 @@ pub struct MetricsUpdate {
     pub ceph: Option<CephStatus>,
 }
 
+fn fmt_ceph_bytes(bytes: f64) -> String {
+    if bytes >= 1_099_511_627_776.0 {
+        format!("{:.1} TiB", bytes / 1_099_511_627_776.0)
+    } else if bytes >= 1_073_741_824.0 {
+        format!("{:.1} GiB", bytes / 1_073_741_824.0)
+    } else if bytes >= 1_048_576.0 {
+        format!("{:.1} MiB", bytes / 1_048_576.0)
+    } else if bytes >= 1_024.0 {
+        format!("{:.0} KiB", bytes / 1_024.0)
+    } else {
+        format!("{:.0} B", bytes)
+    }
+}
+
+fn fmt_ceph_rate(bytes_per_sec: f64) -> String {
+    format!("{}/s", fmt_ceph_bytes(bytes_per_sec))
+}
+
+fn fmt_objects(count: f64) -> String {
+    if count >= 1_000_000.0 {
+        format!("{:.2}M", count / 1_000_000.0)
+    } else if count >= 1_000.0 {
+        format!("{:.2}k", count / 1_000.0)
+    } else {
+        format!("{:.0}", count)
+    }
+}
+
 #[component]
 fn CephStatusPanel(ceph: CephStatus) -> impl IntoView {
     let health = ceph.health;
     let mon_quorum = ceph.mon_quorum;
     let mon_total = ceph.mon_total;
+    let mgr_active = ceph.mgr_active;
+    let mgr_standby = ceph.mgr_standby;
+    let mds_up = ceph.mds_up;
+    let mds_standby = ceph.mds_standby;
     let osd_up = ceph.osd_up;
     let osd_in = ceph.osd_in;
     let osd_total = ceph.osd_total;
-    let pg_active = ceph.pg_active;
-    let pg_clean = ceph.pg_clean;
-    let pg_total = ceph.pg_total;
+    let rgw_count = ceph.rgw_count;
+    let volumes_healthy = ceph.volumes_healthy;
+    let volumes_total = ceph.volumes_total;
     let pool_count = ceph.pool_count;
-    let read_mbps = ceph.read_mbps;
-    let write_mbps = ceph.write_mbps;
+    let pg_total = ceph.pg_total;
+    let pg_clean = ceph.pg_clean;
+    let pg_degraded = ceph.pg_degraded;
+    let pg_recovering = ceph.pg_recovering;
+    let pg_remapped = ceph.pg_remapped;
+    let pg_scrubbing = ceph.pg_scrubbing;
+    let pg_deep_scrub = ceph.pg_deep_scrub;
+    let objects_count = ceph.objects_count;
+    let data_used_bytes = ceph.data_used_bytes;
+    let data_avail_bytes = ceph.data_avail_bytes;
+    let data_total_bytes = ceph.data_total_bytes;
+    let read_bytes_per_sec = ceph.read_bytes_per_sec;
+    let write_bytes_per_sec = ceph.write_bytes_per_sec;
     let read_iops = ceph.read_iops;
     let write_iops = ceph.write_iops;
 
@@ -398,42 +504,122 @@ fn CephStatusPanel(ceph: CephStatus) -> impl IntoView {
         _ => ("HEALTH_ERR", "text-red-500"),
     };
 
-    let all_clean = pg_total > 0 && pg_active == pg_total && pg_clean == pg_total;
-
     view! {
         <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
             <div class="flex items-center justify-between mb-3">
                 <h3 class="text-xs font-medium text-charcoal-lighter">"Ceph"</h3>
                 <span class={"text-xs font-mono font-semibold ".to_string() + health_class}>{health_label}</span>
             </div>
-            <div class="font-mono text-xs space-y-1.5 text-charcoal">
-                <div class="flex gap-2">
-                    <span class="text-charcoal-lighter w-20 shrink-0">"services"</span>
-                    <span>
-                        "mon " {mon_quorum} "/" {mon_total} " quorum  "
-                        "osd " {osd_up} "/" {osd_total} " up, " {osd_in} " in"
-                    </span>
-                </div>
-                {(pool_count > 0 || pg_total > 0).then(move || {
-                    let pg_status = if all_clean {
-                        format!("{} active+clean", pg_total)
-                    } else {
-                        format!("{} active, {} clean / {} total", pg_active, pg_clean, pg_total)
-                    };
-                    view! {
-                        <div class="flex gap-2">
-                            <span class="text-charcoal-lighter w-20 shrink-0">"data"</span>
-                            <span>{format!("{} pools  {}", pool_count, pg_status)}</span>
+            <div class="font-mono text-xs text-charcoal">
+                // Services section
+                <div class="mb-2">
+                    <div class="text-charcoal-lighter mb-1">"services:"</div>
+                    <div class="space-y-0.5 ml-2">
+                        <div>
+                            <span class="text-charcoal-lighter inline-block w-5">"mon:"</span>
+                            " "
+                            {format!("{} daemons, quorum ({}/{})", mon_total, mon_quorum, mon_total)}
                         </div>
-                    }
-                })}
-                {(read_mbps > 0.001 || write_mbps > 0.001 || read_iops > 0.0 || write_iops > 0.0).then(move || view! {
-                    <div class="flex gap-2">
-                        <span class="text-charcoal-lighter w-20 shrink-0">"io"</span>
-                        <span>
-                            {format!("{:.1} MiB/s rd  {:.1} MiB/s wr  {:.0} op/s rd  {:.0} op/s wr",
-                                read_mbps, write_mbps, read_iops, write_iops)}
-                        </span>
+                        {(mgr_active > 0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter inline-block w-5">"mgr:"</span>
+                                " "
+                                {format!("{} active, {} standby", mgr_active, mgr_standby)}
+                            </div>
+                        })}
+                        {(mds_up > 0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter inline-block w-5">"mds:"</span>
+                                " "
+                                {format!("{}/{} daemons up, {} hot standby", mds_up, mds_up, mds_standby)}
+                            </div>
+                        })}
+                        <div>
+                            <span class="text-charcoal-lighter inline-block w-5">"osd:"</span>
+                            " "
+                            {format!("{} osds: {} up, {} in", osd_total, osd_up, osd_in)}
+                        </div>
+                        {(rgw_count > 0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter inline-block w-5">"rgw:"</span>
+                                " "
+                                {format!("{} daemon{} active", rgw_count, if rgw_count == 1 { "" } else { "s" })}
+                            </div>
+                        })}
+                    </div>
+                </div>
+
+                // Data section
+                <div class="mb-2">
+                    <div class="text-charcoal-lighter mb-1">"data:"</div>
+                    <div class="space-y-0.5 ml-2">
+                        {(volumes_total > 0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter">"volumes: "</span>
+                                {format!("{}/{} healthy", volumes_healthy, volumes_total)}
+                            </div>
+                        })}
+                        {(pool_count > 0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter">"pools:   "</span>
+                                {format!("{} pools, {} pgs", pool_count, pg_total)}
+                            </div>
+                        })}
+                        {(objects_count > 0.0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter">"objects: "</span>
+                                {format!("{} objects, {}", fmt_objects(objects_count), fmt_ceph_bytes(data_used_bytes))}
+                            </div>
+                        })}
+                        {(data_total_bytes > 0.0).then(move || view! {
+                            <div>
+                                <span class="text-charcoal-lighter">"usage:   "</span>
+                                {format!("{} used, {} / {} avail",
+                                    fmt_ceph_bytes(data_used_bytes),
+                                    fmt_ceph_bytes(data_avail_bytes),
+                                    fmt_ceph_bytes(data_total_bytes))}
+                            </div>
+                        })}
+                        {(pg_total > 0).then(move || {
+                            let non_clean = vec![
+                                (pg_clean, "active+clean"),
+                                (pg_degraded, "degraded"),
+                                (pg_recovering, "recovering"),
+                                (pg_remapped, "active+clean+remapped"),
+                                (pg_scrubbing, "active+clean+scrubbing"),
+                                (pg_deep_scrub, "active+clean+scrubbing+deep"),
+                            ];
+                            let lines: Vec<_> = non_clean.into_iter()
+                                .filter(|(n, _)| *n > 0)
+                                .collect();
+                            view! {
+                                <div>
+                                    <span class="text-charcoal-lighter">"pgs:     "</span>
+                                    <span class="inline-block">
+                                        {lines.into_iter().enumerate().map(|(i, (n, state))| {
+                                            let prefix = if i == 0 { String::new() } else { "         ".to_string() };
+                                            view! {
+                                                <span class="block">{format!("{}{} {}", prefix, n, state)}</span>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                    </span>
+                                </div>
+                            }
+                        })}
+                    </div>
+                </div>
+
+                // IO section
+                {(read_bytes_per_sec > 0.0 || write_bytes_per_sec > 0.0 || read_iops > 0.0 || write_iops > 0.0).then(move || view! {
+                    <div>
+                        <div class="text-charcoal-lighter mb-1">"io:"</div>
+                        <div class="ml-2">
+                            <span class="text-charcoal-lighter">"client:  "</span>
+                            {format!("{} rd, {} wr, {:.0} op/s rd, {:.0} op/s wr",
+                                fmt_ceph_rate(read_bytes_per_sec),
+                                fmt_ceph_rate(write_bytes_per_sec),
+                                read_iops, write_iops)}
+                        </div>
                     </div>
                 })}
             </div>
