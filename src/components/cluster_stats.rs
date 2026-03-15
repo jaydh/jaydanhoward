@@ -673,15 +673,16 @@ pub async fn get_network_breakdown() -> Result<NetworkBreakdown, ServerFnError<S
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CloudflaredHostStats {
-    pub host: String,
+pub struct CloudflaredCodeStats {
+    pub status_code: String,
     pub req_per_sec: f64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CloudflaredStatus {
     pub ha_connections: u32,
-    pub per_host: Vec<CloudflaredHostStats>,
+    pub total_req_per_sec: f64,
+    pub by_status: Vec<CloudflaredCodeStats>,
     pub error_rate: f64,
 }
 
@@ -694,12 +695,11 @@ pub async fn get_cloudflared_status() -> Result<CloudflaredStatus, ServerFnError
         data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
     };
 
-    let (ha, host_reqs, errors) = tokio::join!(
+    let (ha, total_reqs, code_reqs, errors) = tokio::join!(
         query_prometheus("sum(cloudflared_tunnel_ha_connections)"),
-        query_prometheus(
-            "topk(10, sum by (host) (rate(cloudflared_tunnel_requests_with_response_total[5m])))"
-        ),
-        query_prometheus("sum(rate(cloudflared_tunnel_request_errors_total[5m]))"),
+        query_prometheus("sum(rate(cloudflared_tunnel_total_requests[5m]))"),
+        query_prometheus("sum by (status_code) (rate(cloudflared_tunnel_response_by_code[5m]))"),
+        query_prometheus("sum(rate(cloudflared_tunnel_request_errors[5m]))"),
     );
 
     let scalar = |data: Result<crate::prometheus_client::PrometheusData, _>| -> f64 {
@@ -710,21 +710,21 @@ pub async fn get_cloudflared_status() -> Result<CloudflaredStatus, ServerFnError
     };
 
     let ha_connections = scalar(ha) as u32;
+    let total_req_per_sec = scalar(total_reqs);
     let error_rate = scalar(errors);
 
-    let mut per_host: Vec<CloudflaredHostStats> = host_reqs
+    let mut by_status: Vec<CloudflaredCodeStats> = code_reqs
         .unwrap_or_else(|_| empty())
         .data.result.into_iter()
         .filter_map(|m| {
-            let host = m.metric.get("host")?.clone();
+            let status_code = m.metric.get("status_code")?.clone();
             let rps = m.value.1.parse::<f64>().ok()?;
-            Some(CloudflaredHostStats { host, req_per_sec: rps })
+            Some(CloudflaredCodeStats { status_code, req_per_sec: rps })
         })
-        .filter(|h| !h.host.is_empty())
         .collect();
-    per_host.sort_by(|a, b| b.req_per_sec.partial_cmp(&a.req_per_sec).unwrap_or(std::cmp::Ordering::Equal));
+    by_status.sort_by(|a, b| b.req_per_sec.partial_cmp(&a.req_per_sec).unwrap_or(std::cmp::Ordering::Equal));
 
-    Ok(CloudflaredStatus { ha_connections, per_host, error_rate })
+    Ok(CloudflaredStatus { ha_connections, total_req_per_sec, by_status, error_rate })
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1712,18 +1712,29 @@ pub fn ClusterStats() -> impl IntoView {
                                             })}
                                         </div>
                                     </div>
-                                    {if !cf.per_host.is_empty() {
+                                    <div class="flex items-baseline gap-4 mb-3">
+                                        <span class="text-lg font-bold text-charcoal font-mono">
+                                            {format!("{:.2}", cf.total_req_per_sec)}
+                                        </span>
+                                        <span class="text-xs text-charcoal-lighter">"req/s (5m avg)"</span>
+                                    </div>
+                                    {if !cf.by_status.is_empty() {
                                         view! {
-                                            <div class="space-y-1">
-                                                <div class="grid grid-cols-[1fr_auto] gap-x-4 text-xs text-charcoal-lighter font-mono mb-1">
-                                                    <span>"host"</span>
-                                                    <span class="text-right">"req/s"</span>
-                                                </div>
-                                                {cf.per_host.into_iter().map(|h| view! {
-                                                    <div class="grid grid-cols-[1fr_auto] gap-x-4 text-xs font-mono">
-                                                        <span class="text-charcoal truncate">{h.host}</span>
-                                                        <span class="text-right text-charcoal-lighter">{format!("{:.3}", h.req_per_sec)}</span>
-                                                    </div>
+                                            <div class="flex flex-wrap gap-3">
+                                                {cf.by_status.into_iter().map(|s| {
+                                                    let color = if s.status_code.starts_with('5') {
+                                                        "text-red-500"
+                                                    } else if s.status_code.starts_with('4') {
+                                                        "text-amber-500"
+                                                    } else {
+                                                        "text-green-600"
+                                                    };
+                                                    view! {
+                                                        <div class="text-xs font-mono">
+                                                            <span class=color>{s.status_code}</span>
+                                                            <span class="text-charcoal-lighter">{format!(" {:.2}/s", s.req_per_sec)}</span>
+                                                        </div>
+                                                    }
                                                 }).collect::<Vec<_>>()}
                                             </div>
                                         }.into_any()
