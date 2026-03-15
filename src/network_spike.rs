@@ -47,7 +47,7 @@ mod inner {
             let baseline: f64 =
                 self.tx_window.iter().take(n - 1).sum::<f64>() / (n - 1) as f64;
 
-            let is_spike = tx_mbps > baseline * 2.5 && tx_mbps > 50.0;
+            let is_spike = tx_mbps > baseline * 3.0 && tx_mbps > 5.0;
             if !is_spike {
                 return None;
             }
