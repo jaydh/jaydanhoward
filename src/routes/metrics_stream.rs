@@ -7,7 +7,7 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
-use crate::components::cluster_stats::{DbEntry, DbInfo};
+use crate::components::cluster_stats::{PvcEntry, StorageInfo};
 use crate::prometheus_client::query_prometheus;
 
 #[derive(Clone, Debug, Serialize)]
@@ -23,7 +23,7 @@ pub struct ClusterMetrics {
     pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
-    pub db_info: Option<DbInfo>,
+    pub storage: Option<StorageInfo>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -153,40 +153,49 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
     ).await?;
 
-    let db_info = {
-        let (db_data, pvc_data) = tokio::join!(
+    let storage = {
+        use std::collections::HashMap;
+
+        let empty = || crate::prometheus_client::PrometheusData {
+            status: String::new(),
+            data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+        };
+
+        let (cap_data, used_data) = tokio::join!(
             query_prometheus(
-                "sort_desc(cnpg_pg_database_size_bytes{datname!~\"template.*|postgres\"})"
+                "max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes)"
             ),
             query_prometheus(
-                "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~\"pgdata-.*\"})"
+                "max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes)"
             ),
         );
 
-        let databases: Vec<DbEntry> = db_data
-            .unwrap_or_else(|_| crate::prometheus_client::PrometheusData {
-                status: String::new(),
-                data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
-            })
-            .data
-            .result
-            .iter()
+        let cap_map: HashMap<(String, String), i64> = cap_data
+            .unwrap_or_else(|_| empty())
+            .data.result.into_iter()
             .filter_map(|m| {
-                let name = m.metric.get("datname")?.clone();
-                let size_bytes = m.value.1.parse::<f64>().ok()? as i64;
-                Some(DbEntry { name, size_bytes })
+                let ns = m.metric.get("namespace")?.clone();
+                let pvc = m.metric.get("persistentvolumeclaim")?.clone();
+                let bytes = m.value.1.parse::<f64>().ok()? as i64;
+                Some(((ns, pvc), bytes))
             })
             .collect();
 
-        let pvc_capacity_bytes = pvc_data
-            .ok()
-            .and_then(|d| d.data.result.first().map(|m| m.value.1.parse::<f64>().unwrap_or(0.0) as i64));
+        let mut pvcs: Vec<PvcEntry> = used_data
+            .unwrap_or_else(|_| empty())
+            .data.result.into_iter()
+            .filter_map(|m| {
+                let ns = m.metric.get("namespace")?.clone();
+                let pvc = m.metric.get("persistentvolumeclaim")?.clone();
+                let used = m.value.1.parse::<f64>().ok()? as i64;
+                let capacity = *cap_map.get(&(ns.clone(), pvc.clone())).unwrap_or(&0);
+                Some(PvcEntry { namespace: ns, name: pvc, used_bytes: used, capacity_bytes: capacity })
+            })
+            .collect();
 
-        if databases.is_empty() && pvc_capacity_bytes.is_none() {
-            None
-        } else {
-            Some(DbInfo { databases, pvc_capacity_bytes })
-        }
+        pvcs.sort_by(|a, b| b.used_bytes.cmp(&a.used_bytes));
+
+        if pvcs.is_empty() { None } else { Some(StorageInfo { pvcs }) }
     };
 
     Ok(ClusterMetrics {
@@ -201,7 +210,7 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
-        db_info,
+        storage,
     })
 }
 

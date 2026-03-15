@@ -15,19 +15,20 @@ pub struct ClusterMetrics {
     pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
-    pub db_info: Option<DbInfo>,
+    pub storage: Option<StorageInfo>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DbEntry {
+pub struct PvcEntry {
+    pub namespace: String,
     pub name: String,
-    pub size_bytes: i64,
+    pub used_bytes: i64,
+    pub capacity_bytes: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct DbInfo {
-    pub databases: Vec<DbEntry>,
-    pub pvc_capacity_bytes: Option<i64>,
+pub struct StorageInfo {
+    pub pvcs: Vec<PvcEntry>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -105,42 +106,51 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
     ).await?;
 
-    let db_info = {
+    let storage = {
         use crate::prometheus_client::query_prometheus;
+        use std::collections::HashMap;
 
-        let (db_data, pvc_data) = tokio::join!(
+        let (cap_data, used_data) = tokio::join!(
             query_prometheus(
-                "sort_desc(cnpg_pg_database_size_bytes{datname!~\"template.*|postgres\"})"
+                "max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_capacity_bytes)"
             ),
             query_prometheus(
-                "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~\"pgdata-.*\"})"
+                "max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes)"
             ),
         );
 
-        let databases: Vec<DbEntry> = db_data
-            .unwrap_or_else(|_| crate::prometheus_client::PrometheusData {
-                status: String::new(),
-                data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
-            })
-            .data
-            .result
-            .iter()
+        let empty = || crate::prometheus_client::PrometheusData {
+            status: String::new(),
+            data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+        };
+
+        let cap_map: HashMap<(String, String), i64> = cap_data
+            .unwrap_or_else(|_| empty())
+            .data.result.into_iter()
             .filter_map(|m| {
-                let name = m.metric.get("datname")?.clone();
-                let size_bytes = m.value.1.parse::<f64>().ok()? as i64;
-                Some(DbEntry { name, size_bytes })
+                let ns = m.metric.get("namespace")?.clone();
+                let pvc = m.metric.get("persistentvolumeclaim")?.clone();
+                let bytes = m.value.1.parse::<f64>().ok()? as i64;
+                Some(((ns, pvc), bytes))
             })
             .collect();
 
-        let pvc_capacity_bytes = pvc_data
-            .ok()
-            .and_then(|d| d.data.result.first().map(|m| m.value.1.parse::<f64>().unwrap_or(0.0) as i64));
+        let mut pvcs: Vec<PvcEntry> = used_data
+            .unwrap_or_else(|_| empty())
+            .data.result.into_iter()
+            .filter_map(|m| {
+                let ns = m.metric.get("namespace")?.clone();
+                let pvc = m.metric.get("persistentvolumeclaim")?.clone();
+                let used = m.value.1.parse::<f64>().ok()? as i64;
+                let capacity = *cap_map.get(&(ns.clone(), pvc.clone())).unwrap_or(&0);
+                Some(PvcEntry { namespace: ns, name: pvc, used_bytes: used, capacity_bytes: capacity })
+            })
+            .collect();
 
-        if databases.is_empty() && pvc_capacity_bytes.is_none() {
-            None
-        } else {
-            Some(DbInfo { databases, pvc_capacity_bytes })
-        }
+        // Sort by used bytes descending
+        pvcs.sort_by(|a, b| b.used_bytes.cmp(&a.used_bytes));
+
+        if pvcs.is_empty() { None } else { Some(StorageInfo { pvcs }) }
     };
 
     Ok(ClusterMetrics {
@@ -155,7 +165,7 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
-        db_info,
+        storage,
     })
 }
 
@@ -1278,36 +1288,51 @@ pub fn ClusterStats() -> impl IntoView {
 
             // ── Tab: Storage ──────────────────────────────────────────────────
             {move || (active_tab.get() == "storage").then(|| {
-                let db_info = cluster_metrics.get().and_then(|c| c.db_info);
+                let storage = cluster_metrics.get().and_then(|c| c.storage);
                 view! {
                     <div>
-                        {db_info.map(|info| {
-                            let total: i64 = info.databases.iter().map(|d| d.size_bytes).sum();
+                        {storage.map(|info| {
+                            // Group by namespace
+                            let mut groups: Vec<(String, Vec<PvcEntry>)> = Vec::new();
+                            for pvc in info.pvcs {
+                                if let Some(g) = groups.iter_mut().find(|(ns, _)| ns == &pvc.namespace) {
+                                    g.1.push(pvc);
+                                } else {
+                                    groups.push((pvc.namespace.clone(), vec![pvc]));
+                                }
+                            }
                             view! {
                                 <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mb-4">
-                                    <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Postgres"</h3>
-                                    <div class="flex items-baseline gap-2 mb-2">
-                                        <span class="text-2xl font-bold text-blue-500">{fmt_db_size(total)}</span>
-                                        {info.pvc_capacity_bytes.map(|cap| view! {
-                                            <span class="text-charcoal-lighter">"/ " {fmt_db_size(cap)} " PVC"</span>
-                                        })}
-                                    </div>
-                                    <div class="space-y-1">
-                                        {info.databases.into_iter().map(|db| {
-                                            let pct = info.pvc_capacity_bytes
-                                                .filter(|&cap| cap > 0)
-                                                .map(|cap| (db.size_bytes as f64 / cap as f64 * 100.0).min(100.0))
-                                                .unwrap_or(0.0);
+                                    <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Persistent Volumes"</h3>
+                                    <div class="space-y-4">
+                                        {groups.into_iter().map(|(ns, pvcs)| {
                                             view! {
-                                                <div class="flex items-center gap-3 text-xs">
-                                                    <span class="text-charcoal w-32 truncate font-mono">{db.name}</span>
-                                                    <div class="flex-1 bg-background rounded-full h-1.5">
-                                                        <div
-                                                            class="bg-blue-500 h-1.5 rounded-full"
-                                                            style=format!("width: {pct:.1}%")
-                                                        />
+                                                <div>
+                                                    <p class="text-xs text-charcoal-lighter font-mono mb-1">{ns}</p>
+                                                    <div class="space-y-1.5">
+                                                        {pvcs.into_iter().map(|pvc| {
+                                                            let pct = if pvc.capacity_bytes > 0 {
+                                                                (pvc.used_bytes as f64 / pvc.capacity_bytes as f64 * 100.0).min(100.0)
+                                                            } else { 0.0 };
+                                                            let bar_color = if pct > 85.0 { "bg-red-500" } else if pct > 65.0 { "bg-amber-400" } else { "bg-blue-500" };
+                                                            view! {
+                                                                <div class="flex items-center gap-3 text-xs">
+                                                                    <span class="text-charcoal w-40 truncate font-mono">{pvc.name}</span>
+                                                                    <div class="flex-1 bg-background rounded-full h-1.5">
+                                                                        <div
+                                                                            class=format!("{bar_color} h-1.5 rounded-full")
+                                                                            style=format!("width: {pct:.1}%")
+                                                                        />
+                                                                    </div>
+                                                                    <span class="text-charcoal-lighter w-24 text-right font-mono">
+                                                                        {fmt_db_size(pvc.used_bytes)}
+                                                                        " / "
+                                                                        {fmt_db_size(pvc.capacity_bytes)}
+                                                                    </span>
+                                                                </div>
+                                                            }
+                                                        }).collect::<Vec<_>>()}
                                                     </div>
-                                                    <span class="text-charcoal-lighter w-12 text-right">{fmt_db_size(db.size_bytes)}</span>
                                                 </div>
                                             }
                                         }).collect::<Vec<_>>()}
