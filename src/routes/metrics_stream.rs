@@ -3,10 +3,12 @@ use actix_web_lab::sse::{self, Sse};
 use serde::Serialize;
 use sqlx::PgPool;
 use std::time::Duration;
+use tokio::sync::Mutex;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
+use crate::network_spike::NetworkSpikeDetector;
 use crate::prometheus_client::query_prometheus;
 
 #[derive(Clone, Debug, Serialize)]
@@ -70,10 +72,28 @@ pub struct CephStatus {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct PodTraffic {
+    pub namespace: String,
+    pub pod: String,
+    pub mbps: f64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct NetworkInsight {
+    pub id: i64,
+    pub occurred_at: String,
+    pub spike_tx_mbps: f64,
+    pub baseline_tx_mbps: f64,
+    pub top_pods: Vec<PodTraffic>,
+    pub explanation: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
     pub ceph: Option<CephStatus>,
+    pub latest_insight: Option<NetworkInsight>,
 }
 
 async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
@@ -278,20 +298,86 @@ async fn fetch_ceph_status() -> CephStatus {
     }
 }
 
-pub async fn metrics_stream(pool: Option<Data<PgPool>>) -> impl actix_web::Responder {
+pub async fn metrics_stream(
+    pool: Option<Data<PgPool>>,
+    spike_detector: Data<Mutex<NetworkSpikeDetector>>,
+) -> impl actix_web::Responder {
     let stream = IntervalStream::new(interval(Duration::from_secs(5)))
         .then(move |_| {
             let pool = pool.clone();
+            let spike_detector = spike_detector.clone();
             async move {
             // Fetch cluster, node, and ceph metrics
             let cluster_metrics = fetch_cluster_metrics(pool.as_deref().map(|v| &**v)).await.ok();
             let node_metrics = fetch_node_metrics().await.unwrap_or_default();
             let ceph = fetch_ceph_status().await;
 
+            // Check for a network spike and explain it asynchronously.
+            if let Some(ref c) = cluster_metrics {
+                let spike = spike_detector.lock().await.check(c.network_tx_mbps);
+                if let Some((spike_mbps, baseline_mbps)) = spike {
+                    let pool_opt = pool.clone();
+                    tokio::spawn(async move {
+                        match crate::network_spike::explain_spike(spike_mbps, baseline_mbps).await {
+                            Ok((pods, explanation)) => {
+                                let top_pods_json = serde_json::to_value(
+                                    pods.iter()
+                                        .map(|p| serde_json::json!({
+                                            "namespace": p.namespace,
+                                            "pod": p.pod,
+                                            "mbps": p.mbps,
+                                        }))
+                                        .collect::<Vec<_>>()
+                                ).unwrap_or_default();
+
+                                if let Some(pool) = pool_opt {
+                                    let _ = crate::db::insert_network_insight(
+                                        &pool,
+                                        spike_mbps,
+                                        baseline_mbps,
+                                        &top_pods_json,
+                                        &explanation,
+                                    ).await;
+                                }
+                            }
+                            Err(e) => tracing::warn!("Failed to explain network spike: {}", e),
+                        }
+                    });
+                }
+            }
+
+            // Include the most recent stored insight (if any) so the client
+            // picks it up without needing a separate poll.
+            let latest_insight = if let Some(ref p) = pool {
+                crate::db::get_recent_network_insights(p, 1)
+                    .await
+                    .ok()
+                    .and_then(|mut rows| rows.pop())
+                    .map(|r| NetworkInsight {
+                        id: r.id,
+                        occurred_at: r.occurred_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+                        spike_tx_mbps: r.spike_tx_mbps,
+                        baseline_tx_mbps: r.baseline_tx_mbps,
+                        top_pods: serde_json::from_value::<Vec<serde_json::Value>>(r.top_pods)
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|v| PodTraffic {
+                                namespace: v["namespace"].as_str().unwrap_or("").to_string(),
+                                pod: v["pod"].as_str().unwrap_or("").to_string(),
+                                mbps: v["mbps"].as_f64().unwrap_or(0.0),
+                            })
+                            .collect(),
+                        explanation: r.explanation,
+                    })
+            } else {
+                None
+            };
+
             let update = MetricsUpdate {
                 cluster: cluster_metrics,
                 nodes: node_metrics,
                 ceph: Some(ceph),
+                latest_insight,
             };
 
             // Serialize to JSON and create SSE event

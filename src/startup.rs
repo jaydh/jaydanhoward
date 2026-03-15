@@ -3,6 +3,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     use crate::components::conjunction::ConjunctionCache;
     use crate::components::satellite_tracker::TleCache;
     use crate::components::App;
+    use crate::network_spike::NetworkSpikeDetector;
     use crate::db::create_pool;
     use crate::middleware::cache_control::CacheControl;
     use crate::middleware::rate_limit::RateLimiter;
@@ -74,6 +75,8 @@ pub async fn run() -> Result<(), std::io::Error> {
     let tle_cache = web::Data::new(TleCache::new(std::collections::HashMap::new()));
     let conjunction_cache =
         web::Data::new(ConjunctionCache::new(std::collections::HashMap::new()));
+    let spike_detector =
+        web::Data::new(tokio::sync::Mutex::new(NetworkSpikeDetector::new()));
 
     // Startup conjunction screening — chunk-based distributed approach.
     //
@@ -353,6 +356,7 @@ pub async fn run() -> Result<(), std::io::Error> {
         app = app.app_data(world_map_data.clone());
         app = app.app_data(tle_cache.clone());
         app = app.app_data(conjunction_cache.clone());
+        app = app.app_data(spike_detector.clone());
 
         app
     })

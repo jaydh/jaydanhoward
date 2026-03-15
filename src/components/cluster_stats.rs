@@ -432,10 +432,51 @@ pub async fn get_ceph_status() -> Result<CephStatus, ServerFnError<String>> {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PodTraffic {
+    pub namespace: String,
+    pub pod: String,
+    pub mbps: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkInsight {
+    pub id: i64,
+    pub occurred_at: String,
+    pub spike_tx_mbps: f64,
+    pub baseline_tx_mbps: f64,
+    pub top_pods: Vec<PodTraffic>,
+    pub explanation: String,
+}
+
+#[server(name = GetNetworkInsights, prefix = "/api", endpoint = "get_network_insights")]
+pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError<String>> {
+    use actix_web::web::Data;
+    use leptos_actix::extract;
+    use sqlx::PgPool;
+
+    let pool = extract::<Data<PgPool>>().await
+        .map_err(|_| ServerFnError::ServerError("no db".into()))?;
+
+    let rows = crate::db::get_recent_network_insights(&pool, 5)
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    Ok(rows.into_iter().map(|r| NetworkInsight {
+        id: r.id,
+        occurred_at: r.occurred_at.format("%Y-%m-%d %H:%M UTC").to_string(),
+        spike_tx_mbps: r.spike_tx_mbps,
+        baseline_tx_mbps: r.baseline_tx_mbps,
+        top_pods: serde_json::from_value(r.top_pods).unwrap_or_default(),
+        explanation: r.explanation,
+    }).collect())
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
     pub ceph: Option<CephStatus>,
+    pub latest_insight: Option<NetworkInsight>,
 }
 
 fn fmt_ceph_bytes(bytes: f64) -> String {
@@ -463,6 +504,38 @@ fn fmt_objects(count: f64) -> String {
         format!("{:.2}k", count / 1_000.0)
     } else {
         format!("{:.0}", count)
+    }
+}
+
+#[component]
+fn NetworkInsightsPanel(insights: Vec<NetworkInsight>) -> impl IntoView {
+    view! {
+        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
+            <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Network Insights"</h3>
+            <div class="space-y-3">
+                {insights.into_iter().map(|insight| {
+                    let multiplier = insight.spike_tx_mbps / insight.baseline_tx_mbps.max(0.1);
+                    view! {
+                        <div class="border-l-2 border-amber-400 pl-3">
+                            <div class="flex items-baseline gap-2 mb-1">
+                                <span class="text-xs font-mono font-semibold text-amber-500">
+                                    {format!("↑ {:.0} Mbps", insight.spike_tx_mbps)}
+                                </span>
+                                <span class="text-xs text-charcoal-lighter">
+                                    {format!("{:.1}x baseline", multiplier)}
+                                </span>
+                                <span class="text-xs text-charcoal-lighter ml-auto">
+                                    {insight.occurred_at}
+                                </span>
+                            </div>
+                            <p class="text-xs text-charcoal leading-relaxed">
+                                {insight.explanation}
+                            </p>
+                        </div>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+        </div>
     }
 }
 
@@ -635,6 +708,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (node_metrics, set_node_metrics) = signal(Vec::<NodeMetric>::new());
     #[allow(unused_variables)]
     let (ceph_status, set_ceph_status) = signal(None::<CephStatus>);
+    #[allow(unused_variables)]
+    let (network_insights, set_network_insights) = signal(Vec::<NetworkInsight>::new());
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -676,6 +751,15 @@ pub fn ClusterStats() -> impl IntoView {
             });
         };
     }
+
+    // Load recent insights on mount
+    Effect::new(move |_| {
+        leptos::task::spawn_local(async move {
+            if let Ok(insights) = get_network_insights().await {
+                set_network_insights.set(insights);
+            }
+        });
+    });
 
     // Fetch historical data on mount
     Effect::new(move |_| {
@@ -737,6 +821,14 @@ pub fn ClusterStats() -> impl IntoView {
                             }
                             set_node_metrics.set(update.nodes);
                             set_ceph_status.set(update.ceph);
+                            if let Some(insight) = update.latest_insight {
+                                set_network_insights.update(|v| {
+                                    if v.iter().all(|i| i.id != insight.id) {
+                                        v.insert(0, insight);
+                                        v.truncate(5);
+                                    }
+                                });
+                            }
                             set_error.set(None);
                         }
                         Err(e) => {
@@ -787,6 +879,9 @@ pub fn ClusterStats() -> impl IntoView {
             }
             if let Ok(ceph) = get_ceph_status().await {
                 set_ceph_status.set(Some(ceph));
+            }
+            if let Ok(insights) = get_network_insights().await {
+                set_network_insights.set(insights);
             }
         });
     });
@@ -893,6 +988,13 @@ pub fn ClusterStats() -> impl IntoView {
 
             {move || {
                 ceph_status.get().map(|ceph| view! { <CephStatusPanel ceph=ceph /> })
+            }}
+
+            {move || {
+                let insights = network_insights.get();
+                (!insights.is_empty()).then(|| view! {
+                    <NetworkInsightsPanel insights=insights />
+                })
             }}
         </div>
     }

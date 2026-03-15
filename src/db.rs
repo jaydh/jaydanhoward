@@ -5,7 +5,7 @@ pub use inner::*;
 mod inner {
     use chrono::{DateTime, Utc};
     use serde::{Deserialize, Serialize};
-    use sqlx::PgPool;
+    use sqlx::{PgPool, Row};
 
     pub async fn create_pool(database_url: &str) -> Result<PgPool, sqlx::Error> {
         let pool = PgPool::connect(database_url).await?;
@@ -822,5 +822,59 @@ mod inner {
                 calculated_by: r.try_get("calculated_by").unwrap_or_default(),
             })
             .collect())
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct NetworkInsightRow {
+        pub id: i64,
+        pub occurred_at: DateTime<Utc>,
+        pub spike_tx_mbps: f64,
+        pub baseline_tx_mbps: f64,
+        pub top_pods: serde_json::Value,
+        pub explanation: String,
+    }
+
+    pub async fn insert_network_insight(
+        pool: &PgPool,
+        spike_tx_mbps: f64,
+        baseline_tx_mbps: f64,
+        top_pods: &serde_json::Value,
+        explanation: &str,
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO network_insights (spike_tx_mbps, baseline_tx_mbps, top_pods, explanation)
+             VALUES ($1, $2, $3, $4)
+             RETURNING id",
+        )
+        .bind(spike_tx_mbps)
+        .bind(baseline_tx_mbps)
+        .bind(top_pods)
+        .bind(explanation)
+        .fetch_one(pool)
+        .await
+        .and_then(|r| r.try_get(0))
+    }
+
+    pub async fn get_recent_network_insights(
+        pool: &PgPool,
+        limit: i64,
+    ) -> Result<Vec<NetworkInsightRow>, sqlx::Error> {
+        sqlx::query(
+            "SELECT id, occurred_at, spike_tx_mbps, baseline_tx_mbps, top_pods, explanation
+             FROM network_insights
+             ORDER BY occurred_at DESC
+             LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .map(|rows| rows.into_iter().map(|r| NetworkInsightRow {
+            id: r.try_get("id").unwrap_or(0),
+            occurred_at: r.try_get("occurred_at").unwrap_or_else(|_| Utc::now()),
+            spike_tx_mbps: r.try_get("spike_tx_mbps").unwrap_or(0.0),
+            baseline_tx_mbps: r.try_get("baseline_tx_mbps").unwrap_or(0.0),
+            top_pods: r.try_get("top_pods").unwrap_or(serde_json::Value::Array(vec![])),
+            explanation: r.try_get("explanation").unwrap_or_default(),
+        }).collect())
     }
 }

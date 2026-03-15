@@ -8,6 +8,8 @@ mod components;
 mod db;
 #[cfg(feature = "ssr")]
 mod middleware;
+#[cfg(feature = "ssr")]
+mod network_spike;
 mod prometheus_client;
 mod routes;
 mod startup;
