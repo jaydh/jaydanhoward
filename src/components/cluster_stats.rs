@@ -1083,23 +1083,6 @@ pub fn ClusterStats() -> impl IntoView {
                 </div>
             })}
 
-            // ── Summary badges (always visible) ───────────────────────────────
-            {move || cluster_metrics.get().map(|cluster| {
-                view! {
-                    <div class="flex gap-6 mb-4 text-sm flex-wrap">
-                        <div class="flex items-baseline gap-2">
-                            <span class="text-2xl font-bold text-accent">{cluster.pod_count}</span>
-                            <span class="text-charcoal-lighter">"pods"</span>
-                        </div>
-                        <div class="flex items-baseline gap-2">
-                            <span class="text-2xl font-bold text-green-600">
-                                {cluster.healthy_node_count} "/" {cluster.node_count}
-                            </span>
-                            <span class="text-charcoal-lighter">"nodes"</span>
-                        </div>
-                    </div>
-                }
-            })}
 
             // ── Tab bar ───────────────────────────────────────────────────────
             <div class="flex border-b border-border mb-4">
@@ -1111,7 +1094,7 @@ pub fn ClusterStats() -> impl IntoView {
 
             // ── Tab: Overview ─────────────────────────────────────────────────
             {move || (active_tab.get() == "overview").then(|| {
-                if cluster_metrics.get().is_some() {
+                if let Some(cluster) = cluster_metrics.get() {
                     let cpu_hist  = cpu_history.get().iter().copied().collect::<Vec<_>>();
                     let mem_hist  = memory_history.get().iter().copied().collect::<Vec<_>>();
                     let disk_hist = disk_history.get().iter().copied().collect::<Vec<_>>();
@@ -1119,6 +1102,18 @@ pub fn ClusterStats() -> impl IntoView {
                     let tx_hist   = network_tx_history.get().iter().copied().collect::<Vec<_>>();
                     view! {
                         <div>
+                            <div class="flex gap-6 mb-4 text-sm flex-wrap">
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-2xl font-bold text-accent">{cluster.pod_count}</span>
+                                    <span class="text-charcoal-lighter">"pods"</span>
+                                </div>
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-2xl font-bold text-green-600">
+                                        {cluster.healthy_node_count} "/" {cluster.node_count}
+                                    </span>
+                                    <span class="text-charcoal-lighter">"nodes"</span>
+                                </div>
+                            </div>
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                                 <LineChart data=cpu_hist  title="CPU Usage".to_string()     color="#ef4444".to_string() />
                                 <LineChart data=mem_hist  title="Memory Usage".to_string()  color="#3b82f6".to_string() />
