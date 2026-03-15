@@ -101,11 +101,16 @@ pub async fn run() -> Result<(), std::io::Error> {
             let mut ticker = interval(Duration::from_secs(1));
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
+            let mut heartbeat_tick: u64 = 0;
             loop {
                 ticker.tick().await;
+                heartbeat_tick += 1;
 
                 let tx_mbps = match crate::prometheus_client::query_prometheus(
-                    "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000",
+                    // Use rate([1m]) for responsive spike detection rather than the
+                    // 5m-smoothed version used for charts — avoids baseline adapting
+                    // to a sustained spike before detection fires.
+                    "sum(rate(container_network_transmit_bytes_total[1m])) * 8 / 1000 / 1000",
                 )
                 .await
                 {
@@ -115,8 +120,23 @@ pub async fn run() -> Result<(), std::io::Error> {
                         .first()
                         .and_then(|m| m.value.1.parse::<f64>().ok())
                         .unwrap_or(0.0),
-                    Err(_) => continue,
+                    Err(e) => {
+                        log::warn!("Spike detector: Prometheus query failed: {e}");
+                        continue;
+                    }
                 };
+
+                // Heartbeat every 5 minutes so we can confirm the task is alive.
+                if heartbeat_tick % 300 == 1 {
+                    let (mult, floor) = {
+                        let det = detector.lock().await;
+                        (det.multiplier, det.floor_mbps)
+                    };
+                    log::info!(
+                        "Spike detector heartbeat: tx={tx_mbps:.1} Mbps  threshold={:.1}x  floor={floor:.0} Mbps",
+                        mult
+                    );
+                }
 
                 let spike = detector.lock().await.check(tx_mbps);
                 if let Some((spike_mbps, baseline_mbps)) = spike {
@@ -125,6 +145,12 @@ pub async fn run() -> Result<(), std::io::Error> {
                     } else {
                         true
                     };
+
+                    if !claimed {
+                        log::debug!(
+                            "Spike detector: {spike_mbps:.1} Mbps spike already claimed this bucket"
+                        );
+                    }
 
                     if claimed {
                         log::info!(
