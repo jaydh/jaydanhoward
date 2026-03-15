@@ -97,7 +97,8 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
     // Fetch any missing ones individually by CATNR and merge them in.
     if group == "active" {
         // 56371=Arcturus, 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
-        // (62454 was removed from CelesTrak — no GP data found)
+        // 62454=Astranis UtilitySat exists but has no public TLE on CelesTrak
+        // (Space-Track restriction; it's in a HEO transfer orbit, apogee 67447km)
         const ASTRANIS_IDS: &[u32] = &[56371, 62455, 62456, 62457];
         let present: std::collections::HashSet<u32> = satellites
             .iter()
@@ -380,7 +381,8 @@ pub fn SatelliteTracker() -> impl IntoView {
                                             let current_time = time_points[time_index];
 
                                             // 56371=Arcturus, 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
-        // (62454 was removed from CelesTrak — no GP data found)
+        // 62454=Astranis UtilitySat exists but has no public TLE on CelesTrak
+        // (Space-Track restriction; it's in a HEO transfer orbit, apogee 67447km)
         const ASTRANIS_IDS: &[u32] = &[56371, 62455, 62456, 62457];
                                             let hide_astranis = !show_astranis.get_untracked();
                                             let filtered_sats: Vec<satellite_calculations::Satellite>;
