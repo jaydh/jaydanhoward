@@ -607,33 +607,53 @@ pub struct FluxResource {
 
 #[server(name = GetGitOpsStatus, prefix = "/api", endpoint = "get_gitops_status")]
 pub async fn get_gitops_status() -> Result<Vec<FluxResource>, ServerFnError<String>> {
-    use crate::prometheus_client::query_prometheus;
+    use kube::{Api, Client, api::ListParams};
+    use kube::core::DynamicObject;
+    use kube::discovery::ApiResource;
 
-    // gotk_reconcile_condition{type="Ready"} has value 1 per resource+status combo.
-    // Labels: kind, name, exported_namespace (or namespace), status ("True"/"False"/"Unknown").
-    let data = query_prometheus("gotk_reconcile_condition{type=\"Ready\"}")
+    let client = Client::try_default()
         .await
         .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
 
-    let mut resources: Vec<FluxResource> = data
-        .data
-        .result
-        .iter()
-        .map(|m| {
-            let kind = m.metric.get("kind").cloned().unwrap_or_default();
-            let name = m.metric.get("name").cloned().unwrap_or_default();
-            let namespace = m.metric
-                .get("exported_namespace")
-                .or_else(|| m.metric.get("namespace"))
-                .cloned()
-                .unwrap_or_default();
-            let status = m.metric.get("status").map(|s| s.as_str()).unwrap_or("");
-            FluxResource { kind, namespace, name, ready: status == "True" }
-        })
-        .filter(|r| !r.name.is_empty())
-        .collect();
+    // Flux resource types and their API groups
+    let flux_types: &[(&str, &str, &str)] = &[
+        ("Kustomization", "kustomize.toolkit.fluxcd.io", "kustomizations"),
+        ("HelmRelease",   "helm.toolkit.fluxcd.io",      "helmreleases"),
+        ("GitRepository", "source.toolkit.fluxcd.io",    "gitrepositories"),
+        ("HelmRepository","source.toolkit.fluxcd.io",    "helmrepositories"),
+        ("HelmChart",     "source.toolkit.fluxcd.io",    "helmcharts"),
+    ];
 
-    // Sort: failing first, then alphabetically by kind + name.
+    let mut resources: Vec<FluxResource> = Vec::new();
+
+    for &(kind, group, plural) in flux_types {
+        let ar = ApiResource {
+            group: group.to_string(),
+            version: "v1".to_string(),
+            api_version: format!("{group}/v1"),
+            kind: kind.to_string(),
+            plural: plural.to_string(),
+        };
+        let api: Api<DynamicObject> = Api::all_with(client.clone(), &ar);
+        let list = match api.list(&ListParams::default()).await {
+            Ok(l) => l,
+            Err(_) => continue,
+        };
+        for obj in list.items {
+            let name = obj.metadata.name.unwrap_or_default();
+            let namespace = obj.metadata.namespace.unwrap_or_default();
+            let ready = obj.data["status"]["conditions"]
+                .as_array()
+                .and_then(|conds| {
+                    conds.iter().find(|c| c["type"].as_str() == Some("Ready"))
+                })
+                .and_then(|c| c["status"].as_str())
+                .map(|s| s == "True")
+                .unwrap_or(false);
+            resources.push(FluxResource { kind: kind.to_string(), namespace, name, ready });
+        }
+    }
+
     resources.sort_by(|a, b| {
         a.ready.cmp(&b.ready)
             .then(a.kind.cmp(&b.kind))
