@@ -183,7 +183,11 @@ pub fn SatelliteTracker() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     let (orbit_filter, set_orbit_filter) = signal(0b00111111_u8); // All types enabled
 
-    // Astranis satellite filter (NORAD IDs: 56371, 62454–62457)
+    // Named satellite groups — each has its own toggle independent of the orbit type filter.
+    // Add new groups here; they automatically bypass the orbit filter when enabled.
+    #[cfg(not(feature = "ssr"))]
+    const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+
     #[cfg(not(feature = "ssr"))]
     let (show_astranis, set_show_astranis) = signal(true);
 
@@ -378,18 +382,28 @@ pub fn SatelliteTracker() -> impl IntoView {
                                         if time_index < time_points.len() {
                                             let current_time = time_points[time_index];
 
-                                            // 56371=Arcturus, 62454=UtilitySat (no public TLE), 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
-        const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
-                                            let hide_astranis = !show_astranis.get_untracked();
+                                            // Build the set of pinned NORAD IDs from all enabled named groups.
+                                            // Pinned satellites always render regardless of the orbit type filter.
+                                            // To add a new named group: add its signal check here and a toggle in the UI.
+                                            let mut pinned = std::collections::HashSet::<u32>::new();
+                                            if show_astranis.get_untracked() {
+                                                pinned.extend(ASTRANIS_IDS);
+                                            }
+
+                                            // Exclude satellites whose named group is disabled
                                             let filtered_sats: Vec<satellite_calculations::Satellite>;
-                                            let sats_to_use: &[satellite_calculations::Satellite] = if hide_astranis {
+                                            let sats_to_use: &[satellite_calculations::Satellite] = {
                                                 filtered_sats = satellites.iter()
-                                                    .filter(|s| !ASTRANIS_IDS.contains(&s.norad_id))
+                                                    .filter(|s| {
+                                                        // Keep if pinned (group enabled) or not in any named group
+                                                        if ASTRANIS_IDS.contains(&s.norad_id) {
+                                                            return pinned.contains(&s.norad_id);
+                                                        }
+                                                        true
+                                                    })
                                                     .cloned()
                                                     .collect();
                                                 &filtered_sats
-                                            } else {
-                                                satellites
                                             };
 
                                             // Calculate positions at this specific time
@@ -397,6 +411,10 @@ pub fn SatelliteTracker() -> impl IntoView {
                                             let filter = orbit_filter.get_untracked();
                                             let sat_positions: Vec<satellite_calculations::SatellitePosition> =
                                                 positions.into_iter().map(|(_, pos)| pos).filter(|pos| {
+                                                    // Pinned satellites bypass the orbit type filter
+                                                    if pinned.contains(&pos.norad_id) {
+                                                        return true;
+                                                    }
                                                     let idx: u8 = if pos.altitude_km > 35000.0 && pos.altitude_km < 37000.0 && pos.inclination_deg.abs() < 5.0 {
                                                         4 // GEO
                                                     } else {
