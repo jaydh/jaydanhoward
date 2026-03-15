@@ -1656,7 +1656,7 @@ pub fn ClusterStats() -> impl IntoView {
                                     {if !bd.top_services.is_empty() {
                                         view! {
                                             <div>
-                                                <p class="text-xs text-charcoal-lighter mb-1">"Top public services (5m avg)"</p>
+                                                <p class="text-xs text-charcoal-lighter mb-1">"Top Traefik backends (5m avg, all traffic)"</p>
                                                 <div class="space-y-1">
                                                     <div class="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 text-xs text-charcoal-lighter font-mono mb-1">
                                                         <span>"service"</span>
