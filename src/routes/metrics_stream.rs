@@ -8,6 +8,7 @@ use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
+use crate::components::cluster_stats::{DbEntry, DbInfo};
 use crate::network_spike::NetworkSpikeDetector;
 use crate::prometheus_client::query_prometheus;
 
@@ -24,7 +25,7 @@ pub struct ClusterMetrics {
     pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
-    pub db_size_bytes: Option<i64>,
+    pub db_info: Option<DbInfo>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -106,7 +107,7 @@ async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
     }
 }
 
-async fn fetch_cluster_metrics(pool: Option<&PgPool>) -> Result<ClusterMetrics, anyhow::Error> {
+async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
     // Cluster CPU metrics
     let cpu_used = parse_prometheus_value(
         "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))"
@@ -154,10 +155,41 @@ async fn fetch_cluster_metrics(pool: Option<&PgPool>) -> Result<ClusterMetrics, 
         "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
     ).await?;
 
-    let db_size_bytes = if let Some(pool) = pool {
-        crate::db::get_db_size(pool).await.ok()
-    } else {
-        None
+    let db_info = {
+        let (db_data, pvc_data) = tokio::join!(
+            query_prometheus(
+                "sort_desc(pg_database_size_bytes{datname!~\"template.*|postgres\"})"
+            ),
+            query_prometheus(
+                "max(kubelet_volume_stats_capacity_bytes\
+                 {namespace=\"service\",persistentvolumeclaim=~\"pgdata-jaydanhoward-postgres-.*\"})"
+            ),
+        );
+
+        let databases: Vec<DbEntry> = db_data
+            .unwrap_or_else(|_| crate::prometheus_client::PrometheusData {
+                status: String::new(),
+                data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+            })
+            .data
+            .result
+            .iter()
+            .filter_map(|m| {
+                let name = m.metric.get("datname")?.clone();
+                let size_bytes = m.value.1.parse::<f64>().ok()? as i64;
+                Some(DbEntry { name, size_bytes })
+            })
+            .collect();
+
+        let pvc_capacity_bytes = pvc_data
+            .ok()
+            .and_then(|d| d.data.result.first().map(|m| m.value.1.parse::<f64>().unwrap_or(0.0) as i64));
+
+        if databases.is_empty() && pvc_capacity_bytes.is_none() {
+            None
+        } else {
+            Some(DbInfo { databases, pvc_capacity_bytes })
+        }
     };
 
     Ok(ClusterMetrics {
@@ -172,7 +204,7 @@ async fn fetch_cluster_metrics(pool: Option<&PgPool>) -> Result<ClusterMetrics, 
         healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
-        db_size_bytes,
+        db_info,
     })
 }
 
@@ -308,7 +340,7 @@ pub async fn metrics_stream(
             let spike_detector = spike_detector.clone();
             async move {
             // Fetch cluster, node, and ceph metrics
-            let cluster_metrics = fetch_cluster_metrics(pool.as_deref().map(|v| &**v)).await.ok();
+            let cluster_metrics = fetch_cluster_metrics().await.ok();
             let node_metrics = fetch_node_metrics().await.unwrap_or_default();
             let ceph = fetch_ceph_status().await;
 

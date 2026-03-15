@@ -75,54 +75,126 @@ mod inner {
         let api_key = std::env::var("ANTHROPIC_API_KEY")
             .map_err(|_| anyhow::anyhow!("ANTHROPIC_API_KEY not set"))?;
 
-        // Enrich: top pods by tx over the last 2 minutes.
-        let pod_data = query_prometheus(
-            "topk(5, sum by (namespace, pod) (rate(container_network_transmit_bytes_total[2m])))",
-        )
-        .await
-        .unwrap_or_else(|_| crate::prometheus_client::PrometheusData {
+        let empty_data = || crate::prometheus_client::PrometheusData {
             status: String::new(),
             data: crate::prometheus_client::PrometheusResult {
                 result_type: String::new(),
                 result: vec![],
             },
-        });
+        };
 
-        let top_pods: Vec<PodTraffic> = pod_data
+        // Fan out all Prometheus queries concurrently.
+        let (tx_data, rx_data, traefik_data, cilium_data) = tokio::join!(
+            query_prometheus(
+                "topk(5, sum by (namespace, pod) (rate(container_network_transmit_bytes_total[2m])))"
+            ),
+            query_prometheus(
+                "topk(5, sum by (namespace, pod) (rate(container_network_receive_bytes_total[2m])))"
+            ),
+            query_prometheus(
+                "topk(5, sum by (service) (rate(traefik_service_requests_total[2m])))"
+            ),
+            query_prometheus(
+                "topk(10, sum by (reason, direction) (rate(cilium_drop_count_total[2m])))"
+            ),
+        );
+
+        let tx_data = tx_data.unwrap_or_else(|_| empty_data());
+        let rx_data = rx_data.unwrap_or_else(|_| empty_data());
+        let traefik_data = traefik_data.unwrap_or_else(|_| empty_data());
+        let cilium_data = cilium_data.unwrap_or_else(|_| empty_data());
+
+        // Top TX pods (returned to caller for storage).
+        let top_pods: Vec<PodTraffic> = tx_data
             .data
             .result
             .iter()
             .map(|m| PodTraffic {
                 namespace: m.metric.get("namespace").cloned().unwrap_or_default(),
                 pod: m.metric.get("pod").cloned().unwrap_or_default(),
-                // Prometheus gives bytes/s — convert to Mbps.
                 mbps: m.value.1.parse::<f64>().unwrap_or(0.0) * 8.0 / 1_000_000.0,
             })
             .filter(|p| !p.pod.is_empty())
             .collect();
 
-        let pod_lines: Vec<String> = top_pods
-            .iter()
-            .map(|p| format!("  {}/{}: {:.1} Mbps", p.namespace, p.pod, p.mbps))
-            .collect();
+        let fmt_pod_rows = |data: &crate::prometheus_client::PrometheusData| -> String {
+            let rows: Vec<String> = data
+                .data
+                .result
+                .iter()
+                .map(|m| {
+                    let ns = m.metric.get("namespace").cloned().unwrap_or_default();
+                    let pod = m.metric.get("pod").cloned().unwrap_or_default();
+                    let mbps = m.value.1.parse::<f64>().unwrap_or(0.0) * 8.0 / 1_000_000.0;
+                    format!("  {ns}/{pod}: {mbps:.1} Mbps")
+                })
+                .filter(|s| !s.trim_start().starts_with('/'))
+                .collect();
+            if rows.is_empty() {
+                "  (none)".to_string()
+            } else {
+                rows.join("\n")
+            }
+        };
+
+        let traefik_section = {
+            let rows: Vec<String> = traefik_data
+                .data
+                .result
+                .iter()
+                .map(|m| {
+                    let svc = m.metric.get("service").cloned().unwrap_or_default();
+                    let rps = m.value.1.parse::<f64>().unwrap_or(0.0);
+                    format!("  {svc}: {rps:.1} req/s")
+                })
+                .filter(|s| !s.trim_start().starts_with('/'))
+                .collect();
+            if rows.is_empty() {
+                "  (no Traefik data)".to_string()
+            } else {
+                rows.join("\n")
+            }
+        };
+
+        let cilium_section = {
+            let rows: Vec<String> = cilium_data
+                .data
+                .result
+                .iter()
+                .map(|m| {
+                    let reason = m.metric.get("reason").cloned().unwrap_or_default();
+                    let dir = m.metric.get("direction").cloned().unwrap_or_default();
+                    let rate = m.value.1.parse::<f64>().unwrap_or(0.0);
+                    format!("  {dir} {reason}: {rate:.1} drops/s")
+                })
+                .collect();
+            if rows.is_empty() {
+                "  (no Cilium drops)".to_string()
+            } else {
+                rows.join("\n")
+            }
+        };
+
+        let now = chrono::Local::now().format("%Y-%m-%d %H:%M %Z").to_string();
 
         let prompt = format!(
             "A network spike was detected in a homelab Kubernetes cluster \
-             (self-hosted, rook-ceph storage, mix of personal and infrastructure services).\n\n\
+             (self-hosted, rook-ceph storage, Traefik ingress, Cilium CNI, \
+             mix of personal and infrastructure services).\n\n\
+             Time: {now}\n\
              Baseline tx (3-min avg): {:.1} Mbps\n\
              Spike tx: {:.1} Mbps ({:.1}x increase)\n\n\
-             Top pods by transmit at time of spike:\n\
-             {}\n\n\
+             Top pods by transmit:\n{}\n\n\
+             Top pods by receive:\n{}\n\n\
+             Traefik ingress request rate (top services):\n{traefik_section}\n\n\
+             Cilium network drops:\n{cilium_section}\n\n\
              In 2-3 sentences: what likely caused this spike, is it concerning, \
              and is any action needed?",
             baseline_tx_mbps,
             spike_tx_mbps,
             spike_tx_mbps / baseline_tx_mbps.max(0.1),
-            if pod_lines.is_empty() {
-                "  (no per-pod data available)".to_string()
-            } else {
-                pod_lines.join("\n")
-            },
+            fmt_pod_rows(&tx_data),
+            fmt_pod_rows(&rx_data),
         );
 
         let client = reqwest::Client::new();

@@ -601,13 +601,6 @@ mod inner {
         Ok(id)
     }
 
-    /// Query the size of the jaydanhoward database in bytes.
-    pub async fn get_db_size(pool: &PgPool) -> Result<i64, sqlx::Error> {
-        sqlx::query_scalar("SELECT pg_database_size('jaydanhoward')")
-            .fetch_one(pool)
-            .await
-    }
-
     /// Update the live pairs-propagated count on a running screening.
     pub async fn update_conjunction_pairs_propagated(
         pool: &PgPool,

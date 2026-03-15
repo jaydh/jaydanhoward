@@ -15,7 +15,19 @@ pub struct ClusterMetrics {
     pub healthy_node_count: u32,
     pub network_rx_mbps: f64,
     pub network_tx_mbps: f64,
-    pub db_size_bytes: Option<i64>,
+    pub db_info: Option<DbInfo>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DbEntry {
+    pub name: String,
+    pub size_bytes: i64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DbInfo {
+    pub databases: Vec<DbEntry>,
+    pub pvc_capacity_bytes: Option<i64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -45,9 +57,6 @@ async fn parse_prometheus_value(query: &str) -> Result<f64, ServerFnError<String
 
 #[server(name = GetClusterMetrics, prefix = "/api", endpoint = "get_cluster_metrics")]
 pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
-    use sqlx::PgPool;
 
     // Cluster CPU metrics
     let cpu_used = parse_prometheus_value(
@@ -96,10 +105,43 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
     ).await?;
 
-    let db_size_bytes = if let Ok(pool) = extract::<Data<PgPool>>().await {
-        crate::db::get_db_size(&pool).await.ok()
-    } else {
-        None
+    let db_info = {
+        use crate::prometheus_client::query_prometheus;
+
+        let (db_data, pvc_data) = tokio::join!(
+            query_prometheus(
+                "sort_desc(pg_database_size_bytes{datname!~\"template.*|postgres\"})"
+            ),
+            query_prometheus(
+                "max(kubelet_volume_stats_capacity_bytes\
+                 {namespace=\"service\",persistentvolumeclaim=~\"pgdata-jaydanhoward-postgres-.*\"})"
+            ),
+        );
+
+        let databases: Vec<DbEntry> = db_data
+            .unwrap_or_else(|_| crate::prometheus_client::PrometheusData {
+                status: String::new(),
+                data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+            })
+            .data
+            .result
+            .iter()
+            .filter_map(|m| {
+                let name = m.metric.get("datname")?.clone();
+                let size_bytes = m.value.1.parse::<f64>().ok()? as i64;
+                Some(DbEntry { name, size_bytes })
+            })
+            .collect();
+
+        let pvc_capacity_bytes = pvc_data
+            .ok()
+            .and_then(|d| d.data.result.first().map(|m| m.value.1.parse::<f64>().unwrap_or(0.0) as i64));
+
+        if databases.is_empty() && pvc_capacity_bytes.is_none() {
+            None
+        } else {
+            Some(DbInfo { databases, pvc_capacity_bytes })
+        }
     };
 
     Ok(ClusterMetrics {
@@ -114,7 +156,7 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         healthy_node_count,
         network_rx_mbps: network_rx,
         network_tx_mbps: network_tx,
-        db_size_bytes,
+        db_info,
     })
 }
 
@@ -930,13 +972,30 @@ pub fn ClusterStats() -> impl IntoView {
                                 </span>
                                 <span class="text-charcoal-lighter">"nodes"</span>
                             </div>
-                            {cluster.db_size_bytes.map(|bytes| view! {
-                                <div class="flex items-baseline gap-2">
-                                    <span class="text-2xl font-bold text-blue-500">
-                                        {fmt_db_size(bytes)}
-                                    </span>
-                                    <span class="text-charcoal-lighter">"DB"</span>
-                                </div>
+                            {cluster.db_info.map(|info| {
+                                let total: i64 = info.databases.iter().map(|d| d.size_bytes).sum();
+                                view! {
+                                    <div class="flex flex-col gap-0.5">
+                                        <div class="flex items-baseline gap-2">
+                                            <span class="text-2xl font-bold text-blue-500">
+                                                {fmt_db_size(total)}
+                                            </span>
+                                            {info.pvc_capacity_bytes.map(|cap| view! {
+                                                <span class="text-charcoal-lighter">
+                                                    "/ " {fmt_db_size(cap)}
+                                                </span>
+                                            })}
+                                            <span class="text-charcoal-lighter">"DB"</span>
+                                        </div>
+                                        <div class="flex gap-3 text-xs text-charcoal-light">
+                                            {info.databases.into_iter().map(|db| view! {
+                                                <span>
+                                                    {db.name} ": " {fmt_db_size(db.size_bytes)}
+                                                </span>
+                                            }).collect::<Vec<_>>()}
+                                        </div>
+                                    </div>
+                                }
                             })}
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">

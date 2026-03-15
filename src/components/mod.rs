@@ -4,7 +4,7 @@ pub mod conjunction;
 mod flux_graph;
 mod visitors;
 mod beliefs;
-mod cluster_stats;
+pub mod cluster_stats;
 mod dev;
 mod footer;
 mod icons;
