@@ -514,6 +514,52 @@ pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FluxResource {
+    pub kind: String,
+    pub namespace: String,
+    pub name: String,
+    pub ready: bool,
+}
+
+#[server(name = GetGitOpsStatus, prefix = "/api", endpoint = "get_gitops_status")]
+pub async fn get_gitops_status() -> Result<Vec<FluxResource>, ServerFnError<String>> {
+    use crate::prometheus_client::query_prometheus;
+
+    // gotk_reconcile_condition{type="Ready"} has value 1 per resource+status combo.
+    // Labels: kind, name, exported_namespace (or namespace), status ("True"/"False"/"Unknown").
+    let data = query_prometheus("gotk_reconcile_condition{type=\"Ready\"}")
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    let mut resources: Vec<FluxResource> = data
+        .data
+        .result
+        .iter()
+        .map(|m| {
+            let kind = m.metric.get("kind").cloned().unwrap_or_default();
+            let name = m.metric.get("name").cloned().unwrap_or_default();
+            let namespace = m.metric
+                .get("exported_namespace")
+                .or_else(|| m.metric.get("namespace"))
+                .cloned()
+                .unwrap_or_default();
+            let status = m.metric.get("status").map(|s| s.as_str()).unwrap_or("");
+            FluxResource { kind, namespace, name, ready: status == "True" }
+        })
+        .filter(|r| !r.name.is_empty())
+        .collect();
+
+    // Sort: failing first, then alphabetically by kind + name.
+    resources.sort_by(|a, b| {
+        a.ready.cmp(&b.ready)
+            .then(a.kind.cmp(&b.kind))
+            .then(a.name.cmp(&b.name))
+    });
+
+    Ok(resources)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClaudeAuditEntry {
     pub id: i64,
     pub occurred_at: String,
@@ -612,6 +658,63 @@ fn NetworkInsightsPanel(insights: Vec<NetworkInsight>) -> impl IntoView {
                             <p class="text-xs text-charcoal leading-relaxed">
                                 {insight.explanation}
                             </p>
+                        </div>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+        </div>
+    }
+}
+
+#[component]
+fn GitOpsPanel(resources: Vec<FluxResource>) -> impl IntoView {
+    // Group by kind.
+    let mut groups: Vec<(String, Vec<FluxResource>)> = Vec::new();
+    for r in resources {
+        if let Some(g) = groups.iter_mut().find(|(k, _)| k == &r.kind) {
+            g.1.push(r);
+        } else {
+            groups.push((r.kind.clone(), vec![r]));
+        }
+    }
+
+    let total: usize = groups.iter().map(|(_, rs)| rs.len()).sum();
+    let failing: usize = groups.iter().flat_map(|(_, rs)| rs).filter(|r| !r.ready).count();
+
+    view! {
+        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border">
+            <div class="flex items-center gap-3 mb-4">
+                <h3 class="text-xs font-medium text-charcoal-lighter">"Flux GitOps"</h3>
+                <span class="text-xs text-charcoal-lighter">{total} " resources"</span>
+                {(failing > 0).then(|| view! {
+                    <span class="text-xs font-medium text-red-500">{failing} " failing"</span>
+                })}
+                {(failing == 0).then(|| view! {
+                    <span class="text-xs text-green-600">"✓ all ready"</span>
+                })}
+            </div>
+            <div class="space-y-4">
+                {groups.into_iter().map(|(kind, rs)| {
+                    let kind_failing = rs.iter().filter(|r| !r.ready).count();
+                    view! {
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="text-xs font-medium text-charcoal">{kind}</span>
+                                {(kind_failing > 0).then(|| view! {
+                                    <span class="text-xs text-red-500">{kind_failing} " not ready"</span>
+                                })}
+                            </div>
+                            <div class="space-y-0.5">
+                                {rs.into_iter().map(|r| view! {
+                                    <div class="flex items-center gap-2 text-xs font-mono">
+                                        <span class=if r.ready { "text-green-600" } else { "text-red-500" }>
+                                            {if r.ready { "●" } else { "●" }}
+                                        </span>
+                                        <span class="text-charcoal-lighter">{r.namespace} "/"</span>
+                                        <span class="text-charcoal">{r.name}</span>
+                                    </div>
+                                }).collect::<Vec<_>>()}
+                            </div>
                         </div>
                     }
                 }).collect::<Vec<_>>()}
@@ -871,6 +974,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (network_insights, set_network_insights) = signal(Vec::<NetworkInsight>::new());
     #[allow(unused_variables)]
     let (audit_log, set_audit_log) = signal(Vec::<ClaudeAuditEntry>::new());
+    #[allow(unused_variables)]
+    let (gitops, set_gitops) = signal(Vec::<FluxResource>::new());
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -921,6 +1026,9 @@ pub fn ClusterStats() -> impl IntoView {
             }
             if let Ok(entries) = get_claude_audit_log().await {
                 set_audit_log.set(entries);
+            }
+            if let Ok(resources) = get_gitops_status().await {
+                set_gitops.set(resources);
             }
         });
     });
@@ -1050,6 +1158,9 @@ pub fn ClusterStats() -> impl IntoView {
             if let Ok(entries) = get_claude_audit_log().await {
                 set_audit_log.set(entries);
             }
+            if let Ok(resources) = get_gitops_status().await {
+                set_gitops.set(resources);
+            }
         });
     });
 
@@ -1089,6 +1200,7 @@ pub fn ClusterStats() -> impl IntoView {
                 <button class=move || tab_class("overview") on:click=move |_| set_active_tab.set("overview")>"Overview"</button>
                 <button class=move || tab_class("storage")  on:click=move |_| set_active_tab.set("storage") >"Storage"</button>
                 <button class=move || tab_class("network")  on:click=move |_| set_active_tab.set("network") >"Network"</button>
+                <button class=move || tab_class("gitops")   on:click=move |_| set_active_tab.set("gitops")  >"GitOps"</button>
                 <button class=move || tab_class("audit")    on:click=move |_| set_active_tab.set("audit")   >"AI Audit"</button>
             </div>
 
@@ -1202,6 +1314,18 @@ pub fn ClusterStats() -> impl IntoView {
                     }.into_any()
                 } else {
                     view! { <NetworkInsightsPanel insights=insights /> }.into_any()
+                }
+            })}
+
+            // ── Tab: GitOps ───────────────────────────────────────────────────
+            {move || (active_tab.get() == "gitops").then(|| {
+                let resources = gitops.get();
+                if resources.is_empty() {
+                    view! {
+                        <p class="text-center text-charcoal-light py-8">"No Flux resources found."</p>
+                    }.into_any()
+                } else {
+                    view! { <GitOpsPanel resources=resources /> }.into_any()
                 }
             })}
 
