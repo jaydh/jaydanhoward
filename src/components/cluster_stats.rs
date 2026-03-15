@@ -655,6 +655,61 @@ pub async fn get_network_breakdown() -> Result<NetworkBreakdown, ServerFnError<S
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CloudflaredHostStats {
+    pub host: String,
+    pub req_per_sec: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CloudflaredStatus {
+    pub ha_connections: u32,
+    pub per_host: Vec<CloudflaredHostStats>,
+    pub error_rate: f64,
+}
+
+#[server(name = GetCloudflaredStatus, prefix = "/api", endpoint = "get_cloudflared_status")]
+pub async fn get_cloudflared_status() -> Result<CloudflaredStatus, ServerFnError<String>> {
+    use crate::prometheus_client::query_prometheus;
+
+    let empty = || crate::prometheus_client::PrometheusData {
+        status: String::new(),
+        data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+    };
+
+    let (ha, host_reqs, errors) = tokio::join!(
+        query_prometheus("sum(cloudflared_tunnel_ha_connections)"),
+        query_prometheus(
+            "topk(10, sum by (host) (rate(cloudflared_tunnel_requests_with_response_total[5m])))"
+        ),
+        query_prometheus("sum(rate(cloudflared_tunnel_request_errors_total[5m]))"),
+    );
+
+    let scalar = |data: Result<crate::prometheus_client::PrometheusData, _>| -> f64 {
+        data.unwrap_or_else(|_| empty())
+            .data.result.first()
+            .and_then(|m| m.value.1.parse::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+
+    let ha_connections = scalar(ha) as u32;
+    let error_rate = scalar(errors);
+
+    let mut per_host: Vec<CloudflaredHostStats> = host_reqs
+        .unwrap_or_else(|_| empty())
+        .data.result.into_iter()
+        .filter_map(|m| {
+            let host = m.metric.get("host")?.clone();
+            let rps = m.value.1.parse::<f64>().ok()?;
+            Some(CloudflaredHostStats { host, req_per_sec: rps })
+        })
+        .filter(|h| !h.host.is_empty())
+        .collect();
+    per_host.sort_by(|a, b| b.req_per_sec.partial_cmp(&a.req_per_sec).unwrap_or(std::cmp::Ordering::Equal));
+
+    Ok(CloudflaredStatus { ha_connections, per_host, error_rate })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpikeConfig {
     pub multiplier: f64,
     pub floor_mbps: f64,
@@ -1162,6 +1217,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (top_pods, set_top_pods) = signal(Vec::<TopPodTraffic>::new());
     #[allow(unused_variables)]
     let (net_breakdown, set_net_breakdown) = signal(None::<NetworkBreakdown>);
+    #[allow(unused_variables)]
+    let (cloudflared, set_cloudflared) = signal(None::<CloudflaredStatus>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1225,6 +1282,9 @@ pub fn ClusterStats() -> impl IntoView {
             if let Ok(bd) = get_network_breakdown().await {
                 set_net_breakdown.set(Some(bd));
             }
+            if let Ok(cf) = get_cloudflared_status().await {
+                set_cloudflared.set(Some(cf));
+            }
         });
     });
 
@@ -1239,6 +1299,9 @@ pub fn ClusterStats() -> impl IntoView {
                 }
                 if let Ok(bd) = get_network_breakdown().await {
                     set_net_breakdown.set(Some(bd));
+                }
+                if let Ok(cf) = get_cloudflared_status().await {
+                    set_cloudflared.set(Some(cf));
                 }
             });
         });
@@ -1541,6 +1604,7 @@ pub fn ClusterStats() -> impl IntoView {
                 let cfg = spike_config.get();
                 let pods = top_pods.get();
                 let breakdown = net_breakdown.get();
+                let cf = cloudflared.get();
                 let rx_hist = network_rx_history.get().iter().copied().collect::<Vec<_>>();
                 let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
                 view! {
@@ -1598,6 +1662,55 @@ pub fn ClusterStats() -> impl IntoView {
                                         }.into_any()
                                     } else {
                                         view! { <div /> }.into_any()
+                                    }}
+                                </div>
+                            }
+                        })}
+
+                        // Cloudflared tunnel status
+                        {cf.map(|cf| {
+                            // Expected: 4 connections per replica × 3 replicas = 12
+                            let expected: u32 = 12;
+                            let (ha_color, ha_label) = if cf.ha_connections >= expected {
+                                ("text-green-600", "healthy")
+                            } else if cf.ha_connections > 0 {
+                                ("text-amber-500", "degraded")
+                            } else {
+                                ("text-red-500", "down")
+                            };
+                            view! {
+                                <div class="bg-surface rounded-lg shadow-sm p-4 border border-border">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="text-xs font-medium text-charcoal-lighter">"Cloudflare Tunnel"</h3>
+                                        <div class="flex items-center gap-2 text-xs font-mono">
+                                            <span class=ha_color>"● " {ha_label}</span>
+                                            <span class="text-charcoal-lighter">
+                                                {format!("{}/{} HA conns", cf.ha_connections, expected)}
+                                            </span>
+                                            {(cf.error_rate > 0.001).then(|| view! {
+                                                <span class="text-red-500">
+                                                    {format!("{:.3} err/s", cf.error_rate)}
+                                                </span>
+                                            })}
+                                        </div>
+                                    </div>
+                                    {if !cf.per_host.is_empty() {
+                                        view! {
+                                            <div class="space-y-1">
+                                                <div class="grid grid-cols-[1fr_auto] gap-x-4 text-xs text-charcoal-lighter font-mono mb-1">
+                                                    <span>"host"</span>
+                                                    <span class="text-right">"req/s"</span>
+                                                </div>
+                                                {cf.per_host.into_iter().map(|h| view! {
+                                                    <div class="grid grid-cols-[1fr_auto] gap-x-4 text-xs font-mono">
+                                                        <span class="text-charcoal truncate">{h.host}</span>
+                                                        <span class="text-right text-charcoal-lighter">{format!("{:.3}", h.req_per_sec)}</span>
+                                                    </div>
+                                                }).collect::<Vec<_>>()}
+                                            </div>
+                                        }.into_any()
+                                    } else {
+                                        view! { <p class="text-xs text-charcoal-lighter">"No requests in last 5m"</p> }.into_any()
                                     }}
                                 </div>
                             }
