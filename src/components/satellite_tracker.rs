@@ -96,7 +96,9 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
     // or in high-eccentricity transfer orbits not covered by any standard group).
     // Fetch any missing ones individually by CATNR and merge them in.
     if group == "active" {
-        const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+        // 56371=Arcturus, 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
+        // (62454 was removed from CelesTrak — no GP data found)
+        const ASTRANIS_IDS: &[u32] = &[56371, 62455, 62456, 62457];
         let present: std::collections::HashSet<u32> = satellites
             .iter()
             .filter_map(|s| s.line1.get(2..7)?.trim().parse::<u32>().ok())
@@ -377,7 +379,9 @@ pub fn SatelliteTracker() -> impl IntoView {
                                         if time_index < time_points.len() {
                                             let current_time = time_points[time_index];
 
-                                            const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+                                            // 56371=Arcturus, 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
+        // (62454 was removed from CelesTrak — no GP data found)
+        const ASTRANIS_IDS: &[u32] = &[56371, 62455, 62456, 62457];
                                             let hide_astranis = !show_astranis.get_untracked();
                                             let filtered_sats: Vec<satellite_calculations::Satellite>;
                                             let sats_to_use: &[satellite_calculations::Satellite] = if hide_astranis {
@@ -914,7 +918,17 @@ pub fn SatelliteTracker() -> impl IntoView {
                                             "flex items-center gap-1.5 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 opacity-40 transition-colors".to_string()
                                         }
                                     }
-                                    on:click=move |_| set_show_astranis.update(|v| *v = !*v)
+                                    on:click=move |_| {
+                                        let next = !show_astranis.get_untracked();
+                                        set_show_astranis.set(next);
+                                        // GEO orbit (~6.6 Earth radii) is off-screen at default
+                                        // camera distance (4.0). Zoom out when enabling Astranis.
+                                        if let Some(rv) = renderer_signal.get_untracked() {
+                                            rv.update_value(|r| {
+                                                r.set_camera_distance(if next { 18.0 } else { 4.0 });
+                                            });
+                                        }
+                                    }
                                     title="Toggle Astranis satellites (my sats!)"
                                 >
                                     <div class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: rgb(0, 220, 180);"></div>

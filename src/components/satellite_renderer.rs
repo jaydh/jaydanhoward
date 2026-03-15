@@ -50,7 +50,12 @@ impl SatelliteRenderer {
     pub fn adjust_zoom(&mut self, delta: f32) {
         // Make zoom speed proportional to current distance (faster when far away)
         let zoom_factor = self.camera_distance * 0.1;
-        self.camera_distance = (self.camera_distance - delta * zoom_factor).clamp(1.5, 20.0);
+        self.camera_distance = (self.camera_distance - delta * zoom_factor).clamp(1.5, 50.0);
+    }
+
+    /// Set camera distance directly (Earth radii). GEO orbit requires >= 17.
+    pub fn set_camera_distance(&mut self, distance: f32) {
+        self.camera_distance = distance.clamp(1.5, 50.0);
     }
 
     /// Rotate camera based on mouse drag
