@@ -523,6 +523,62 @@ pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TopPodTraffic {
+    pub namespace: String,
+    pub pod: String,
+    pub tx_mbps: f64,
+    pub rx_mbps: f64,
+}
+
+#[server(name = GetTopNetworkPods, prefix = "/api", endpoint = "get_top_network_pods")]
+pub async fn get_top_network_pods() -> Result<Vec<TopPodTraffic>, ServerFnError<String>> {
+    use crate::prometheus_client::query_prometheus;
+
+    let (tx_data, rx_data) = tokio::join!(
+        query_prometheus(
+            "topk(10, sum by (namespace, pod) \
+             (rate(container_network_transmit_bytes_total{pod!=\"\"}[5m]))) * 8 / 1000000"
+        ),
+        query_prometheus(
+            "topk(10, sum by (namespace, pod) \
+             (rate(container_network_receive_bytes_total{pod!=\"\"}[5m]))) * 8 / 1000000"
+        ),
+    );
+
+    let empty = || crate::prometheus_client::PrometheusData {
+        status: String::new(),
+        data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+    };
+
+    let mut map: std::collections::HashMap<(String, String), (f64, f64)> =
+        std::collections::HashMap::new();
+
+    for m in tx_data.unwrap_or_else(|_| empty()).data.result {
+        let ns = m.metric.get("namespace").cloned().unwrap_or_default();
+        let pod = m.metric.get("pod").cloned().unwrap_or_default();
+        if pod.is_empty() { continue; }
+        let mbps = m.value.1.parse::<f64>().unwrap_or(0.0);
+        map.entry((ns, pod)).or_insert((0.0, 0.0)).0 = mbps;
+    }
+    for m in rx_data.unwrap_or_else(|_| empty()).data.result {
+        let ns = m.metric.get("namespace").cloned().unwrap_or_default();
+        let pod = m.metric.get("pod").cloned().unwrap_or_default();
+        if pod.is_empty() { continue; }
+        let mbps = m.value.1.parse::<f64>().unwrap_or(0.0);
+        map.entry((ns, pod)).or_insert((0.0, 0.0)).1 = mbps;
+    }
+
+    let mut pods: Vec<TopPodTraffic> = map.into_iter()
+        .map(|((namespace, pod), (tx_mbps, rx_mbps))| TopPodTraffic { namespace, pod, tx_mbps, rx_mbps })
+        .collect();
+
+    pods.sort_by(|a, b| (b.tx_mbps + b.rx_mbps).partial_cmp(&(a.tx_mbps + a.rx_mbps)).unwrap_or(std::cmp::Ordering::Equal));
+    pods.truncate(10);
+
+    Ok(pods)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpikeConfig {
     pub multiplier: f64,
     pub floor_mbps: f64,
@@ -1006,6 +1062,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (gitops, set_gitops) = signal(Vec::<FluxResource>::new());
     #[allow(unused_variables)]
     let (spike_config, set_spike_config) = signal(None::<SpikeConfig>);
+    #[allow(unused_variables)]
+    let (top_pods, set_top_pods) = signal(Vec::<TopPodTraffic>::new());
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1063,8 +1121,31 @@ pub fn ClusterStats() -> impl IntoView {
             if let Ok(cfg) = get_spike_config().await {
                 set_spike_config.set(Some(cfg));
             }
+            if let Ok(pods) = get_top_network_pods().await {
+                set_top_pods.set(pods);
+            }
         });
     });
+
+    // Refresh top pods every 15 s
+    #[cfg(not(feature = "ssr"))]
+    {
+        use wasm_bindgen::prelude::*;
+        let cb = Closure::<dyn Fn()>::new(move || {
+            leptos::task::spawn_local(async move {
+                if let Ok(pods) = get_top_network_pods().await {
+                    set_top_pods.set(pods);
+                }
+            });
+        });
+        let _ = web_sys::window()
+            .unwrap()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                cb.as_ref().unchecked_ref(),
+                15_000,
+            );
+        cb.forget();
+    }
 
     // Fetch historical data on mount
     Effect::new(move |_| {
@@ -1355,10 +1436,44 @@ pub fn ClusterStats() -> impl IntoView {
             {move || (active_tab.get() == "network").then(|| {
                 let insights = network_insights.get();
                 let cfg = spike_config.get();
+                let pods = top_pods.get();
+                let rx_hist = network_rx_history.get().iter().copied().collect::<Vec<_>>();
+                let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
                 view! {
-                    <div>
+                    <div class="space-y-3">
+                        // Large detailed chart
+                        <DetailedNetworkChart data_rx=rx_hist data_tx=tx_hist />
+
+                        // Top pods table
+                        {if !pods.is_empty() {
+                            view! {
+                                <div class="bg-surface rounded-lg shadow-sm p-4 border border-border">
+                                    <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Top Pods by Traffic (5m avg)"</h3>
+                                    <div class="space-y-1">
+                                        <div class="grid grid-cols-[1fr_auto_auto] gap-x-4 text-xs text-charcoal-lighter font-mono mb-1">
+                                            <span>"pod"</span>
+                                            <span class="text-right text-amber-400">"↑ TX"</span>
+                                            <span class="text-right text-blue-400">"↓ RX"</span>
+                                        </div>
+                                        {pods.into_iter().map(|p| view! {
+                                            <div class="grid grid-cols-[1fr_auto_auto] gap-x-4 text-xs font-mono">
+                                                <span class="text-charcoal truncate">
+                                                    <span class="text-charcoal-lighter">{p.namespace} "/"</span>
+                                                    {p.pod}
+                                                </span>
+                                                <span class="text-right text-amber-500">{format!("{:.1}", p.tx_mbps)}</span>
+                                                <span class="text-right text-blue-500">{format!("{:.1}", p.rx_mbps)}</span>
+                                            </div>
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                </div>
+                            }.into_any()
+                        } else {
+                            view! { <div /> }.into_any()
+                        }}
+
                         // Spike detector config
-                        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mb-2">
+                        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border">
                             <h3 class="text-xs font-medium text-charcoal-lighter mb-2">"Spike Detector"</h3>
                             {match cfg {
                                 Some(c) => view! {
@@ -1376,14 +1491,12 @@ pub fn ClusterStats() -> impl IntoView {
                                 None => view! { <p class="text-xs text-charcoal-lighter">"Loading..."</p> }.into_any(),
                             }}
                         </div>
-                        {if insights.is_empty() {
-                            view! {
-                                <p class="text-center text-charcoal-light py-8">
-                                    "No spike events recorded yet."
-                                </p>
-                            }.into_any()
-                        } else {
+
+                        // Spike insights
+                        {if !insights.is_empty() {
                             view! { <NetworkInsightsPanel insights=insights /> }.into_any()
+                        } else {
+                            view! { <div /> }.into_any()
                         }}
                     </div>
                 }.into_any()
@@ -1415,6 +1528,113 @@ pub fn ClusterStats() -> impl IntoView {
                 }
             })}
 
+        </div>
+    }
+}
+
+#[component]
+fn DetailedNetworkChart(
+    data_rx: Vec<f64>,
+    data_tx: Vec<f64>,
+) -> impl IntoView {
+    let max_val = data_rx.iter().chain(data_tx.iter())
+        .cloned()
+        .fold(0.0f64, f64::max)
+        .max(1.0);
+
+    // Round max up to a nice value for y-axis labels
+    let y_max = {
+        let magnitude = 10.0f64.powf(max_val.log10().floor());
+        (max_val / magnitude).ceil() * magnitude
+    };
+
+    let n_rx = data_rx.len();
+    let n_tx = data_tx.len();
+
+    let make_path = |data: &[f64], n: usize| -> String {
+        if n == 0 { return String::new(); }
+        let mut d = String::new();
+        for (i, &val) in data.iter().enumerate() {
+            let x = i as f64 / (n - 1).max(1) as f64 * 100.0;
+            let y = 60.0 - (val / y_max * 60.0);
+            if i == 0 { d.push_str(&format!("M {x:.2} {y:.2}")); }
+            else       { d.push_str(&format!(" L {x:.2} {y:.2}")); }
+        }
+        d
+    };
+
+    let path_rx = make_path(&data_rx, n_rx);
+    let path_tx = make_path(&data_tx, n_tx);
+
+    let current_rx = data_rx.last().copied().unwrap_or(0.0);
+    let current_tx = data_tx.last().copied().unwrap_or(0.0);
+
+    // Y-axis labels: 4 evenly spaced ticks
+    let y_ticks: Vec<f64> = (0..=4).map(|i| y_max * i as f64 / 4.0).collect();
+
+    view! {
+        <div class="bg-surface p-4 rounded-lg shadow-sm border border-border">
+            <div class="flex justify-between items-center mb-3">
+                <h3 class="text-xs font-medium text-charcoal-lighter">"Network Throughput"</h3>
+                <div class="flex gap-4 text-xs font-mono font-semibold">
+                    <span><span class="text-blue-400">"↓ RX  "</span><span class="text-charcoal">{format!("{:.1} Mbps", current_rx)}</span></span>
+                    <span><span class="text-amber-400">"↑ TX  "</span><span class="text-charcoal">{format!("{:.1} Mbps", current_tx)}</span></span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                // Y-axis labels
+                <div class="flex flex-col justify-between text-right pr-1 py-0.5" style="width:3rem">
+                    {y_ticks.iter().rev().map(|&v| view! {
+                        <span class="text-xs text-charcoal-lighter font-mono leading-none">
+                            {if v >= 1000.0 { format!("{:.0}G", v/1000.0) }
+                             else { format!("{:.0}", v) }}
+                        </span>
+                    }).collect::<Vec<_>>()}
+                </div>
+                // Chart
+                <div class="flex-1">
+                    <svg viewBox="0 0 100 60" class="w-full h-40" preserveAspectRatio="none">
+                        // Horizontal grid lines
+                        {(0..=4).map(|i| {
+                            let y = i as f64 * 60.0 / 4.0;
+                            view! {
+                                <line
+                                    x1="0" y1={format!("{y:.1}")}
+                                    x2="100" y2={format!("{y:.1}")}
+                                    stroke="#e2e8f0" stroke-width="0.3"
+                                    vector-effect="non-scaling-stroke"
+                                />
+                            }
+                        }).collect::<Vec<_>>()}
+                        // TX line
+                        <path
+                            d={path_tx}
+                            fill="none"
+                            stroke="#f59e0b"
+                            stroke-width="0.8"
+                            stroke-linejoin="round"
+                            stroke-linecap="round"
+                            vector-effect="non-scaling-stroke"
+                        />
+                        // RX line
+                        <path
+                            d={path_rx}
+                            fill="none"
+                            stroke="#60a5fa"
+                            stroke-width="0.8"
+                            stroke-linejoin="round"
+                            stroke-linecap="round"
+                            vector-effect="non-scaling-stroke"
+                        />
+                    </svg>
+                    // X-axis labels
+                    <div class="flex justify-between text-xs text-charcoal-lighter font-mono mt-1">
+                        <span>"24h ago"</span>
+                        <span>"12h ago"</span>
+                        <span>"now"</span>
+                    </div>
+                </div>
+            </div>
         </div>
     }
 }
