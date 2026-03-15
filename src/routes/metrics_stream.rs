@@ -334,7 +334,7 @@ pub async fn metrics_stream(
     pool: Option<Data<PgPool>>,
     spike_detector: Data<Mutex<NetworkSpikeDetector>>,
 ) -> impl actix_web::Responder {
-    let stream = IntervalStream::new(interval(Duration::from_secs(5)))
+    let stream = IntervalStream::new(interval(Duration::from_secs(1)))
         .then(move |_| {
             let pool = pool.clone();
             let spike_detector = spike_detector.clone();
@@ -349,9 +349,15 @@ pub async fn metrics_stream(
                 let spike = spike_detector.lock().await.check(c.network_tx_mbps);
                 if let Some((spike_mbps, baseline_mbps)) = spike {
                     let pool_opt = pool.clone();
+                    let detector_ref = spike_detector.clone();
                     tokio::spawn(async move {
                         match crate::network_spike::explain_spike(spike_mbps, baseline_mbps).await {
-                            Ok((pods, explanation)) => {
+                            Ok((pods, explanation, significance)) => {
+                                tracing::info!(
+                                    "Spike significance={significance}/10, \
+                                     multiplier/floor will be adjusted accordingly"
+                                );
+
                                 let top_pods_json = serde_json::to_value(
                                     pods.iter()
                                         .map(|p| serde_json::json!({
@@ -362,9 +368,21 @@ pub async fn metrics_stream(
                                         .collect::<Vec<_>>()
                                 ).unwrap_or_default();
 
-                                if let Some(pool) = pool_opt {
+                                // Apply feedback to in-memory thresholds.
+                                let (new_mult, new_floor) = {
+                                    let mut det = detector_ref.lock().await;
+                                    det.apply_feedback(significance);
+                                    (det.multiplier, det.floor_mbps)
+                                };
+                                tracing::info!(
+                                    "Thresholds after feedback: multiplier={new_mult:.2} floor={new_floor:.1} Mbps"
+                                );
+
+                                // Persist to DB so all pods and restarts pick up the new values.
+                                if let Some(ref pool) = pool_opt {
+                                    let _ = crate::db::save_spike_config(pool, new_mult, new_floor).await;
                                     let _ = crate::db::insert_network_insight(
-                                        &pool,
+                                        pool,
                                         spike_mbps,
                                         baseline_mbps,
                                         &top_pods_json,

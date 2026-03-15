@@ -9,10 +9,14 @@ mod inner {
     use serde::{Deserialize, Serialize};
 
     /// Rolling-window spike detector for cluster network tx.
-    /// Holds 36 samples (3 minutes at 5s SSE interval).
+    /// Window size and thresholds are tuned dynamically via Claude feedback.
     pub struct NetworkSpikeDetector {
         tx_window: VecDeque<f64>,
+        window_capacity: usize,
+        min_samples: usize,
         last_spike_at: Option<Instant>,
+        pub multiplier: f64,
+        pub floor_mbps: f64,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -23,23 +27,28 @@ mod inner {
     }
 
     impl NetworkSpikeDetector {
-        pub fn new() -> Self {
+        /// `window_capacity`: number of samples to keep (~3 min at your tick rate).
+        /// `min_samples`: warmup samples before spike detection activates.
+        pub fn new(multiplier: f64, floor_mbps: f64, window_capacity: usize, min_samples: usize) -> Self {
             Self {
-                tx_window: VecDeque::with_capacity(36),
+                tx_window: VecDeque::with_capacity(window_capacity),
+                window_capacity,
+                min_samples,
                 last_spike_at: None,
+                multiplier,
+                floor_mbps,
             }
         }
 
         /// Feed the latest tx value. Returns `Some((spike, baseline))` when a
         /// spike is detected and the cooldown has elapsed.
         pub fn check(&mut self, tx_mbps: f64) -> Option<(f64, f64)> {
-            if self.tx_window.len() >= 36 {
+            if self.tx_window.len() >= self.window_capacity {
                 self.tx_window.pop_front();
             }
             self.tx_window.push_back(tx_mbps);
 
-            // Need at least 6 samples (~30s) before declaring a spike.
-            if self.tx_window.len() < 6 {
+            if self.tx_window.len() < self.min_samples {
                 return None;
             }
 
@@ -47,8 +56,7 @@ mod inner {
             let baseline: f64 =
                 self.tx_window.iter().take(n - 1).sum::<f64>() / (n - 1) as f64;
 
-            let is_spike = tx_mbps > baseline * 3.0 && tx_mbps > 5.0;
-            if !is_spike {
+            if !(tx_mbps > baseline * self.multiplier && tx_mbps > self.floor_mbps) {
                 return None;
             }
 
@@ -62,14 +70,30 @@ mod inner {
             self.last_spike_at = Some(Instant::now());
             Some((tx_mbps, baseline))
         }
+
+        /// Apply significance feedback from Claude to nudge thresholds.
+        ///
+        /// - significance 1-3 (boring): raise floor 15% — we're too sensitive
+        /// - significance 4-6: no change
+        /// - significance 7-10 (real event): lower floor 10% — stay sensitive to similar events
+        ///
+        /// Clamps: floor 1.0–100.0 Mbps, multiplier 1.5–6.0x.
+        pub fn apply_feedback(&mut self, significance: u8) {
+            self.floor_mbps = match significance {
+                1..=3 => (self.floor_mbps * 1.15).min(100.0),
+                7..=10 => (self.floor_mbps * 0.90).max(1.0),
+                _ => self.floor_mbps,
+            };
+        }
     }
 
     /// Query Prometheus for the top pods by tx at the moment of the spike,
     /// then call Claude to explain what happened.
+    /// Returns `(top_pods, explanation, significance)` where significance is 1-10.
     pub async fn explain_spike(
         spike_tx_mbps: f64,
         baseline_tx_mbps: f64,
-    ) -> Result<(Vec<PodTraffic>, String), anyhow::Error> {
+    ) -> Result<(Vec<PodTraffic>, String, u8), anyhow::Error> {
         use crate::prometheus_client::query_prometheus;
 
         let api_key = std::env::var("ANTHROPIC_API_KEY")
@@ -188,8 +212,9 @@ mod inner {
              Top pods by receive:\n{}\n\n\
              Traefik ingress request rate (top services):\n{traefik_section}\n\n\
              Cilium network drops:\n{cilium_section}\n\n\
-             In 2-3 sentences: what likely caused this spike, is it concerning, \
-             and is any action needed?",
+             Respond with JSON only, no prose outside the JSON:\n\
+             {{\"explanation\": \"2-3 sentence explanation of likely cause, whether concerning, and if action is needed\",\
+             \"significance\": <integer 1-10 where 1=routine background noise, 10=critical/unexpected>}}",
             baseline_tx_mbps,
             spike_tx_mbps,
             spike_tx_mbps / baseline_tx_mbps.max(0.1),
@@ -212,11 +237,21 @@ mod inner {
             .json::<serde_json::Value>()
             .await?;
 
-        let explanation = res["content"][0]["text"]
+        let raw = res["content"][0]["text"]
+            .as_str()
+            .unwrap_or("{}")
+            .to_string();
+
+        let parsed = serde_json::from_str::<serde_json::Value>(&raw).unwrap_or_default();
+        let explanation = parsed["explanation"]
             .as_str()
             .unwrap_or("Unable to generate explanation.")
             .to_string();
+        let significance = parsed["significance"]
+            .as_u64()
+            .map(|v| v.clamp(1, 10) as u8)
+            .unwrap_or(5);
 
-        Ok((top_pods, explanation))
+        Ok((top_pods, explanation, significance))
     }
 }

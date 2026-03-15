@@ -75,8 +75,21 @@ pub async fn run() -> Result<(), std::io::Error> {
     let tle_cache = web::Data::new(TleCache::new(std::collections::HashMap::new()));
     let conjunction_cache =
         web::Data::new(ConjunctionCache::new(std::collections::HashMap::new()));
-    let spike_detector =
-        web::Data::new(tokio::sync::Mutex::new(NetworkSpikeDetector::new()));
+    // Load persisted thresholds from DB, fall back to defaults.
+    let (spike_multiplier, spike_floor_mbps) = if let Some(ref p) = pool {
+        let tmp = web::Data::new(p.clone());
+        crate::db::load_spike_config(&tmp).await
+    } else {
+        (3.0, 5.0)
+    };
+    log::info!(
+        "Spike detector: multiplier={:.2} floor={:.1} Mbps",
+        spike_multiplier, spike_floor_mbps
+    );
+    // At 1s SSE tick: 180 samples = 3-min window, 30 samples = 30s warmup.
+    let spike_detector = web::Data::new(tokio::sync::Mutex::new(
+        NetworkSpikeDetector::new(spike_multiplier, spike_floor_mbps, 180, 30),
+    ));
 
     // Startup conjunction screening — chunk-based distributed approach.
     //

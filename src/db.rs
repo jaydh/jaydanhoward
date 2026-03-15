@@ -870,4 +870,39 @@ mod inner {
             explanation: r.try_get("explanation").unwrap_or_default(),
         }).collect())
     }
+
+    /// Load the persisted spike detector thresholds, falling back to defaults.
+    pub async fn load_spike_config(pool: &PgPool) -> (f64, f64) {
+        let row = sqlx::query(
+            "SELECT multiplier, floor_mbps FROM spike_detector_config WHERE id = 1",
+        )
+        .fetch_optional(pool)
+        .await;
+
+        match row {
+            Ok(Some(r)) => (
+                r.try_get("multiplier").unwrap_or(3.0),
+                r.try_get("floor_mbps").unwrap_or(5.0),
+            ),
+            _ => (3.0, 5.0),
+        }
+    }
+
+    /// Persist updated spike detector thresholds.
+    pub async fn save_spike_config(
+        pool: &PgPool,
+        multiplier: f64,
+        floor_mbps: f64,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO spike_detector_config (id, multiplier, floor_mbps, updated_at) \
+             VALUES (1, $1, $2, NOW()) \
+             ON CONFLICT (id) DO UPDATE SET multiplier = $1, floor_mbps = $2, updated_at = NOW()",
+        )
+        .bind(multiplier)
+        .bind(floor_mbps)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
 }
