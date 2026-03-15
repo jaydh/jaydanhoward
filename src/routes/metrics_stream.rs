@@ -3,13 +3,11 @@ use actix_web_lab::sse::{self, Sse};
 use serde::Serialize;
 use sqlx::PgPool;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
 use tokio_stream::StreamExt;
 
 use crate::components::cluster_stats::{DbEntry, DbInfo};
-use crate::network_spike::NetworkSpikeDetector;
 use crate::prometheus_client::query_prometheus;
 
 #[derive(Clone, Debug, Serialize)]
@@ -331,80 +329,15 @@ async fn fetch_ceph_status() -> CephStatus {
 
 pub async fn metrics_stream(
     pool: Option<Data<PgPool>>,
-    spike_detector: Data<Mutex<NetworkSpikeDetector>>,
 ) -> impl actix_web::Responder {
     let stream = IntervalStream::new(interval(Duration::from_secs(1)))
         .then(move |_| {
             let pool = pool.clone();
-            let spike_detector = spike_detector.clone();
             async move {
             // Fetch cluster, node, and ceph metrics
             let cluster_metrics = fetch_cluster_metrics().await.ok();
             let node_metrics = fetch_node_metrics().await.unwrap_or_default();
             let ceph = fetch_ceph_status().await;
-
-            // Check for a network spike and explain it asynchronously.
-            if let Some(ref c) = cluster_metrics {
-                let spike = spike_detector.lock().await.check(c.network_tx_mbps);
-                if let Some((spike_mbps, baseline_mbps)) = spike {
-                    // Only one pod should explain a spike — atomically claim the
-                    // 5-minute bucket in the DB. If another replica already claimed
-                    // it, skip.
-                    let claimed = if let Some(ref p) = pool {
-                        crate::db::try_claim_spike(p).await
-                    } else {
-                        true // no DB → single pod, always proceed
-                    };
-
-                    if claimed {
-                    let pool_opt = pool.clone();
-                    let detector_ref = spike_detector.clone();
-                    tokio::spawn(async move {
-                        match crate::network_spike::explain_spike(spike_mbps, baseline_mbps, pool_opt.as_deref().map(|v| &**v)).await {
-                            Ok((pods, explanation, significance)) => {
-                                tracing::info!(
-                                    "Spike significance={significance}/10, \
-                                     multiplier/floor will be adjusted accordingly"
-                                );
-
-                                let top_pods_json = serde_json::to_value(
-                                    pods.iter()
-                                        .map(|p| serde_json::json!({
-                                            "namespace": p.namespace,
-                                            "pod": p.pod,
-                                            "mbps": p.mbps,
-                                        }))
-                                        .collect::<Vec<_>>()
-                                ).unwrap_or_default();
-
-                                // Apply feedback to in-memory thresholds.
-                                let (new_mult, new_floor) = {
-                                    let mut det = detector_ref.lock().await;
-                                    det.apply_feedback(significance);
-                                    (det.multiplier, det.floor_mbps)
-                                };
-                                tracing::info!(
-                                    "Thresholds after feedback: multiplier={new_mult:.2} floor={new_floor:.1} Mbps"
-                                );
-
-                                // Persist to DB so all pods and restarts pick up the new values.
-                                if let Some(ref pool) = pool_opt {
-                                    let _ = crate::db::save_spike_config(pool, new_mult, new_floor).await;
-                                    let _ = crate::db::insert_network_insight(
-                                        pool,
-                                        spike_mbps,
-                                        baseline_mbps,
-                                        &top_pods_json,
-                                        &explanation,
-                                    ).await;
-                                }
-                            }
-                            Err(e) => tracing::warn!("Failed to explain network spike: {}", e),
-                        }
-                    });
-                    } // if claimed
-                }
-            }
 
             // Include the most recent stored insight (if any) so the client
             // picks it up without needing a separate poll.

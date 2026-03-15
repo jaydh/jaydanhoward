@@ -91,6 +91,96 @@ pub async fn run() -> Result<(), std::io::Error> {
         NetworkSpikeDetector::new(spike_multiplier, spike_floor_mbps, 180, 30),
     ));
 
+    // Background spike detection loop — runs independently of SSE connections.
+    {
+        let detector = spike_detector.clone();
+        let pool_opt = pool.clone().map(web::Data::new);
+
+        tokio::spawn(async move {
+            use tokio::time::interval;
+            let mut ticker = interval(Duration::from_secs(1));
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+            loop {
+                ticker.tick().await;
+
+                let tx_mbps = match crate::prometheus_client::query_prometheus(
+                    "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000",
+                )
+                .await
+                {
+                    Ok(data) => data
+                        .data
+                        .result
+                        .first()
+                        .and_then(|m| m.value.1.parse::<f64>().ok())
+                        .unwrap_or(0.0),
+                    Err(_) => continue,
+                };
+
+                let spike = detector.lock().await.check(tx_mbps);
+                if let Some((spike_mbps, baseline_mbps)) = spike {
+                    let claimed = if let Some(ref p) = pool_opt {
+                        crate::db::try_claim_spike(p).await
+                    } else {
+                        true
+                    };
+
+                    if claimed {
+                        log::info!(
+                            "Network spike detected: {:.1} Mbps (baseline {:.1} Mbps) — calling Claude",
+                            spike_mbps, baseline_mbps
+                        );
+                        let pool_ref = pool_opt.clone();
+                        let detector_ref = detector.clone();
+                        tokio::spawn(async move {
+                            match crate::network_spike::explain_spike(
+                                spike_mbps,
+                                baseline_mbps,
+                                pool_ref.as_deref().map(|v| &**v),
+                            )
+                            .await
+                            {
+                                Ok((pods, explanation, significance)) => {
+                                    log::info!(
+                                        "Spike explained (significance={significance}/10): {explanation}"
+                                    );
+                                    let (new_mult, new_floor) = {
+                                        let mut det = detector_ref.lock().await;
+                                        det.apply_feedback(significance);
+                                        (det.multiplier, det.floor_mbps)
+                                    };
+                                    if let Some(ref p) = pool_ref {
+                                        let top_pods_json = serde_json::to_value(
+                                            pods.iter()
+                                                .map(|pod| serde_json::json!({
+                                                    "namespace": pod.namespace,
+                                                    "pod": pod.pod,
+                                                    "mbps": pod.mbps,
+                                                }))
+                                                .collect::<Vec<_>>(),
+                                        )
+                                        .unwrap_or_default();
+                                        let _ = crate::db::save_spike_config(p, new_mult, new_floor).await;
+                                        let _ = crate::db::insert_network_insight(
+                                            p,
+                                            spike_mbps,
+                                            baseline_mbps,
+                                            &top_pods_json,
+                                            &explanation,
+                                        )
+                                        .await;
+                                    }
+                                }
+                                Err(e) => log::warn!("Failed to explain spike: {e}"),
+                            }
+                        });
+                    }
+                }
+            }
+        });
+    }
+
     // Startup conjunction screening — chunk-based distributed approach.
     //
     // Two phases run concurrently on every pod:
