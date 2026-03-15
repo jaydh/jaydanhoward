@@ -80,7 +80,7 @@ pub async fn run() -> Result<(), std::io::Error> {
         let tmp = web::Data::new(p.clone());
         crate::db::load_spike_config(&tmp).await
     } else {
-        (3.0, 5.0)
+        (1.5, 100.0)
     };
     log::info!(
         "Spike detector: multiplier={:.2} floor={:.1} Mbps",
