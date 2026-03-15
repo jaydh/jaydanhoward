@@ -1097,29 +1097,6 @@ pub fn ClusterStats() -> impl IntoView {
                             </span>
                             <span class="text-charcoal-lighter">"nodes"</span>
                         </div>
-                        {cluster.db_info.map(|info| {
-                            let total: i64 = info.databases.iter().map(|d| d.size_bytes).sum();
-                            view! {
-                                <div class="flex flex-col gap-0.5">
-                                    <div class="flex items-baseline gap-2">
-                                        <span class="text-2xl font-bold text-blue-500">
-                                            {fmt_db_size(total)}
-                                        </span>
-                                        {info.pvc_capacity_bytes.map(|cap| view! {
-                                            <span class="text-charcoal-lighter">
-                                                "/ " {fmt_db_size(cap)}
-                                            </span>
-                                        })}
-                                        <span class="text-charcoal-lighter">"DB"</span>
-                                    </div>
-                                    <div class="flex gap-3 text-xs text-charcoal-light">
-                                        {info.databases.into_iter().map(|db| view! {
-                                            <span>{db.name} ": " {fmt_db_size(db.size_bytes)}</span>
-                                        }).collect::<Vec<_>>()}
-                                    </div>
-                                </div>
-                            }
-                        })}
                     </div>
                 }
             })}
@@ -1171,13 +1148,52 @@ pub fn ClusterStats() -> impl IntoView {
 
             // ── Tab: Storage ──────────────────────────────────────────────────
             {move || (active_tab.get() == "storage").then(|| {
-                if let Some(ceph) = ceph_status.get() {
-                    view! { <CephStatusPanel ceph=ceph /> }.into_any()
-                } else {
-                    view! {
-                        <p class="text-center text-charcoal-light py-8">"No Ceph data yet..."</p>
-                    }.into_any()
-                }
+                let db_info = cluster_metrics.get().and_then(|c| c.db_info);
+                view! {
+                    <div>
+                        {db_info.map(|info| {
+                            let total: i64 = info.databases.iter().map(|d| d.size_bytes).sum();
+                            view! {
+                                <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mb-4">
+                                    <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Postgres"</h3>
+                                    <div class="flex items-baseline gap-2 mb-2">
+                                        <span class="text-2xl font-bold text-blue-500">{fmt_db_size(total)}</span>
+                                        {info.pvc_capacity_bytes.map(|cap| view! {
+                                            <span class="text-charcoal-lighter">"/ " {fmt_db_size(cap)} " PVC"</span>
+                                        })}
+                                    </div>
+                                    <div class="space-y-1">
+                                        {info.databases.into_iter().map(|db| {
+                                            let pct = info.pvc_capacity_bytes
+                                                .filter(|&cap| cap > 0)
+                                                .map(|cap| (db.size_bytes as f64 / cap as f64 * 100.0).min(100.0))
+                                                .unwrap_or(0.0);
+                                            view! {
+                                                <div class="flex items-center gap-3 text-xs">
+                                                    <span class="text-charcoal w-32 truncate font-mono">{db.name}</span>
+                                                    <div class="flex-1 bg-background rounded-full h-1.5">
+                                                        <div
+                                                            class="bg-blue-500 h-1.5 rounded-full"
+                                                            style=format!("width: {pct:.1}%")
+                                                        />
+                                                    </div>
+                                                    <span class="text-charcoal-lighter w-12 text-right">{fmt_db_size(db.size_bytes)}</span>
+                                                </div>
+                                            }
+                                        }).collect::<Vec<_>>()}
+                                    </div>
+                                </div>
+                            }
+                        })}
+                        {if let Some(ceph) = ceph_status.get() {
+                            view! { <CephStatusPanel ceph=ceph /> }.into_any()
+                        } else {
+                            view! {
+                                <p class="text-center text-charcoal-light py-8">"No Ceph data yet..."</p>
+                            }.into_any()
+                        }}
+                    </div>
+                }.into_any()
             })}
 
             // ── Tab: Network ──────────────────────────────────────────────────
