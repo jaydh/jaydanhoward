@@ -579,6 +579,82 @@ pub async fn get_top_network_pods() -> Result<Vec<TopPodTraffic>, ServerFnError<
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExternalService {
+    pub name: String,
+    pub req_per_sec: f64,
+    pub rx_mbps: f64,
+    pub tx_mbps: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct NetworkBreakdown {
+    pub external_rx_mbps: f64,
+    pub external_tx_mbps: f64,
+    pub total_rx_mbps: f64,
+    pub total_tx_mbps: f64,
+    pub top_services: Vec<ExternalService>,
+}
+
+#[server(name = GetNetworkBreakdown, prefix = "/api", endpoint = "get_network_breakdown")]
+pub async fn get_network_breakdown() -> Result<NetworkBreakdown, ServerFnError<String>> {
+    use crate::prometheus_client::query_prometheus;
+
+    let empty = || crate::prometheus_client::PrometheusData {
+        status: String::new(),
+        data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+    };
+
+    let (ext_rx, ext_tx, svc_reqs, svc_rx, svc_tx, total_rx, total_tx) = tokio::join!(
+        query_prometheus("sum(rate(traefik_entrypoint_requests_bytes_total{entrypoint=\"websecure\"}[5m])) * 8 / 1000000"),
+        query_prometheus("sum(rate(traefik_entrypoint_responses_bytes_total{entrypoint=\"websecure\"}[5m])) * 8 / 1000000"),
+        query_prometheus("topk(10, sum by (service) (rate(traefik_service_requests_total[5m])))"),
+        query_prometheus("topk(10, sum by (service) (rate(traefik_service_requests_bytes_total[5m]))) * 8 / 1000000"),
+        query_prometheus("topk(10, sum by (service) (rate(traefik_service_responses_bytes_total[5m]))) * 8 / 1000000"),
+        query_prometheus("sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000000"),
+        query_prometheus("sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000000"),
+    );
+
+    let scalar = |data: Result<crate::prometheus_client::PrometheusData, _>| -> f64 {
+        data.unwrap_or_else(|_| empty())
+            .data.result.first()
+            .and_then(|m| m.value.1.parse::<f64>().ok())
+            .unwrap_or(0.0)
+    };
+
+    let external_rx_mbps = scalar(ext_rx);
+    let external_tx_mbps = scalar(ext_tx);
+    let total_rx_mbps = scalar(total_rx);
+    let total_tx_mbps = scalar(total_tx);
+
+    // Build per-service map with req/s, rx, tx
+    let mut svc_map: std::collections::HashMap<String, ExternalService> = std::collections::HashMap::new();
+
+    for m in svc_reqs.unwrap_or_else(|_| empty()).data.result {
+        let name = m.metric.get("service").cloned().unwrap_or_default();
+        let rps = m.value.1.parse::<f64>().unwrap_or(0.0);
+        svc_map.entry(name.clone()).or_insert(ExternalService { name, req_per_sec: 0.0, rx_mbps: 0.0, tx_mbps: 0.0 }).req_per_sec = rps;
+    }
+    for m in svc_rx.unwrap_or_else(|_| empty()).data.result {
+        let name = m.metric.get("service").cloned().unwrap_or_default();
+        let mbps = m.value.1.parse::<f64>().unwrap_or(0.0);
+        svc_map.entry(name.clone()).or_insert(ExternalService { name, req_per_sec: 0.0, rx_mbps: 0.0, tx_mbps: 0.0 }).rx_mbps = mbps;
+    }
+    for m in svc_tx.unwrap_or_else(|_| empty()).data.result {
+        let name = m.metric.get("service").cloned().unwrap_or_default();
+        let mbps = m.value.1.parse::<f64>().unwrap_or(0.0);
+        svc_map.entry(name.clone()).or_insert(ExternalService { name, req_per_sec: 0.0, rx_mbps: 0.0, tx_mbps: 0.0 }).tx_mbps = mbps;
+    }
+
+    let mut top_services: Vec<ExternalService> = svc_map.into_values()
+        .filter(|s| !s.name.is_empty())
+        .collect();
+    top_services.sort_by(|a, b| b.req_per_sec.partial_cmp(&a.req_per_sec).unwrap_or(std::cmp::Ordering::Equal));
+    top_services.truncate(10);
+
+    Ok(NetworkBreakdown { external_rx_mbps, external_tx_mbps, total_rx_mbps, total_tx_mbps, top_services })
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpikeConfig {
     pub multiplier: f64,
     pub floor_mbps: f64,
@@ -1084,6 +1160,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (spike_config, set_spike_config) = signal(None::<SpikeConfig>);
     #[allow(unused_variables)]
     let (top_pods, set_top_pods) = signal(Vec::<TopPodTraffic>::new());
+    #[allow(unused_variables)]
+    let (net_breakdown, set_net_breakdown) = signal(None::<NetworkBreakdown>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1102,9 +1180,9 @@ pub fn ClusterStats() -> impl IntoView {
     #[allow(unused_variables)]
     let (disk_history, set_disk_history) = signal(VecDeque::<f64>::with_capacity(144));
     #[allow(unused_variables)]
-    let (network_rx_history, set_network_rx_history) = signal(VecDeque::<f64>::with_capacity(144));
+    let (network_rx_history, set_network_rx_history) = signal(VecDeque::<f64>::with_capacity(3600));
     #[allow(unused_variables)]
-    let (network_tx_history, set_network_tx_history) = signal(VecDeque::<f64>::with_capacity(144));
+    let (network_tx_history, set_network_tx_history) = signal(VecDeque::<f64>::with_capacity(3600));
 
     // Note: set_error is used in closures below, but Rust can't see through
     // the .forget() pattern required for WASM event handlers
@@ -1115,7 +1193,7 @@ pub fn ClusterStats() -> impl IntoView {
     macro_rules! update_history {
         ($setter:expr, $value:expr) => {
             $setter.update(|h| {
-                if h.len() >= 144 { h.pop_front(); }
+                if h.len() >= h.capacity() { h.pop_front(); }
                 h.push_back($value);
             });
         };
@@ -1144,10 +1222,13 @@ pub fn ClusterStats() -> impl IntoView {
             if let Ok(pods) = get_top_network_pods().await {
                 set_top_pods.set(pods);
             }
+            if let Ok(bd) = get_network_breakdown().await {
+                set_net_breakdown.set(Some(bd));
+            }
         });
     });
 
-    // Refresh top pods every 15 s
+    // Refresh top pods + breakdown every 15 s
     #[cfg(not(feature = "ssr"))]
     {
         use wasm_bindgen::prelude::*;
@@ -1155,6 +1236,9 @@ pub fn ClusterStats() -> impl IntoView {
             leptos::task::spawn_local(async move {
                 if let Ok(pods) = get_top_network_pods().await {
                     set_top_pods.set(pods);
+                }
+                if let Ok(bd) = get_network_breakdown().await {
+                    set_net_breakdown.set(Some(bd));
                 }
             });
         });
@@ -1175,8 +1259,7 @@ pub fn ClusterStats() -> impl IntoView {
                     update_history!(set_cpu_history, historical.cpu_history, init);
                     update_history!(set_memory_history, historical.memory_history, init);
                     update_history!(set_disk_history, historical.disk_history, init);
-                    update_history!(set_network_rx_history, historical.network_rx_history, init);
-                    update_history!(set_network_tx_history, historical.network_tx_history, init);
+                    // Network is a live 1-hour view fed by SSE; not pre-loaded from history.
                 }
                 Err(e) => {
                     #[cfg(feature = "ssr")]
@@ -1457,12 +1540,68 @@ pub fn ClusterStats() -> impl IntoView {
                 let insights = network_insights.get();
                 let cfg = spike_config.get();
                 let pods = top_pods.get();
+                let breakdown = net_breakdown.get();
                 let rx_hist = network_rx_history.get().iter().copied().collect::<Vec<_>>();
                 let tx_hist = network_tx_history.get().iter().copied().collect::<Vec<_>>();
                 view! {
                     <div class="space-y-3">
                         // Large detailed chart
                         <DetailedNetworkChart data_rx=rx_hist data_tx=tx_hist />
+
+                        // External vs internal breakdown
+                        {breakdown.map(|bd| {
+                            let internal_rx = (bd.total_rx_mbps - bd.external_rx_mbps).max(0.0);
+                            let internal_tx = (bd.total_tx_mbps - bd.external_tx_mbps).max(0.0);
+                            view! {
+                                <div class="bg-surface rounded-lg shadow-sm p-4 border border-border">
+                                    <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Traffic Origin"</h3>
+                                    <div class="grid grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <p class="text-xs text-charcoal-lighter mb-1">"External (Traefik websecure)"</p>
+                                            <div class="flex gap-4 text-xs font-mono">
+                                                <span><span class="text-blue-400">"↓ "</span>{format!("{:.1} Mbps", bd.external_rx_mbps)}</span>
+                                                <span><span class="text-amber-400">"↑ "</span>{format!("{:.1} Mbps", bd.external_tx_mbps)}</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <p class="text-xs text-charcoal-lighter mb-1">"Internal (pod-to-pod)"</p>
+                                            <div class="flex gap-4 text-xs font-mono">
+                                                <span><span class="text-blue-400">"↓ "</span>{format!("{:.1} Mbps", internal_rx)}</span>
+                                                <span><span class="text-amber-400">"↑ "</span>{format!("{:.1} Mbps", internal_tx)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {if !bd.top_services.is_empty() {
+                                        view! {
+                                            <div>
+                                                <p class="text-xs text-charcoal-lighter mb-1">"Top public services (5m avg)"</p>
+                                                <div class="space-y-1">
+                                                    <div class="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 text-xs text-charcoal-lighter font-mono mb-1">
+                                                        <span>"service"</span>
+                                                        <span class="text-right">"req/s"</span>
+                                                        <span class="text-right text-blue-400">"↓ RX"</span>
+                                                        <span class="text-right text-amber-400">"↑ TX"</span>
+                                                    </div>
+                                                    {bd.top_services.into_iter().map(|s| {
+                                                        let name = s.name.trim_end_matches("@kubernetes").to_string();
+                                                        view! {
+                                                            <div class="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 text-xs font-mono">
+                                                                <span class="text-charcoal truncate">{name}</span>
+                                                                <span class="text-right text-charcoal">{format!("{:.2}", s.req_per_sec)}</span>
+                                                                <span class="text-right text-blue-500">{format!("{:.2}", s.rx_mbps)}</span>
+                                                                <span class="text-right text-amber-500">{format!("{:.2}", s.tx_mbps)}</span>
+                                                            </div>
+                                                        }
+                                                    }).collect::<Vec<_>>()}
+                                                </div>
+                                            </div>
+                                        }.into_any()
+                                    } else {
+                                        view! { <div /> }.into_any()
+                                    }}
+                                </div>
+                            }
+                        })}
 
                         // Top pods table
                         {if !pods.is_empty() {
@@ -1472,8 +1611,8 @@ pub fn ClusterStats() -> impl IntoView {
                                     <div class="space-y-1">
                                         <div class="grid grid-cols-[1fr_auto_auto] gap-x-4 text-xs text-charcoal-lighter font-mono mb-1">
                                             <span>"pod"</span>
-                                            <span class="text-right text-amber-400">"↑ TX"</span>
-                                            <span class="text-right text-blue-400">"↓ RX"</span>
+                                            <span class="text-right text-amber-400">"↑ TX (Mbps)"</span>
+                                            <span class="text-right text-blue-400">"↓ RX (Mbps)"</span>
                                         </div>
                                         {pods.into_iter().map(|p| view! {
                                             <div class="grid grid-cols-[1fr_auto_auto] gap-x-4 text-xs font-mono">
@@ -1589,13 +1728,26 @@ fn DetailedNetworkChart(
     let current_rx = data_rx.last().copied().unwrap_or(0.0);
     let current_tx = data_tx.last().copied().unwrap_or(0.0);
 
-    // Y-axis labels: 4 evenly spaced ticks
+    // Y-axis: 4 evenly spaced ticks, labelled in Mbps (k for thousands)
+    let fmt_mbps = |v: f64| -> String {
+        if v == 0.0 { "0".to_string() }
+        else if v >= 1000.0 { format!("{:.0}k", v / 1000.0) }
+        else { format!("{:.0}", v) }
+    };
     let y_ticks: Vec<f64> = (0..=4).map(|i| y_max * i as f64 / 4.0).collect();
+
+    // X-axis: each point = 1 second of live SSE data, cap 3600 = 1 hour
+    let n_points = n_rx.max(n_tx);
+    let mins = n_points / 60;
+    let x_left = if mins >= 60 { "1h ago".to_string() }
+                 else if mins > 0 { format!("{mins}m ago") }
+                 else { format!("{}s ago", n_points) };
+    let x_mid  = if mins >= 2 { format!("{}m ago", mins / 2) } else { "".to_string() };
 
     view! {
         <div class="bg-surface p-4 rounded-lg shadow-sm border border-border">
             <div class="flex justify-between items-center mb-3">
-                <h3 class="text-xs font-medium text-charcoal-lighter">"Network Throughput"</h3>
+                <h3 class="text-xs font-medium text-charcoal-lighter">"Network Throughput (Mbps)"</h3>
                 <div class="flex gap-4 text-xs font-mono font-semibold">
                     <span><span class="text-blue-400">"↓ RX  "</span><span class="text-charcoal">{format!("{:.1} Mbps", current_rx)}</span></span>
                     <span><span class="text-amber-400">"↑ TX  "</span><span class="text-charcoal">{format!("{:.1} Mbps", current_tx)}</span></span>
@@ -1603,18 +1755,16 @@ fn DetailedNetworkChart(
             </div>
             <div class="flex gap-2">
                 // Y-axis labels
-                <div class="flex flex-col justify-between text-right pr-1 py-0.5" style="width:3rem">
+                <div class="flex flex-col justify-between text-right pr-1 py-0.5" style="width:2.5rem">
                     {y_ticks.iter().rev().map(|&v| view! {
                         <span class="text-xs text-charcoal-lighter font-mono leading-none">
-                            {if v >= 1000.0 { format!("{:.0}G", v/1000.0) }
-                             else { format!("{:.0}", v) }}
+                            {fmt_mbps(v)}
                         </span>
                     }).collect::<Vec<_>>()}
                 </div>
                 // Chart
                 <div class="flex-1">
                     <svg viewBox="0 0 100 60" class="w-full h-40" preserveAspectRatio="none">
-                        // Horizontal grid lines
                         {(0..=4).map(|i| {
                             let y = i as f64 * 60.0 / 4.0;
                             view! {
@@ -1626,31 +1776,14 @@ fn DetailedNetworkChart(
                                 />
                             }
                         }).collect::<Vec<_>>()}
-                        // TX line
-                        <path
-                            d={path_tx}
-                            fill="none"
-                            stroke="#f59e0b"
-                            stroke-width="0.8"
-                            stroke-linejoin="round"
-                            stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"
-                        />
-                        // RX line
-                        <path
-                            d={path_rx}
-                            fill="none"
-                            stroke="#60a5fa"
-                            stroke-width="0.8"
-                            stroke-linejoin="round"
-                            stroke-linecap="round"
-                            vector-effect="non-scaling-stroke"
-                        />
+                        <path d={path_tx} fill="none" stroke="#f59e0b" stroke-width="0.8"
+                            stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
+                        <path d={path_rx} fill="none" stroke="#60a5fa" stroke-width="0.8"
+                            stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" />
                     </svg>
-                    // X-axis labels
                     <div class="flex justify-between text-xs text-charcoal-lighter font-mono mt-1">
-                        <span>"24h ago"</span>
-                        <span>"12h ago"</span>
+                        <span>{x_left}</span>
+                        <span>{x_mid}</span>
                         <span>"now"</span>
                     </div>
                 </div>
