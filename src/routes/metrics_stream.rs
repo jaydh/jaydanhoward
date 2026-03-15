@@ -158,11 +158,10 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
     let db_info = {
         let (db_data, pvc_data) = tokio::join!(
             query_prometheus(
-                "sort_desc(pg_database_size_bytes{datname!~\"template.*|postgres\"})"
+                "sort_desc(cnpg_pg_database_size_bytes{datname!~\"template.*|postgres\"})"
             ),
             query_prometheus(
-                "max(kubelet_volume_stats_capacity_bytes\
-                 {namespace=\"service\",persistentvolumeclaim=~\"pgdata-jaydanhoward-postgres-.*\"})"
+                "sum(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=~\"pgdata-.*\"})"
             ),
         );
 
