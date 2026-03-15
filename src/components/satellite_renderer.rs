@@ -5,6 +5,8 @@
 use web_sys::{WebGl2RenderingContext, WebGlBuffer, WebGlProgram, WebGlShader};
 use crate::components::satellite_calculations::SatellitePosition;
 
+const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+
 pub struct SatelliteRenderer {
     gl: WebGl2RenderingContext,
     program: Option<WebGlProgram>,
@@ -19,6 +21,8 @@ pub struct SatelliteRenderer {
     auto_rotate: bool,
     satellite_positions: Vec<SatellitePosition>,
     satellite_vertex_buffer: Option<WebGlBuffer>,
+    astranis_vertex_buffer: Option<WebGlBuffer>,
+    astranis_count: i32,
     pole_axis_vertex_buffer: Option<WebGlBuffer>,
     pole_axis_vertex_count: i32,
     pole_tips_vertex_buffer: Option<WebGlBuffer>,
@@ -36,10 +40,12 @@ impl SatelliteRenderer {
             equator_vertex_count: 0,
             camera_angle_horizontal: 0.0,
             camera_angle_vertical: 0.5,
-            camera_distance: 4.0,
+            camera_distance: 18.0, // Start zoomed out to show GEO (Astranis) by default
             auto_rotate: true,
             satellite_positions: Vec::new(),
             satellite_vertex_buffer: None,
+            astranis_vertex_buffer: None,
+            astranis_count: 0,
             pole_axis_vertex_buffer: None,
             pole_axis_vertex_count: 0,
             pole_tips_vertex_buffer: None,
@@ -93,22 +99,23 @@ impl SatelliteRenderer {
         }
     }
 
-    /// Get color based on altitude and inclination
-    /// True GEO satellites must be at ~35,786 km AND near 0° inclination (on equator)
-    fn get_altitude_color(altitude_km: f32, inclination_deg: f32) -> [f32; 3] {
+    /// Get color based on altitude, inclination, and whether it's an Astranis satellite
+    fn get_altitude_color(altitude_km: f32, inclination_deg: f32, is_astranis: bool) -> [f32; 3] {
+        if is_astranis {
+            return [0.0, 0.86, 0.71]; // Teal - Astranis
+        }
+
         // Check for true geostationary: altitude ~35,786 km AND inclination near 0°
-        // GEO satellites at the right altitude, allowing for slight drift (< 5°)
         if altitude_km > 35000.0 && altitude_km < 37000.0 && inclination_deg.abs() < 5.0 {
             return [1.0, 0.3, 0.3]; // Red - True Geostationary Orbit (on equator)
         }
 
-        // Color by altitude for all other satellites
         match altitude_km {
-            a if a < 600.0   => [0.3, 0.8, 1.0],  // Cyan - Low Earth Orbit (ISS, Starlink)
+            a if a < 600.0   => [0.3, 0.8, 1.0],  // Cyan - LEO
             a if a < 2000.0  => [0.5, 1.0, 0.5],  // Green - LEO high
-            a if a < 20000.0 => [1.0, 0.8, 0.2],  // Yellow - Medium Earth Orbit (GPS, Galileo)
+            a if a < 20000.0 => [1.0, 0.8, 0.2],  // Yellow - MEO
             a if a < 35000.0 => [1.0, 0.5, 0.2],  // Orange - MEO high
-            _                => [0.8, 0.6, 1.0],  // Purple - HEO (highly elliptical, inclined geosync, etc)
+            _                => [0.8, 0.6, 1.0],  // Purple - HEO
         }
     }
 
@@ -116,34 +123,51 @@ impl SatelliteRenderer {
     pub fn update_satellites(&mut self, positions: Vec<SatellitePosition>) {
         self.satellite_positions = positions;
 
-        // Create/update satellite vertex buffer
-        if !self.satellite_positions.is_empty() {
-            // Convert positions to vertex data (position + color)
-            let mut vertices = Vec::new();
-            for pos in &self.satellite_positions {
-                // Position
-                vertices.push(pos.x);
-                vertices.push(pos.y);
-                vertices.push(pos.z);
-                // Color based on altitude and inclination
-                let color = Self::get_altitude_color(pos.altitude_km, pos.inclination_deg);
-                vertices.push(color[0]);
-                vertices.push(color[1]);
-                vertices.push(color[2]);
-            }
+        let mut regular_verts: Vec<f32> = Vec::new();
+        let mut astranis_verts: Vec<f32> = Vec::new();
 
+        for pos in &self.satellite_positions {
+            let is_astranis = ASTRANIS_IDS.contains(&pos.norad_id);
+            let color = Self::get_altitude_color(pos.altitude_km, pos.inclination_deg, is_astranis);
+            let entry = [pos.x, pos.y, pos.z, color[0], color[1], color[2]];
+            if is_astranis {
+                astranis_verts.extend_from_slice(&entry);
+            } else {
+                regular_verts.extend_from_slice(&entry);
+            }
+        }
+
+        // Upload regular satellites
+        if !regular_verts.is_empty() {
             if self.satellite_vertex_buffer.is_none() {
                 self.satellite_vertex_buffer = self.gl.create_buffer();
             }
-
             if let Some(buffer) = &self.satellite_vertex_buffer {
                 self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(buffer));
-
                 unsafe {
-                    let vertices_array = js_sys::Float32Array::view(&vertices);
+                    let arr = js_sys::Float32Array::view(&regular_verts);
                     self.gl.buffer_data_with_array_buffer_view(
                         WebGl2RenderingContext::ARRAY_BUFFER,
-                        &vertices_array,
+                        &arr,
+                        WebGl2RenderingContext::DYNAMIC_DRAW,
+                    );
+                }
+            }
+        }
+
+        // Upload Astranis satellites
+        self.astranis_count = (astranis_verts.len() / 6) as i32;
+        if self.astranis_count > 0 {
+            if self.astranis_vertex_buffer.is_none() {
+                self.astranis_vertex_buffer = self.gl.create_buffer();
+            }
+            if let Some(buffer) = &self.astranis_vertex_buffer {
+                self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(buffer));
+                unsafe {
+                    let arr = js_sys::Float32Array::view(&astranis_verts);
+                    self.gl.buffer_data_with_array_buffer_view(
+                        WebGl2RenderingContext::ARRAY_BUFFER,
+                        &arr,
                         WebGl2RenderingContext::DYNAMIC_DRAW,
                     );
                 }
@@ -499,27 +523,34 @@ impl SatelliteRenderer {
                 self.gl.draw_arrays(WebGl2RenderingContext::POINTS, 0, 2);
             }
 
-            // Draw satellites
-            if let Some(sat_buffer) = &self.satellite_vertex_buffer {
-                if !self.satellite_positions.is_empty() {
+            let position_loc = self.gl.get_attrib_location(program, "position") as u32;
+            let color_loc = self.gl.get_attrib_location(program, "color") as u32;
+            let stride = 6 * 4; // 6 floats * 4 bytes
+
+            // Draw regular satellites (2px)
+            let regular_count = self.satellite_positions.len() as i32 - self.astranis_count;
+            if regular_count > 0 {
+                if let Some(sat_buffer) = &self.satellite_vertex_buffer {
                     self.gl.uniform1f(point_size_loc.as_ref(), 2.0);
                     self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(sat_buffer));
-
-                    let position_loc = self.gl.get_attrib_location(program, "position") as u32;
-                    let color_loc = self.gl.get_attrib_location(program, "color") as u32;
-
-                    let stride = 6 * 4; // 6 floats * 4 bytes
                     self.gl.vertex_attrib_pointer_with_i32(position_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 0);
                     self.gl.enable_vertex_attrib_array(position_loc);
-
                     self.gl.vertex_attrib_pointer_with_i32(color_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 3 * 4);
                     self.gl.enable_vertex_attrib_array(color_loc);
+                    self.gl.draw_arrays(WebGl2RenderingContext::POINTS, 0, regular_count);
+                }
+            }
 
-                    self.gl.draw_arrays(
-                        WebGl2RenderingContext::POINTS,
-                        0,
-                        self.satellite_positions.len() as i32,
-                    );
+            // Draw Astranis satellites on top (5px, teal)
+            if self.astranis_count > 0 {
+                if let Some(astranis_buffer) = &self.astranis_vertex_buffer {
+                    self.gl.uniform1f(point_size_loc.as_ref(), 5.0);
+                    self.gl.bind_buffer(WebGl2RenderingContext::ARRAY_BUFFER, Some(astranis_buffer));
+                    self.gl.vertex_attrib_pointer_with_i32(position_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 0);
+                    self.gl.enable_vertex_attrib_array(position_loc);
+                    self.gl.vertex_attrib_pointer_with_i32(color_loc, 3, WebGl2RenderingContext::FLOAT, false, stride, 3 * 4);
+                    self.gl.enable_vertex_attrib_array(color_loc);
+                    self.gl.draw_arrays(WebGl2RenderingContext::POINTS, 0, self.astranis_count);
                 }
             }
         }

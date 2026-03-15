@@ -10,6 +10,7 @@ pub struct SatellitePosition {
     pub z: f32,
     pub altitude_km: f32,
     pub inclination_deg: f32,
+    pub norad_id: u32,
 }
 
 #[derive(Clone)]
@@ -81,6 +82,7 @@ impl Satellite {
             z: -(prediction.position[1] * scale) as f32, // ECI y -> our z (negated so prograde orbits are CCW from north)
             altitude_km: altitude_km as f32,
             inclination_deg: self.inclination_deg as f32,
+            norad_id: self.norad_id,
         })
     }
 
