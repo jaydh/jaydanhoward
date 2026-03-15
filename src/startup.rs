@@ -107,10 +107,11 @@ pub async fn run() -> Result<(), std::io::Error> {
                 heartbeat_tick += 1;
 
                 let tx_mbps = match crate::prometheus_client::query_prometheus(
-                    // Use rate([1m]) for responsive spike detection rather than the
-                    // 5m-smoothed version used for charts — avoids baseline adapting
-                    // to a sustained spike before detection fires.
-                    "sum(rate(container_network_transmit_bytes_total[1m])) * 8 / 1000 / 1000",
+                    // Use node_network (physical NIC) + rate([1m]) for responsive
+                    // detection without hostNetwork pod double-counting.
+                    "sum(rate(node_network_transmit_bytes_total{\
+                      device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+                    }[1m])) * 8 / 1000000",
                 )
                 .await
                 {

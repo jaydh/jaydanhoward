@@ -98,12 +98,18 @@ pub async fn get_cluster_metrics() -> Result<ClusterMetrics, ServerFnError<Strin
         "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
     ).await? as u32;
 
-    // Network metrics (convert bytes/sec to Mbps)
+    // Network metrics — node_network (physical NIC) avoids double-counting
+    // hostNetwork pods (node-exporter, cilium, CSI plugins share the host
+    // network namespace so container_network_* inflates totals 4-8x).
     let network_rx = parse_prometheus_value(
-        "sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000 / 1000"
+        "sum(rate(node_network_receive_bytes_total{\
+          device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+        }[5m])) * 8 / 1000000"
     ).await?;
     let network_tx = parse_prometheus_value(
-        "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
+        "sum(rate(node_network_transmit_bytes_total{\
+          device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+        }[5m])) * 8 / 1000000"
     ).await?;
 
     let storage = {
@@ -291,9 +297,11 @@ pub async fn get_historical_metrics() -> Result<HistoricalMetrics, ServerFnError
         step,
     ).await.map_err(|e| ServerFnError::ServerError(format!("Disk query failed: {}", e)))?;
 
-    // Query historical network RX
+    // Query historical network RX (node_network avoids hostNetwork double-counting)
     let network_rx_data = query_prometheus_range(
-        "sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000 / 1000",
+        "sum(rate(node_network_receive_bytes_total{\
+          device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+        }[5m])) * 8 / 1000000",
         twenty_four_hours_ago,
         now,
         step,
@@ -301,7 +309,9 @@ pub async fn get_historical_metrics() -> Result<HistoricalMetrics, ServerFnError
 
     // Query historical network TX
     let network_tx_data = query_prometheus_range(
-        "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000",
+        "sum(rate(node_network_transmit_bytes_total{\
+          device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+        }[5m])) * 8 / 1000000",
         twenty_four_hours_ago,
         now,
         step,
@@ -534,14 +544,22 @@ pub struct TopPodTraffic {
 pub async fn get_top_network_pods() -> Result<Vec<TopPodTraffic>, ServerFnError<String>> {
     use crate::prometheus_client::query_prometheus;
 
+    // Exclude namespaces whose pods run with hostNetwork=true (node-exporter,
+    // cilium, CSI plugins) — they'd show node-level traffic, not pod-level.
     let (tx_data, rx_data) = tokio::join!(
         query_prometheus(
             "topk(10, sum by (namespace, pod) \
-             (rate(container_network_transmit_bytes_total{pod!=\"\"}[5m]))) * 8 / 1000000"
+             (rate(container_network_transmit_bytes_total{\
+               pod!=\"\",\
+               namespace!~\"kube-system|monitoring|ingress\"\
+             }[5m]))) * 8 / 1000000"
         ),
         query_prometheus(
             "topk(10, sum by (namespace, pod) \
-             (rate(container_network_receive_bytes_total{pod!=\"\"}[5m]))) * 8 / 1000000"
+             (rate(container_network_receive_bytes_total{\
+               pod!=\"\",\
+               namespace!~\"kube-system|monitoring|ingress\"\
+             }[5m]))) * 8 / 1000000"
         ),
     );
 
@@ -610,8 +628,8 @@ pub async fn get_network_breakdown() -> Result<NetworkBreakdown, ServerFnError<S
         query_prometheus("topk(10, sum by (service) (rate(traefik_service_requests_total[5m])))"),
         query_prometheus("topk(10, sum by (service) (rate(traefik_service_requests_bytes_total[5m]))) * 8 / 1000000"),
         query_prometheus("topk(10, sum by (service) (rate(traefik_service_responses_bytes_total[5m]))) * 8 / 1000000"),
-        query_prometheus("sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000000"),
-        query_prometheus("sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000000"),
+        query_prometheus("sum(rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"}[5m])) * 8 / 1000000"),
+        query_prometheus("sum(rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"}[5m])) * 8 / 1000000"),
     );
 
     let scalar = |data: Result<crate::prometheus_client::PrometheusData, _>| -> f64 {

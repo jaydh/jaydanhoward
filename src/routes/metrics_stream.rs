@@ -145,12 +145,19 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
     ).await? as u32;
 
-    // Network metrics (convert bytes/sec to Mbps)
+    // Network metrics — use node_network (physical NIC) metrics to avoid
+    // double-counting hostNetwork pods (node-exporter, cilium, CSI plugins all
+    // share the host network namespace; container_network_* counts each of them
+    // separately, inflating totals 4-8x).
     let network_rx = parse_prometheus_value(
-        "sum(rate(container_network_receive_bytes_total[5m])) * 8 / 1000 / 1000"
+        "sum(rate(node_network_receive_bytes_total{\
+          device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+        }[5m])) * 8 / 1000000"
     ).await?;
     let network_tx = parse_prometheus_value(
-        "sum(rate(container_network_transmit_bytes_total[5m])) * 8 / 1000 / 1000"
+        "sum(rate(node_network_transmit_bytes_total{\
+          device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
+        }[5m])) * 8 / 1000000"
     ).await?;
 
     let storage = {
