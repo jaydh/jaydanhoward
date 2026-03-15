@@ -8,7 +8,6 @@ use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
 use crate::components::satellite_tracker::SatelliteTracker;
-use crate::components::flux_graph::FluxGraphView;
 use crate::components::visitors::Visitors;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Html, Link, Script, Style, Title};
@@ -61,7 +60,6 @@ fn HomePage() -> impl IntoView {
                 <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
                     <h1 class="text-3xl font-bold text-charcoal">"Cluster"</h1>
                     <ClusterStats />
-                    <FluxGraphView />
                     <Visitors />
                     <Lighthouse />
                 </div>
