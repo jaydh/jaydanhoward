@@ -107,11 +107,11 @@ pub async fn run() -> Result<(), std::io::Error> {
                 heartbeat_tick += 1;
 
                 let tx_mbps = match crate::prometheus_client::query_prometheus(
-                    // Use node_network (physical NIC) + rate([1m]) for responsive
-                    // detection without hostNetwork pod double-counting.
+                    // Use node_network (physical NIC) to avoid hostNetwork pod double-counting.
+                    // rate([2m]) — scrape interval is ~2m so [1m] always returns empty.
                     "sum(rate(node_network_transmit_bytes_total{\
                       device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
-                    }[1m])) * 8 / 1000000",
+                    }[2m])) * 8 / 1000000",
                 )
                 .await
                 {
