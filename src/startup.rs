@@ -10,8 +10,8 @@ pub async fn run() -> Result<(), std::io::Error> {
     use crate::middleware::security_headers::SecurityHeaders;
     use crate::middleware::visitor_logger::VisitorLogger;
     use crate::routes::{
-        fetch_world_map_svg, health_check, metrics_stream, robots_txt, upload_lighthouse_report,
-        world_map, WorldMapSvg,
+        fetch_world_map_svg, health_check, ingest_claude_audit, metrics_stream, robots_txt,
+        upload_lighthouse_report, world_map, WorldMapSvg,
     };
     use crate::telemtry::{get_subscriber, init_subscriber};
     use actix_files::Files;
@@ -434,6 +434,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                     .to(upload_lighthouse_report)
                     .wrap(auth_rate_limiter),
             )
+            .route("/api/audit/claude", web::post().to(ingest_claude_audit))
             .route("/api/metrics/stream", web::get().to(metrics_stream))
             .route("/world-map.svg", web::get().to(world_map))
             .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
