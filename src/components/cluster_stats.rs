@@ -852,11 +852,24 @@ pub async fn get_claude_audit_log() -> Result<Vec<ClaudeAuditEntry>, ServerFnErr
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SdSyncStatus {
+    pub active: bool,
+    pub last_sync_end_timestamp: f64,
+    pub last_sync_duration_seconds: f64,
+    pub last_sync_files_copied: u64,
+    pub last_sync_files_skipped: u64,
+    pub last_sync_bytes_copied: u64,
+    pub syncs_completed_total: u64,
+    pub syncs_errored_total: u64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
     pub ceph: Option<CephStatus>,
     pub latest_insight: Option<NetworkInsight>,
+    pub sd_sync: Option<SdSyncStatus>,
 }
 
 fn fmt_ceph_bytes(bytes: f64) -> String {
@@ -1055,6 +1068,75 @@ fn ClaudeAuditPanel(entries: Vec<ClaudeAuditEntry>) -> impl IntoView {
 }
 
 #[component]
+fn SdSyncPanel(sync: SdSyncStatus) -> impl IntoView {
+    let active = sync.active;
+    let files_copied = sync.last_sync_files_copied;
+    let files_skipped = sync.last_sync_files_skipped;
+    let bytes_copied = sync.last_sync_bytes_copied;
+    let duration = sync.last_sync_duration_seconds;
+    let completed = sync.syncs_completed_total;
+    let errored = sync.syncs_errored_total;
+
+    let speed_mbps = if duration > 0.0 {
+        bytes_copied as f64 / duration / 1_048_576.0
+    } else {
+        0.0
+    };
+
+    let bytes_label = fmt_ceph_bytes(bytes_copied as f64);
+    let speed_label = format!("{:.1} MB/s avg", speed_mbps);
+
+    let (status_label, status_class) = if active {
+        ("syncing", "text-green-500")
+    } else if errored > 0 && completed == 0 {
+        ("error", "text-red-500")
+    } else {
+        ("idle", "text-charcoal-lighter")
+    };
+
+    view! {
+        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
+            <div class="flex items-center justify-between mb-3">
+                <h3 class="text-xs font-medium text-charcoal-lighter">"SD Sync"</h3>
+                <span class={"text-xs font-mono font-semibold ".to_string() + status_class}>
+                    {if active { "● " } else { "○ " }}
+                    {status_label}
+                </span>
+            </div>
+            <div class="font-mono text-xs space-y-1">
+                <div class="flex justify-between">
+                    <span class="text-charcoal-lighter">"last sync"</span>
+                    <span class="text-charcoal">
+                        {files_copied} " copied · " {files_skipped} " skipped"
+                    </span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-charcoal-lighter">"transferred"</span>
+                    <span class="text-charcoal">{bytes_label}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-charcoal-lighter">"speed"</span>
+                    <span class="text-charcoal">{speed_label}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-charcoal-lighter">"duration"</span>
+                    <span class="text-charcoal">{format!("{:.1}s", duration)}</span>
+                </div>
+                {(errored > 0).then(move || view! {
+                    <div class="flex justify-between mt-1">
+                        <span class="text-charcoal-lighter">"total"</span>
+                        <span class="text-charcoal">
+                            {completed} " ok · "
+                            <span class="text-red-400">{errored} " err"</span>
+                        </span>
+                    </div>
+                })}
+            </div>
+        </div>
+    }
+}
+
+#[component]
 fn CephStatusPanel(ceph: CephStatus) -> impl IntoView {
     let health = ceph.health;
     let mon_quorum = ceph.mon_quorum;
@@ -1237,6 +1319,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (net_breakdown, set_net_breakdown) = signal(None::<NetworkBreakdown>);
     #[allow(unused_variables)]
     let (cloudflared, set_cloudflared) = signal(None::<CloudflaredStatus>);
+    #[allow(unused_variables)]
+    let (sd_sync_status, set_sd_sync_status) = signal(None::<SdSyncStatus>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1391,6 +1475,7 @@ pub fn ClusterStats() -> impl IntoView {
                             }
                             set_node_metrics.set(update.nodes);
                             set_ceph_status.set(update.ceph);
+                            set_sd_sync_status.set(update.sd_sync);
                             if let Some(insight) = update.latest_insight {
                                 set_network_insights.update(|v| {
                                     if v.iter().all(|i| i.id != insight.id) {
@@ -1611,6 +1696,11 @@ pub fn ClusterStats() -> impl IntoView {
                             view! {
                                 <p class="text-center text-charcoal-light py-8">"No Ceph data yet..."</p>
                             }.into_any()
+                        }}
+                        {if let Some(sync) = sd_sync_status.get() {
+                            view! { <SdSyncPanel sync=sync /> }.into_any()
+                        } else {
+                            view! { <div /> }.into_any()
                         }}
                     </div>
                 }.into_any()
