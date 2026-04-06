@@ -55,7 +55,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                 Some(p)
             }
             Err(e) => {
-                log::warn!("Failed to connect to Postgres: {}", e);
+                log::warn!("Failed to connect to Postgres: {e}");
                 None
             }
         },
@@ -82,10 +82,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     } else {
         (1.5, 100.0)
     };
-    log::info!(
-        "Spike detector: multiplier={:.2} floor={:.1} Mbps",
-        spike_multiplier, spike_floor_mbps
-    );
+    log::info!("Spike detector: multiplier={spike_multiplier:.2} floor={spike_floor_mbps:.1} Mbps");
     // At 1s SSE tick: 180 samples = 3-min window, 30 samples = 30s warmup.
     let spike_detector = web::Data::new(tokio::sync::Mutex::new(
         NetworkSpikeDetector::new(spike_multiplier, spike_floor_mbps, 180, 30),
@@ -133,10 +130,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                         let det = detector.lock().await;
                         (det.multiplier, det.floor_mbps)
                     };
-                    log::info!(
-                        "Spike detector heartbeat: tx={tx_mbps:.1} Mbps  threshold={:.1}x  floor={floor:.0} Mbps",
-                        mult
-                    );
+                    log::info!("Spike detector heartbeat: tx={tx_mbps:.1} Mbps  threshold={mult:.1}x  floor={floor:.0} Mbps");
                 }
 
                 let spike = detector.lock().await.check(tx_mbps);
@@ -154,10 +148,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                     }
 
                     if claimed {
-                        log::info!(
-                            "Network spike detected: {:.1} Mbps (baseline {:.1} Mbps) — calling Claude",
-                            spike_mbps, baseline_mbps
-                        );
+                        log::info!("Network spike detected: {spike_mbps:.1} Mbps (baseline {baseline_mbps:.1} Mbps) — calling Claude");
                         let pool_ref = pool_opt.clone();
                         let detector_ref = detector.clone();
                         tokio::spawn(async move {
@@ -427,7 +418,7 @@ pub async fn run() -> Result<(), std::io::Error> {
         }
     }
 
-    log::info!("Starting Server on {}", addr);
+    log::info!("Starting Server on {addr}");
     HttpServer::new(move || {
         let routes = generate_route_list(App);
 

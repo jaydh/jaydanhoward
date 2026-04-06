@@ -88,18 +88,39 @@ pub struct NetworkInsight {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct SdSyncStatus {
+    /// true while a sync is in progress
+    pub active: bool,
+    /// Unix timestamp of the last completed sync (0 = never)
+    pub last_sync_end_timestamp: f64,
+    /// Duration of the last sync in seconds
+    pub last_sync_duration_seconds: f64,
+    /// Files copied in the last sync
+    pub last_sync_files_copied: u64,
+    /// Files skipped (deduplicated) in the last sync
+    pub last_sync_files_skipped: u64,
+    /// Bytes copied in the last sync
+    pub last_sync_bytes_copied: u64,
+    /// Total completed syncs since the daemon started
+    pub syncs_completed_total: u64,
+    /// Total errored syncs since the daemon started
+    pub syncs_errored_total: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
     pub ceph: Option<CephStatus>,
     pub latest_insight: Option<NetworkInsight>,
+    pub sd_sync: Option<SdSyncStatus>,
 }
 
 async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
     let data = query_prometheus(query).await?;
 
     if let Some(metric) = data.data.result.first() {
-        metric.value.1.parse::<f64>().map_err(|e| anyhow::anyhow!("Failed to parse value: {}", e))
+        metric.value.1.parse::<f64>().map_err(|e| anyhow::anyhow!("Failed to parse value: {e}"))
     } else {
         Ok(0.0)
     }
@@ -343,6 +364,35 @@ async fn fetch_ceph_status() -> CephStatus {
     }
 }
 
+async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
+    Some(SdSyncStatus {
+        active: parse_prometheus_value("sd_sync_active").await.ok()? != 0.0,
+        last_sync_end_timestamp: parse_prometheus_value(
+            "sd_sync_last_sync_end_timestamp_seconds",
+        )
+        .await
+        .unwrap_or(0.0),
+        last_sync_duration_seconds: parse_prometheus_value("sd_sync_last_sync_duration_seconds")
+            .await
+            .unwrap_or(0.0),
+        last_sync_files_copied: parse_prometheus_value("sd_sync_last_sync_files_copied")
+            .await
+            .unwrap_or(0.0) as u64,
+        last_sync_files_skipped: parse_prometheus_value("sd_sync_last_sync_files_skipped")
+            .await
+            .unwrap_or(0.0) as u64,
+        last_sync_bytes_copied: parse_prometheus_value("sd_sync_last_sync_bytes_copied")
+            .await
+            .unwrap_or(0.0) as u64,
+        syncs_completed_total: parse_prometheus_value("sd_sync_syncs_completed_total")
+            .await
+            .unwrap_or(0.0) as u64,
+        syncs_errored_total: parse_prometheus_value("sd_sync_syncs_errored_total")
+            .await
+            .unwrap_or(0.0) as u64,
+    })
+}
+
 pub async fn metrics_stream(
     pool: Option<Data<PgPool>>,
 ) -> impl actix_web::Responder {
@@ -350,10 +400,15 @@ pub async fn metrics_stream(
         .then(move |_| {
             let pool = pool.clone();
             async move {
-            // Fetch cluster, node, and ceph metrics
-            let cluster_metrics = fetch_cluster_metrics().await.ok();
-            let node_metrics = fetch_node_metrics().await.unwrap_or_default();
-            let ceph = fetch_ceph_status().await;
+            // Fetch cluster, node, ceph, and sd-sync metrics concurrently
+            let (cluster_metrics, node_metrics, ceph, sd_sync) = tokio::join!(
+                fetch_cluster_metrics(),
+                fetch_node_metrics(),
+                fetch_ceph_status(),
+                fetch_sd_sync_status(),
+            );
+            let cluster_metrics = cluster_metrics.ok();
+            let node_metrics = node_metrics.unwrap_or_default();
 
             // Include the most recent stored insight (if any) so the client
             // picks it up without needing a separate poll.
@@ -387,6 +442,7 @@ pub async fn metrics_stream(
                 nodes: node_metrics,
                 ceph: Some(ceph),
                 latest_insight,
+                sd_sync,
             };
 
             // Serialize to JSON and create SSE event

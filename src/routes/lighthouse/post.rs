@@ -120,7 +120,7 @@ pub async fn upload_lighthouse_report(
 
             // Check if adding this chunk would exceed the max file size
             if file_contents.len() + chunk.len() > MAX_FILE_SIZE {
-                log::warn!("Upload rejected: file size exceeds {} bytes", MAX_FILE_SIZE);
+                log::warn!("Upload rejected: file size exceeds {MAX_FILE_SIZE} bytes");
                 return Ok(HttpResponse::PayloadTooLarge()
                     .body("File size exceeds maximum allowed size of 10MB"));
             }
