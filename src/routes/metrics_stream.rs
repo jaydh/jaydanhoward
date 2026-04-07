@@ -105,6 +105,16 @@ pub struct SdSyncStatus {
     pub syncs_completed_total: u64,
     /// Total errored syncs since the daemon started
     pub syncs_errored_total: u64,
+    /// File currently being processed (present only while active)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_file: Option<String>,
+    /// Live progress counters (present only while active)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_files_copied: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_files_skipped: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_bytes_copied: Option<u64>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -364,32 +374,81 @@ async fn fetch_ceph_status() -> CephStatus {
     }
 }
 
-async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
-    Some(SdSyncStatus {
-        active: parse_prometheus_value("sd_sync_active").await.ok()? != 0.0,
-        last_sync_end_timestamp: parse_prometheus_value(
-            "sd_sync_last_sync_end_timestamp_seconds",
-        )
+const SD_SYNC_STATUS_URL: &str = "http://sd-sync.media.svc.cluster.local:9105/status";
+
+#[derive(serde::Deserialize)]
+struct SdSyncStatusResponse {
+    current_file: Option<String>,
+    current_progress: Option<SdSyncProgress>,
+}
+
+#[derive(serde::Deserialize)]
+struct SdSyncProgress {
+    files_copied: u64,
+    files_skipped: u64,
+    bytes_copied: u64,
+}
+
+async fn fetch_sd_sync_live() -> Option<SdSyncStatusResponse> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(2))
+        .build()
+        .ok()?;
+    client
+        .get(SD_SYNC_STATUS_URL)
+        .send()
         .await
-        .unwrap_or(0.0),
-        last_sync_duration_seconds: parse_prometheus_value("sd_sync_last_sync_duration_seconds")
-            .await
-            .unwrap_or(0.0),
-        last_sync_files_copied: parse_prometheus_value("sd_sync_last_sync_files_copied")
-            .await
-            .unwrap_or(0.0) as u64,
-        last_sync_files_skipped: parse_prometheus_value("sd_sync_last_sync_files_skipped")
-            .await
-            .unwrap_or(0.0) as u64,
-        last_sync_bytes_copied: parse_prometheus_value("sd_sync_last_sync_bytes_copied")
-            .await
-            .unwrap_or(0.0) as u64,
-        syncs_completed_total: parse_prometheus_value("sd_sync_syncs_completed_total")
-            .await
-            .unwrap_or(0.0) as u64,
-        syncs_errored_total: parse_prometheus_value("sd_sync_syncs_errored_total")
-            .await
-            .unwrap_or(0.0) as u64,
+        .ok()?
+        .json()
+        .await
+        .ok()
+}
+
+async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
+    let (prom, live) = tokio::join!(
+        async {
+            Some((
+                parse_prometheus_value("sd_sync_active").await.ok()? != 0.0,
+                parse_prometheus_value("sd_sync_last_sync_end_timestamp_seconds").await.unwrap_or(0.0),
+                parse_prometheus_value("sd_sync_last_sync_duration_seconds").await.unwrap_or(0.0),
+                parse_prometheus_value("sd_sync_last_sync_files_copied").await.unwrap_or(0.0) as u64,
+                parse_prometheus_value("sd_sync_last_sync_files_skipped").await.unwrap_or(0.0) as u64,
+                parse_prometheus_value("sd_sync_last_sync_bytes_copied").await.unwrap_or(0.0) as u64,
+                parse_prometheus_value("sd_sync_syncs_completed_total").await.unwrap_or(0.0) as u64,
+                parse_prometheus_value("sd_sync_syncs_errored_total").await.unwrap_or(0.0) as u64,
+            ))
+        },
+        fetch_sd_sync_live(),
+    );
+
+    let (active, last_sync_end_timestamp, last_sync_duration_seconds,
+         last_sync_files_copied, last_sync_files_skipped, last_sync_bytes_copied,
+         syncs_completed_total, syncs_errored_total) = prom?;
+
+    let (current_file, current_files_copied, current_files_skipped, current_bytes_copied) =
+        match live {
+            Some(s) => (
+                s.current_file,
+                s.current_progress.as_ref().map(|p| p.files_copied),
+                s.current_progress.as_ref().map(|p| p.files_skipped),
+                s.current_progress.as_ref().map(|p| p.bytes_copied),
+            ),
+            None => (None, None, None, None),
+        };
+
+    Some(SdSyncStatus {
+        active,
+        last_sync_end_timestamp,
+        last_sync_duration_seconds,
+        last_sync_files_copied,
+        last_sync_files_skipped,
+        last_sync_bytes_copied,
+        syncs_completed_total,
+        syncs_errored_total,
+        current_file,
+        current_files_copied,
+        current_files_skipped,
+        current_bytes_copied,
     })
 }
 
