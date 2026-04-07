@@ -18,6 +18,7 @@ pub mod satellite_tracker;
 mod satellite_renderer;
 #[cfg(not(feature = "ssr"))]
 mod satellite_calculations;
+mod sd_sync_reports;
 mod skills;
 mod work;
 
@@ -45,4 +46,6 @@ pub fn register_server_fns() {
     register_explicit::<conjunction::GetConjunctionStatus>();
     register_explicit::<conjunction::GetConjunctions>();
     register_explicit::<conjunction::RetriggerConjunction>();
+    register_explicit::<sd_sync_reports::FetchSdSyncReportList>();
+    register_explicit::<sd_sync_reports::FetchSdSyncReport>();
 }

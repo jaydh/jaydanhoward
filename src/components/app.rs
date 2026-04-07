@@ -1,4 +1,5 @@
 use crate::components::about::About;
+use crate::components::sd_sync_reports::SdSyncReports;
 use crate::components::cluster_stats::ClusterStats;
 use crate::components::conjunction::ConjunctionPanel;
 use crate::components::dev::Lighthouse;
@@ -62,6 +63,12 @@ fn HomePage() -> impl IntoView {
                     <ClusterStats />
                     <Visitors />
                     <Lighthouse />
+                </div>
+            </section>
+            <section id="sd-sync" class="flex flex-col py-20 border-t border-border">
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">"SD Card Syncs"</h1>
+                    <SdSyncReports />
                 </div>
             </section>
             <section id="satellites" class="flex flex-col py-20 border-t border-border">
