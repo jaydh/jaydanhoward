@@ -67,6 +67,7 @@ pub async fn fetch_report(name: String) -> Result<SyncReport, ServerFnError<Stri
     Ok(report)
 }
 
+#[allow(dead_code)]
 fn fmt_bytes(bytes: u64) -> String {
     if bytes >= 1_073_741_824 {
         format!("{:.1} GB", bytes as f64 / 1_073_741_824.0)
@@ -79,6 +80,7 @@ fn fmt_bytes(bytes: u64) -> String {
     }
 }
 
+#[allow(dead_code)]
 fn fmt_ts(ts: i64) -> String {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     let t = UNIX_EPOCH + Duration::from_secs(ts as u64);
@@ -97,6 +99,7 @@ fn fmt_ts(ts: i64) -> String {
     }
 }
 
+#[allow(dead_code)]
 #[component]
 fn ReportRow(name: String) -> impl IntoView {
     let (expanded, set_expanded) = signal(false);
