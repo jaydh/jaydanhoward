@@ -45,22 +45,17 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-      - name: Install Harbor CA cert
-        run: |
-          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
-            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
-            > /tmp/harbor.crt
-          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
-          sudo update-ca-certificates
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
-          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+          printf '{"auths":{"%s":{"auth":"%s"}}}' \
+            "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
       - name: Bazel Push
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push
+          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push -- \
+            --repository=${{ vars.HARBOR_HOST }}/library/jaydanhoward
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [clippy, security-audit]
@@ -72,22 +67,17 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
-      - name: Install Harbor CA cert
-        run: |
-          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
-            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
-            > /tmp/harbor.crt
-          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
-          sudo update-ca-certificates
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
-          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+          printf '{"auths":{"%s":{"auth":"%s"}}}' \
+            "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
       - name: Bazel Push
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push
+          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push -- \
+            --repository=${{ vars.HARBOR_HOST }}/library/jaydanhoward
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
@@ -95,29 +85,21 @@ jobs:
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
-      - name: Install Harbor CA cert
-        run: |
-          openssl s_client -connect harbor.home.local:443 </dev/null 2>/dev/null \
-            | sed -ne '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' \
-            > /tmp/harbor.crt
-          sudo cp /tmp/harbor.crt /usr/local/share/ca-certificates/harbor.crt
-          sudo update-ca-certificates
-          sudo mkdir -p /etc/docker/certs.d/harbor.home.local
-          sudo cp /tmp/harbor.crt /etc/docker/certs.d/harbor.home.local/ca.crt
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
-          printf '{"auths":{"harbor.home.local":{"auth":"%s"}}}' \
+          printf '{"auths":{"%s":{"auth":"%s"}}}' \
+            "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
       - name: Create and Push Multi-Arch Manifest
         run: |
           TAG=$(date -u +%Y%m%d-%H%M%S)
-          docker manifest create harbor.home.local/library/jaydanhoward:latest \
-            --amend harbor.home.local/library/jaydanhoward:latest-amd64 \
-            --amend harbor.home.local/library/jaydanhoward:latest-arm64
-          docker manifest push harbor.home.local/library/jaydanhoward:latest
-          docker manifest create harbor.home.local/library/jaydanhoward:${TAG} \
-            --amend harbor.home.local/library/jaydanhoward:latest-amd64 \
-            --amend harbor.home.local/library/jaydanhoward:latest-arm64
-          docker manifest push harbor.home.local/library/jaydanhoward:${TAG}
+          docker manifest create ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest \
+            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64 \
+            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
+          docker manifest push ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest
+          docker manifest create ${{ vars.HARBOR_HOST }}/library/jaydanhoward:${TAG} \
+            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64 \
+            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
+          docker manifest push ${{ vars.HARBOR_HOST }}/library/jaydanhoward:${TAG}
