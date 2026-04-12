@@ -39,10 +39,9 @@ selects.config_setting_group(
 )
 
 server_deps = [
-    "@server_crates//:actix-files",
-    "@server_crates//:actix-multipart",
-    "@server_crates//:actix-web",
-    "@server_crates//:actix-web-lab",
+    "@server_crates//:axum",
+    "@server_crates//:tower",
+    "@server_crates//:tower-http",
     "@server_crates//:anyhow",
     "@server_crates//:base64",
     "@server_crates//:cfg-if",
@@ -51,7 +50,7 @@ server_deps = [
     "@server_crates//:futures",
     "@server_crates//:futures-util",
     "@server_crates//:leptos",
-    "@server_crates//:leptos_actix",
+    "@server_crates//:leptos_axum",
     "@server_crates//:leptos_meta",
     "@server_crates//:leptos_router",
     "@server_crates//:rand",

@@ -26,7 +26,7 @@ pub use app::App;
 
 #[cfg(feature = "ssr")]
 pub fn register_server_fns() {
-    use leptos::server_fn::actix::register_explicit;
+    use leptos::server_fn::axum::register_explicit;
     register_explicit::<photography::FetchImages>();
     register_explicit::<cluster_stats::GetClusterMetrics>();
     register_explicit::<cluster_stats::GetNodeMetrics>();

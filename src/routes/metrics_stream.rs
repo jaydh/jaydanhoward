@@ -1,7 +1,11 @@
-use actix_web::web::Data;
-use actix_web_lab::sse::{self, Sse};
+use axum::{
+    extract::Extension,
+    response::sse::{Event, KeepAlive, Sse},
+};
 use serde::Serialize;
 use sqlx::PgPool;
+use std::convert::Infallible;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 use tokio_stream::wrappers::IntervalStream;
@@ -37,7 +41,6 @@ pub struct NodeMetric {
 #[derive(Clone, Debug, Serialize)]
 pub struct CephStatus {
     pub health: u32,
-    // Services
     pub mon_quorum: u32,
     pub mon_total: u32,
     pub mgr_active: u32,
@@ -48,7 +51,6 @@ pub struct CephStatus {
     pub osd_in: u32,
     pub osd_total: u32,
     pub rgw_count: u32,
-    // Data
     pub volumes_healthy: u32,
     pub volumes_total: u32,
     pub pool_count: u32,
@@ -63,7 +65,6 @@ pub struct CephStatus {
     pub data_used_bytes: f64,
     pub data_avail_bytes: f64,
     pub data_total_bytes: f64,
-    // IO (raw bytes/sec)
     pub read_bytes_per_sec: f64,
     pub write_bytes_per_sec: f64,
     pub read_iops: f64,
@@ -89,26 +90,16 @@ pub struct NetworkInsight {
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SdSyncStatus {
-    /// true while a sync is in progress
     pub active: bool,
-    /// Unix timestamp of the last completed sync (0 = never)
     pub last_sync_end_timestamp: f64,
-    /// Duration of the last sync in seconds
     pub last_sync_duration_seconds: f64,
-    /// Files copied in the last sync
     pub last_sync_files_copied: u64,
-    /// Files skipped (deduplicated) in the last sync
     pub last_sync_files_skipped: u64,
-    /// Bytes copied in the last sync
     pub last_sync_bytes_copied: u64,
-    /// Total completed syncs since the daemon started
     pub syncs_completed_total: u64,
-    /// Total errored syncs since the daemon started
     pub syncs_errored_total: u64,
-    /// File currently being processed (present only while active)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_file: Option<String>,
-    /// Live progress counters (present only while active)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_files_copied: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -128,7 +119,6 @@ pub struct MetricsUpdate {
 
 async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
     let data = query_prometheus(query).await?;
-
     if let Some(metric) = data.data.result.first() {
         metric.value.1.parse::<f64>().map_err(|e| anyhow::anyhow!("Failed to parse value: {e}"))
     } else {
@@ -137,15 +127,11 @@ async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
 }
 
 async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
-    // Cluster CPU metrics
     let cpu_used = parse_prometheus_value(
         "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))"
     ).await?;
-    let cpu_total = parse_prometheus_value(
-        "sum(machine_cpu_cores)"
-    ).await?;
+    let cpu_total = parse_prometheus_value("sum(machine_cpu_cores)").await?;
 
-    // Memory metrics (convert bytes to GB)
     let memory_used = parse_prometheus_value(
         "sum(container_memory_working_set_bytes{container!=\"\"}) / 1024 / 1024 / 1024"
     ).await?;
@@ -153,7 +139,6 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "sum(machine_memory_bytes) / 1024 / 1024 / 1024"
     ).await?;
 
-    // Disk metrics from Rook Ceph (convert bytes to GB)
     let disk_used = parse_prometheus_value(
         "ceph_cluster_total_used_bytes / 1024 / 1024 / 1024"
     ).await?;
@@ -161,25 +146,16 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
         "ceph_cluster_total_bytes / 1024 / 1024 / 1024"
     ).await?;
 
-    // Pod count
     let pod_count = parse_prometheus_value(
         "count(kube_pod_info{pod!=\"\"})"
     ).await? as u32;
 
-    // Node count
-    let node_count = parse_prometheus_value(
-        "count(kube_node_info)"
-    ).await? as u32;
+    let node_count = parse_prometheus_value("count(kube_node_info)").await? as u32;
 
-    // Healthy node count (nodes in Ready state)
     let healthy_node_count = parse_prometheus_value(
         "sum(kube_node_status_condition{condition=\"Ready\",status=\"true\"})"
     ).await? as u32;
 
-    // Network metrics — use node_network (physical NIC) metrics to avoid
-    // double-counting hostNetwork pods (node-exporter, cilium, CSI plugins all
-    // share the host network namespace; container_network_* counts each of them
-    // separately, inflating totals 4-8x).
     let network_rx = parse_prometheus_value(
         "sum(rate(node_network_receive_bytes_total{\
           device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
@@ -196,7 +172,10 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
 
         let empty = || crate::prometheus_client::PrometheusData {
             status: String::new(),
-            data: crate::prometheus_client::PrometheusResult { result_type: String::new(), result: vec![] },
+            data: crate::prometheus_client::PrometheusResult {
+                result_type: String::new(),
+                result: vec![],
+            },
         };
 
         let (cap_data, used_data) = tokio::join!(
@@ -210,7 +189,9 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
 
         let cap_map: HashMap<(String, String), i64> = cap_data
             .unwrap_or_else(|_| empty())
-            .data.result.into_iter()
+            .data
+            .result
+            .into_iter()
             .filter_map(|m| {
                 let ns = m.metric.get("namespace")?.clone();
                 let pvc = m.metric.get("persistentvolumeclaim")?.clone();
@@ -221,19 +202,30 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
 
         let mut pvcs: Vec<PvcEntry> = used_data
             .unwrap_or_else(|_| empty())
-            .data.result.into_iter()
+            .data
+            .result
+            .into_iter()
             .filter_map(|m| {
                 let ns = m.metric.get("namespace")?.clone();
                 let pvc = m.metric.get("persistentvolumeclaim")?.clone();
                 let used = m.value.1.parse::<f64>().ok()? as i64;
                 let capacity = *cap_map.get(&(ns.clone(), pvc.clone())).unwrap_or(&0);
-                Some(PvcEntry { namespace: ns, name: pvc, used_bytes: used, capacity_bytes: capacity })
+                Some(PvcEntry {
+                    namespace: ns,
+                    name: pvc,
+                    used_bytes: used,
+                    capacity_bytes: capacity,
+                })
             })
             .collect();
 
         pvcs.sort_by(|a, b| b.used_bytes.cmp(&a.used_bytes));
 
-        if pvcs.is_empty() { None } else { Some(StorageInfo { pvcs }) }
+        if pvcs.is_empty() {
+            None
+        } else {
+            Some(StorageInfo { pvcs })
+        }
     };
 
     Ok(ClusterMetrics {
@@ -253,7 +245,6 @@ async fn fetch_cluster_metrics() -> Result<ClusterMetrics, anyhow::Error> {
 }
 
 async fn fetch_node_metrics() -> Result<Vec<NodeMetric>, anyhow::Error> {
-    // Get all nodes with their metrics
     let cpu_data = query_prometheus(
         "sum by (node) (rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))"
     ).await?;
@@ -266,22 +257,22 @@ async fn fetch_node_metrics() -> Result<Vec<NodeMetric>, anyhow::Error> {
         "sum by (node) (machine_memory_bytes) / 1024 / 1024 / 1024"
     ).await?;
 
-    let cpu_capacity_data = query_prometheus(
-        "sum by (node) (machine_cpu_cores)"
-    ).await?;
+    let cpu_capacity_data = query_prometheus("sum by (node) (machine_cpu_cores)").await?;
 
-    // Parse and combine metrics
     let mut nodes = std::collections::HashMap::new();
 
     for metric in cpu_data.data.result {
         if let Some(node) = metric.metric.get("node") {
             let cpu_used: f64 = metric.value.1.parse().unwrap_or(0.0);
-            nodes.entry(node.clone()).or_insert(NodeMetric {
-                name: node.clone(),
-                cpu_usage_percent: 0.0,
-                memory_usage_gb: 0.0,
-                memory_total_gb: 0.0,
-            }).cpu_usage_percent = cpu_used;
+            nodes
+                .entry(node.clone())
+                .or_insert(NodeMetric {
+                    name: node.clone(),
+                    cpu_usage_percent: 0.0,
+                    memory_usage_gb: 0.0,
+                    memory_total_gb: 0.0,
+                })
+                .cpu_usage_percent = cpu_used;
         }
     }
 
@@ -303,7 +294,6 @@ async fn fetch_node_metrics() -> Result<Vec<NodeMetric>, anyhow::Error> {
         }
     }
 
-    // Calculate CPU percentage
     for metric in cpu_capacity_data.data.result {
         if let Some(node) = metric.metric.get("node") {
             let cpu_total: f64 = metric.value.1.parse().unwrap_or(1.0);
@@ -319,25 +309,18 @@ async fn fetch_node_metrics() -> Result<Vec<NodeMetric>, anyhow::Error> {
 
 async fn fetch_ceph_status() -> CephStatus {
     let health = parse_prometheus_value("ceph_health_status").await.unwrap_or(0.0) as u32;
-
     let mon_quorum = parse_prometheus_value("sum(ceph_mon_quorum_status == 1)").await.unwrap_or(0.0) as u32;
     let mon_total = parse_prometheus_value("count(ceph_mon_quorum_status)").await.unwrap_or(0.0) as u32;
-
     let mgr_active = parse_prometheus_value("sum(ceph_mgr_status == 1)").await.unwrap_or(0.0) as u32;
     let mgr_standby = parse_prometheus_value("sum(ceph_mgr_status == 0)").await.unwrap_or(0.0) as u32;
-
     let mds_up = parse_prometheus_value("count(ceph_mds_metadata{fs_state=\"up:active\"})").await.unwrap_or(0.0) as u32;
     let mds_standby = parse_prometheus_value("count(ceph_mds_metadata{fs_state=~\"up:standby.*\"})").await.unwrap_or(0.0) as u32;
-
     let osd_up = parse_prometheus_value("count(ceph_osd_up == 1)").await.unwrap_or(0.0) as u32;
     let osd_in = parse_prometheus_value("count(ceph_osd_in == 1)").await.unwrap_or(0.0) as u32;
     let osd_total = parse_prometheus_value("count(ceph_osd_up)").await.unwrap_or(0.0) as u32;
-
     let rgw_count = parse_prometheus_value("count(ceph_rgw_metadata)").await.unwrap_or(0.0) as u32;
-
     let volumes_total = parse_prometheus_value("count(ceph_fs_metadata)").await.unwrap_or(0.0) as u32;
     let volumes_healthy = volumes_total;
-
     let pool_count = parse_prometheus_value("ceph_osdmap_num_pools").await.unwrap_or(0.0) as u32;
     let pg_total = parse_prometheus_value("ceph_osdmap_num_pg").await.unwrap_or(0.0) as u32;
     let pg_clean = parse_prometheus_value("ceph_pg_state{state=\"active+clean\"}").await.unwrap_or(0.0) as u32;
@@ -346,13 +329,10 @@ async fn fetch_ceph_status() -> CephStatus {
     let pg_remapped = parse_prometheus_value("sum(ceph_pg_state{state=~\".*remapped.*\"})").await.unwrap_or(0.0) as u32;
     let pg_scrubbing = parse_prometheus_value("sum(ceph_pg_state{state=~\".*scrubbing(?!\\\\+deep).*\"})").await.unwrap_or(0.0) as u32;
     let pg_deep_scrub = parse_prometheus_value("sum(ceph_pg_state{state=~\".*scrubbing\\\\+deep.*\"})").await.unwrap_or(0.0) as u32;
-
     let objects_count = parse_prometheus_value("sum(ceph_pool_objects_total)").await.unwrap_or(0.0);
-
     let data_used_bytes = parse_prometheus_value("ceph_cluster_total_used_bytes").await.unwrap_or(0.0);
     let data_total_bytes = parse_prometheus_value("ceph_cluster_total_bytes").await.unwrap_or(0.0);
     let data_avail_bytes = (data_total_bytes - data_used_bytes).max(0.0);
-
     let read_bytes_per_sec = parse_prometheus_value("sum(irate(ceph_osd_op_r_out_bytes[5m]))").await.unwrap_or(0.0);
     let write_bytes_per_sec = parse_prometheus_value("sum(irate(ceph_osd_op_w_in_bytes[5m]))").await.unwrap_or(0.0);
     let read_iops = parse_prometheus_value("sum(irate(ceph_osd_op_r[5m]))").await.unwrap_or(0.0);
@@ -394,14 +374,7 @@ async fn fetch_sd_sync_live() -> Option<SdSyncStatusResponse> {
         .timeout(std::time::Duration::from_secs(2))
         .build()
         .ok()?;
-    client
-        .get(SD_SYNC_STATUS_URL)
-        .send()
-        .await
-        .ok()?
-        .json()
-        .await
-        .ok()
+    client.get(SD_SYNC_STATUS_URL).send().await.ok()?.json().await.ok()
 }
 
 async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
@@ -421,9 +394,16 @@ async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
         fetch_sd_sync_live(),
     );
 
-    let (active, last_sync_end_timestamp, last_sync_duration_seconds,
-         last_sync_files_copied, last_sync_files_skipped, last_sync_bytes_copied,
-         syncs_completed_total, syncs_errored_total) = prom?;
+    let (
+        active,
+        last_sync_end_timestamp,
+        last_sync_duration_seconds,
+        last_sync_files_copied,
+        last_sync_files_skipped,
+        last_sync_bytes_copied,
+        syncs_completed_total,
+        syncs_errored_total,
+    ) = prom?;
 
     let (current_file, current_files_copied, current_files_skipped, current_bytes_copied) =
         match live {
@@ -453,13 +433,11 @@ async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
 }
 
 pub async fn metrics_stream(
-    pool: Option<Data<PgPool>>,
-) -> impl actix_web::Responder {
-    let stream = IntervalStream::new(interval(Duration::from_secs(1)))
-        .then(move |_| {
-            let pool = pool.clone();
-            async move {
-            // Fetch cluster, node, ceph, and sd-sync metrics concurrently
+    Extension(pool): Extension<Option<Arc<PgPool>>>,
+) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
+    let stream = IntervalStream::new(interval(Duration::from_secs(1))).then(move |_| {
+        let pool = pool.clone();
+        async move {
             let (cluster_metrics, node_metrics, ceph, sd_sync) = tokio::join!(
                 fetch_cluster_metrics(),
                 fetch_node_metrics(),
@@ -469,8 +447,6 @@ pub async fn metrics_stream(
             let cluster_metrics = cluster_metrics.ok();
             let node_metrics = node_metrics.unwrap_or_default();
 
-            // Include the most recent stored insight (if any) so the client
-            // picks it up without needing a separate poll.
             let latest_insight = if let Some(ref p) = pool {
                 crate::db::get_recent_network_insights(p, 1)
                     .await
@@ -504,22 +480,10 @@ pub async fn metrics_stream(
                 sd_sync,
             };
 
-            // Serialize to JSON and create SSE event
-            match serde_json::to_string(&update) {
-                Ok(json) => Ok::<_, anyhow::Error>(sse::Event::Data(sse::Data::new(json))),
-                Err(e) => {
-                    tracing::error!("Failed to serialize metrics: {}", e);
-                    Ok(sse::Event::Data(sse::Data::new("{}")))
-                }
-            }
-        }})
-        .filter_map(|result| match result {
-            Ok(event) => Some(Ok::<_, actix_web::Error>(event)),
-            Err(e) => {
-                tracing::error!("Error in metrics stream: {}", e);
-                None
-            }
-        });
+            let json = serde_json::to_string(&update).unwrap_or_else(|_| "{}".to_string());
+            Ok::<Event, Infallible>(Event::default().data(json))
+        }
+    });
 
-    Sse::from_stream(stream)
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }

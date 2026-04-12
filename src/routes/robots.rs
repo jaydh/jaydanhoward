@@ -1,15 +1,15 @@
 #[cfg(feature = "ssr")]
 use {
-    actix_web::{web, HttpRequest, Result},
+    axum::{http::StatusCode, response::{IntoResponse, Response}},
     std::fs,
     tracing::instrument,
 };
 
 #[cfg(feature = "ssr")]
 #[instrument]
-pub async fn robots_txt(_req: HttpRequest) -> Result<web::Bytes> {
-    let content = fs::read_to_string("assets/robots.txt")
-        .map_err(|_| actix_web::error::ErrorNotFound("robots.txt not found"))?;
-
-    Ok(web::Bytes::from(content))
+pub async fn robots_txt() -> Response {
+    match fs::read_to_string("assets/robots.txt") {
+        Ok(content) => content.into_response(),
+        Err(_) => StatusCode::NOT_FOUND.into_response(),
+    }
 }

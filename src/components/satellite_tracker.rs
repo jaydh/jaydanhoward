@@ -22,8 +22,9 @@ pub struct SatelliteGroup {
 
 #[server(name = GetTleData, prefix = "/api", endpoint = "get_tle_data")]
 pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
+    use std::sync::Arc;
     use std::time::Duration;
 
     let url = match group.as_str() {
@@ -35,9 +36,10 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         _ => return Err(ServerFnError::ServerError(format!("Unknown group: {}", group))),
     };
 
-    let cache = extract::<Data<TleCache>>()
+    let cache = extract::<Extension<Arc<TleCache>>>()
         .await
-        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?
+        .0;
 
     // Return cached data if still fresh (6-hour TTL)
     {
@@ -127,8 +129,9 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
     // Spawn background conjunction screening (works with or without DB)
     {
         use crate::components::conjunction::ConjunctionCache;
-        let pool_opt = extract::<Data<sqlx::PgPool>>().await.ok();
-        let cache_opt = extract::<Data<ConjunctionCache>>().await.ok();
+        use std::sync::Arc;
+        let pool_opt = extract::<Extension<Arc<sqlx::PgPool>>>().await.ok().map(|e| e.0);
+        let cache_opt = extract::<Extension<Arc<ConjunctionCache>>>().await.ok().map(|e| e.0);
         let tles_clone = satellites.clone();
         let group_clone = group.clone();
         tokio::spawn(async move {

@@ -1,8 +1,13 @@
 #[cfg(feature = "ssr")]
 use {
-    actix_web::{web, HttpResponse},
+    axum::{
+        extract::{Extension, Json},
+        http::StatusCode,
+        response::IntoResponse,
+    },
     serde::Deserialize,
     sqlx::PgPool,
+    std::sync::Arc,
     tracing::warn,
 };
 
@@ -20,9 +25,12 @@ pub struct ClaudeAuditPayload {
 
 #[cfg(feature = "ssr")]
 pub async fn ingest_claude_audit(
-    pool: web::Data<PgPool>,
-    payload: web::Json<ClaudeAuditPayload>,
-) -> HttpResponse {
+    Extension(pool): Extension<Option<Arc<PgPool>>>,
+    Json(payload): Json<ClaudeAuditPayload>,
+) -> impl IntoResponse {
+    let Some(pool) = pool else {
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
     match crate::db::insert_claude_audit(
         &pool,
         &payload.context,
@@ -35,10 +43,10 @@ pub async fn ingest_claude_audit(
     )
     .await
     {
-        Ok(_) => HttpResponse::Ok().finish(),
+        Ok(_) => StatusCode::OK.into_response(),
         Err(e) => {
             warn!("Failed to insert Claude audit from external service: {e}");
-            HttpResponse::InternalServerError().finish()
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
 }

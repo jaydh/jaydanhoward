@@ -340,8 +340,8 @@ pub mod screening {
 
 #[cfg(feature = "ssr")]
 pub async fn screen_and_store(
-    pool: Option<actix_web::web::Data<sqlx::PgPool>>,
-    cache: Option<actix_web::web::Data<ConjunctionCache>>,
+    pool: Option<std::sync::Arc<sqlx::PgPool>>,
+    cache: Option<std::sync::Arc<ConjunctionCache>>,
     group: &str,
     tles: &[crate::components::satellite_tracker::TleData],
     // Some(id) = slot already claimed by caller (startup path, claim-first).
@@ -542,7 +542,7 @@ pub async fn screen_and_store(
 
 #[cfg(feature = "ssr")]
 pub async fn screen_chunk(
-    pool: Option<actix_web::web::Data<sqlx::PgPool>>,
+    pool: Option<std::sync::Arc<sqlx::PgPool>>,
     chunk: crate::db::ChunkInfo,
     tles: &[crate::components::satellite_tracker::TleData],
 ) {
@@ -649,13 +649,14 @@ pub async fn screen_chunk(
 pub async fn get_conjunction_status(
     group: String,
 ) -> Result<ScreeningStatus, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
     // Prefer DB when available
-    if let Ok(pool) = extract::<Data<PgPool>>().await {
-        let row = crate::db::get_latest_conjunction_screening(&pool, &group)
+    if let Ok(pool) = extract::<Extension<Arc<PgPool>>>().await {
+        let row = crate::db::get_latest_conjunction_screening(&pool.0, &group)
             .await
             .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
 
@@ -682,8 +683,8 @@ pub async fn get_conjunction_status(
     }
 
     // No DB: fall back to in-memory cache (dev mode)
-    if let Ok(cache) = extract::<Data<ConjunctionCache>>().await {
-        let r = cache.read().await;
+    if let Ok(cache) = extract::<Extension<Arc<ConjunctionCache>>>().await {
+        let r = cache.0.read().await;
         return Ok(match r.get(&group) {
             None => ScreeningStatus::Idle,
             Some(result) => match &result.status {
@@ -706,20 +707,21 @@ pub async fn get_conjunction_status(
 pub async fn get_conjunctions(
     group: String,
 ) -> Result<Vec<ConjunctionEvent>, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
     // Prefer DB when available (returns events for Running and Complete screenings)
-    if let Ok(pool) = extract::<Data<PgPool>>().await {
-        return crate::db::get_latest_conjunction_events(&pool, &group)
+    if let Ok(pool) = extract::<Extension<Arc<PgPool>>>().await {
+        return crate::db::get_latest_conjunction_events(&pool.0, &group)
             .await
             .map_err(|e| ServerFnError::ServerError(format!("{e}")));
     }
 
     // No DB: fall back to in-memory cache (dev mode)
-    if let Ok(cache) = extract::<Data<ConjunctionCache>>().await {
-        let r = cache.read().await;
+    if let Ok(cache) = extract::<Extension<Arc<ConjunctionCache>>>().await {
+        let r = cache.0.read().await;
         return Ok(r.get(&group).map(|res| res.events.clone()).unwrap_or_default());
     }
 
@@ -732,17 +734,19 @@ pub async fn get_conjunctions(
 /// fetch).  Groups with no cached TLEs are skipped.
 #[server(name = RetriggerConjunction, prefix = "/api", endpoint = "retrigger_conjunction")]
 pub async fn retrigger_conjunction() -> Result<(), ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
     const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
 
-    let pool_opt = extract::<Data<PgPool>>().await.ok();
-    let cache = extract::<Data<ConjunctionCache>>().await.ok();
-    let tle_cache = extract::<Data<crate::components::satellite_tracker::TleCache>>()
+    let pool_opt = extract::<Extension<Arc<PgPool>>>().await.ok().map(|e| e.0);
+    let cache = extract::<Extension<Arc<ConjunctionCache>>>().await.ok().map(|e| e.0);
+    let tle_cache = extract::<Extension<Arc<crate::components::satellite_tracker::TleCache>>>()
         .await
-        .map_err(|_| ServerFnError::ServerError("TLE cache not available".into()))?;
+        .map_err(|_| ServerFnError::ServerError("TLE cache not available".into()))?
+        .0;
 
     // Cancel running DB screenings and clear in-memory cache for all groups
     for &group in GROUPS {

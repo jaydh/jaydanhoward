@@ -5,22 +5,28 @@ pub async fn run() -> Result<(), std::io::Error> {
     use crate::components::App;
     use crate::network_spike::NetworkSpikeDetector;
     use crate::db::create_pool;
-    use crate::middleware::cache_control::CacheControl;
+    use crate::middleware::cache_control::cache_control;
     use crate::middleware::rate_limit::RateLimiter;
-    use crate::middleware::security_headers::SecurityHeaders;
-    use crate::middleware::visitor_logger::VisitorLogger;
+    use crate::middleware::security_headers::security_headers;
+    use crate::middleware::visitor_logger::visitor_logger_fn;
     use crate::routes::{
         fetch_world_map_svg, health_check, ingest_claude_audit, metrics_stream, robots_txt,
         upload_lighthouse_report, world_map, WorldMapSvg,
     };
     use crate::telemtry::{get_subscriber, init_subscriber};
-    use actix_files::Files;
-    use actix_web::{web, HttpServer};
+    use axum::{
+        extract::Extension,
+        middleware,
+        routing::{get, post},
+        Router,
+    };
     use leptos::prelude::*;
-    use leptos_actix::{generate_route_list, LeptosRoutes};
+    use leptos_axum::{generate_route_list, LeptosRoutes};
     use leptos_meta::MetaTags;
     use runfiles::{rlocation, Runfiles};
+    use std::sync::Arc;
     use std::time::Duration;
+    use tower_http::{compression::CompressionLayer, services::ServeDir};
     use tracing::log;
 
     let subscriber = get_subscriber("jaydanhoward".into(), "info".into(), std::io::stdout);
@@ -65,33 +71,34 @@ pub async fn run() -> Result<(), std::io::Error> {
         }
     };
 
+    let pool_arc: Option<Arc<sqlx::PgPool>> = pool.clone().map(Arc::new);
+
     let http_client = reqwest::Client::new();
 
     log::info!("Fetching world map from Natural Earth...");
     let world_map_svg = fetch_world_map_svg(&http_client).await;
     log::info!("World map ready ({} bytes)", world_map_svg.len());
 
-    let world_map_data = web::Data::new(WorldMapSvg(world_map_svg));
-    let tle_cache = web::Data::new(TleCache::new(std::collections::HashMap::new()));
-    let conjunction_cache =
-        web::Data::new(ConjunctionCache::new(std::collections::HashMap::new()));
+    let world_map_data = Arc::new(WorldMapSvg(world_map_svg));
+    let tle_cache = Arc::new(TleCache::new(std::collections::HashMap::new()));
+    let conjunction_cache = Arc::new(ConjunctionCache::new(std::collections::HashMap::new()));
+
     // Load persisted thresholds from DB, fall back to defaults.
     let (spike_multiplier, spike_floor_mbps) = if let Some(ref p) = pool {
-        let tmp = web::Data::new(p.clone());
-        crate::db::load_spike_config(&tmp).await
+        crate::db::load_spike_config(p).await
     } else {
         (1.5, 100.0)
     };
     log::info!("Spike detector: multiplier={spike_multiplier:.2} floor={spike_floor_mbps:.1} Mbps");
     // At 1s SSE tick: 180 samples = 3-min window, 30 samples = 30s warmup.
-    let spike_detector = web::Data::new(tokio::sync::Mutex::new(
+    let spike_detector = Arc::new(tokio::sync::Mutex::new(
         NetworkSpikeDetector::new(spike_multiplier, spike_floor_mbps, 180, 30),
     ));
 
-    // Background spike detection loop — runs independently of SSE connections.
+    // Background spike detection loop
     {
         let detector = spike_detector.clone();
-        let pool_opt = pool.clone().map(web::Data::new);
+        let pool_opt = pool_arc.clone();
 
         tokio::spawn(async move {
             use tokio::time::interval;
@@ -104,8 +111,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                 heartbeat_tick += 1;
 
                 let tx_mbps = match crate::prometheus_client::query_prometheus(
-                    // Use node_network (physical NIC) to avoid hostNetwork pod double-counting.
-                    // rate([2m]) — scrape interval is ~2m so [1m] always returns empty.
                     "sum(rate(node_network_transmit_bytes_total{\
                       device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
                     }[2m])) * 8 / 1000000",
@@ -124,7 +129,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                     }
                 };
 
-                // Heartbeat every 5 minutes so we can confirm the task is alive.
                 if heartbeat_tick % 300 == 1 {
                     let (mult, floor) = {
                         let det = detector.lock().await;
@@ -155,7 +159,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                             match crate::network_spike::explain_spike(
                                 spike_mbps,
                                 baseline_mbps,
-                                pool_ref.as_deref().map(|v| &**v),
+                                pool_ref.as_deref(),
                             )
                             .await
                             {
@@ -200,28 +204,14 @@ pub async fn run() -> Result<(), std::io::Error> {
     }
 
     // Startup conjunction screening — chunk-based distributed approach.
-    //
-    // Two phases run concurrently on every pod:
-    //
-    //   Coordinator (one task per group): races to claim the group via the Postgres
-    //   distributed lock.  The winner fetches TLEs, creates chunk rows in the DB,
-    //   and stores TLEs in the local TleCache.  Losers return immediately.
-    //
-    //   Worker (one task per pod): loops over claim_next_chunk(), fetching TLEs
-    //   on-demand if not already cached, then calls screen_chunk().  Exits after
-    //   10 consecutive seconds with no claimable chunks.
-    //
-    // Group sizes vary by 5 orders of magnitude (gps-ops: 496 pairs vs active: 104M),
-    // so distributing by chunk rather than by group keeps pods evenly loaded.
     {
         use crate::components::satellite_tracker::TleData;
 
-        const CHUNK_SIZE: usize = 50; // satellites per chunk; ~50 sats → ~240 chunks for active group
+        const CHUNK_SIZE: usize = 50;
         const GROUPS: [&str; 5] = ["stations", "gps-ops", "visual", "active", "starlink"];
 
         let hostname = std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_string());
 
-        /// Parse a CelesTrak TLE text body into a Vec<TleData>.
         fn parse_tles(text: &str) -> Vec<TleData> {
             let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
             let mut tles = Vec::new();
@@ -240,7 +230,6 @@ pub async fn run() -> Result<(), std::io::Error> {
             tles
         }
 
-        /// Fetch TLEs for a group from CelesTrak; returns None on any error.
         async fn fetch_tles(
             client: &reqwest::Client,
             group: &str,
@@ -260,25 +249,21 @@ pub async fn run() -> Result<(), std::io::Error> {
             if tles.is_empty() { None } else { Some(tles) }
         }
 
-        // ── Coordinator tasks ────────────────────────────────────────
-        // One persistent task per group. Loops every SCREENING_INTERVAL so all pods
-        // participate in every hourly cycle, not just the one that started first.
-        const SCREENING_INTERVAL_SECS: u64 = 60 * 60; // matches recent_minutes=60 gate
+        const SCREENING_INTERVAL_SECS: u64 = 60 * 60;
 
         for group in GROUPS {
-            let pool_opt  = pool.clone().map(web::Data::new);
+            let pool_opt  = pool_arc.clone();
             let tle_cache = tle_cache.clone();
             let client    = http_client.clone();
             let hostname  = hostname.clone();
 
             tokio::spawn(async move {
                 let pool = match pool_opt {
-                    None => return, // no DB → skip
+                    None => return,
                     Some(p) => p,
                 };
 
                 loop {
-                    // Race to claim the screening slot; only one pod wins per cycle.
                     let screening_id = match crate::db::try_claim_conjunction_startup(
                         &pool, group, &hostname, 60,
                     ).await {
@@ -325,7 +310,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                         }
                     }
 
-                    // Cache TLEs locally so this pod's worker avoids a redundant fetch.
                     tle_cache
                         .write()
                         .await
@@ -336,11 +320,9 @@ pub async fn run() -> Result<(), std::io::Error> {
             });
         }
 
-        // ── Worker loop ──────────────────────────────────────────────
-        // Persistent — never exits, so each pod stays in the work pool across all
-        // future screening cycles. Sleeps 15s when idle to avoid DB pressure.
+        // Worker loop
         {
-            let pool_opt  = pool.clone().map(web::Data::new);
+            let pool_opt  = pool_arc.clone();
             let tle_cache = tle_cache.clone();
             let client    = http_client.clone();
             let hostname  = hostname.clone();
@@ -349,12 +331,10 @@ pub async fn run() -> Result<(), std::io::Error> {
                 use crate::components::conjunction::screen_chunk;
 
                 let pool = match pool_opt {
-                    None    => return, // no DB → nothing to claim
+                    None    => return,
                     Some(p) => p,
                 };
 
-                // Small delay so coordinator tasks have started their TLE fetches
-                // before the worker tries to claim on the first cycle.
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
                 loop {
@@ -362,8 +342,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                         Ok(Some(chunk)) => {
                             let group = chunk.group_name.clone();
 
-                            // Use cached TLEs (set by coordinator) or fetch if the
-                            // winning coordinator ran on a different pod.
                             let tles = {
                                 let cached = tle_cache
                                     .read()
@@ -405,7 +383,6 @@ pub async fn run() -> Result<(), std::io::Error> {
                             screen_chunk(Some(pool.clone()), chunk, &tles).await;
                         }
                         Ok(None) => {
-                            // No pending chunks — sleep before polling again.
                             tokio::time::sleep(Duration::from_secs(15)).await;
                         }
                         Err(e) => {
@@ -418,30 +395,39 @@ pub async fn run() -> Result<(), std::io::Error> {
         }
     }
 
+    let leptos_options = conf.leptos_options.clone();
+    let routes = generate_route_list(App);
+
+    // Rate limiter for lighthouse endpoint: 5 requests per minute
+    let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
+
+    let pool_for_mw = pool.clone();
+    let http_client_for_mw = http_client.clone();
+
     log::info!("Starting Server on {addr}");
-    HttpServer::new(move || {
-        let routes = generate_route_list(App);
 
-        // Rate limiter for authentication endpoints: 5 requests per minute
-        let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
-
-        let visitor_logger = VisitorLogger::new(pool.clone(), http_client.clone());
-
-        let mut app = actix_web::App::new()
-            .route(
-                "/api/lighthouse",
-                web::post()
-                    .to(upload_lighthouse_report)
-                    .wrap(auth_rate_limiter),
-            )
-            .route("/api/audit/claude", web::post().to(ingest_claude_audit))
-            .route("/api/metrics/stream", web::get().to(metrics_stream))
-            .route("/world-map.svg", web::get().to(world_map))
-            .route("/api/{tail:.*}", leptos_actix::handle_server_fns())
-            .route("/health_check", web::get().to(health_check))
-            .route("/robots.txt", web::get().to(robots_txt))
-            .leptos_routes(routes, {
-                let leptos_options = conf.leptos_options.clone();
+    let app = Router::new()
+        .route(
+            "/api/lighthouse",
+            post(upload_lighthouse_report).layer(middleware::from_fn(move |req, next| {
+                let limiter = auth_rate_limiter.clone();
+                async move { limiter.check_middleware(req, next).await }
+            })),
+        )
+        .route("/api/audit/claude", post(ingest_claude_audit))
+        .route("/api/metrics/stream", get(metrics_stream))
+        .route("/world-map.svg", get(world_map))
+        .route(
+            "/api/{*fn_name}",
+            post(leptos_axum::handle_server_fns).get(leptos_axum::handle_server_fns),
+        )
+        .route("/health_check", get(health_check))
+        .route("/robots.txt", get(robots_txt))
+        .leptos_routes(
+            &leptos_options,
+            routes,
+            {
+                let leptos_options = leptos_options.clone();
                 move || {
                     view! {
                         <!DOCTYPE html>
@@ -461,28 +447,28 @@ pub async fn run() -> Result<(), std::io::Error> {
                         </html>
                     }
                 }
-            })
-            .service(Files::new(
-                "/jaydanhoward_wasm",
-                wasm_dir.to_string_lossy().as_ref(),
-            ))
-            .service(Files::new("/", assets_root.to_string_lossy().as_ref()))
-            .wrap(visitor_logger)
-            .wrap(CacheControl)
-            .wrap(SecurityHeaders)
-            .wrap(actix_web::middleware::Compress::default());
+            },
+        )
+        .nest_service(
+            "/jaydanhoward_wasm",
+            ServeDir::new(wasm_dir.to_string_lossy().as_ref()),
+        )
+        .fallback_service(ServeDir::new(assets_root.to_string_lossy().as_ref()))
+        // Global middleware (applied outermost = last listed)
+        .layer(middleware::from_fn(move |req, next| {
+            let pool = pool_for_mw.clone();
+            let http_client = http_client_for_mw.clone();
+            async move { visitor_logger_fn(pool, http_client, req, next).await }
+        }))
+        .layer(middleware::from_fn(cache_control))
+        .layer(middleware::from_fn(security_headers))
+        .layer(CompressionLayer::new())
+        // State extensions
+        .layer(Extension(pool_arc.clone()))
+        .layer(Extension(world_map_data))
+        .layer(Extension(tle_cache))
+        .layer(Extension(conjunction_cache));
 
-        if let Some(ref p) = pool {
-            app = app.app_data(web::Data::new(p.clone()));
-        }
-        app = app.app_data(world_map_data.clone());
-        app = app.app_data(tle_cache.clone());
-        app = app.app_data(conjunction_cache.clone());
-        app = app.app_data(spike_detector.clone());
-
-        app
-    })
-    .bind(&addr)?
-    .run()
-    .await
+    let listener = tokio::net::TcpListener::bind(&addr).await?;
+    axum::serve(listener, app.with_state(leptos_options).into_make_service()).await
 }

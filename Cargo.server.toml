@@ -8,19 +8,18 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.72"
-actix-files = "0.6"
-actix-multipart = "0.6"
-actix-web = { version = "4", features = ["macros", "rustls-0_23"] }
-actix-web-lab = "0.23"
+axum = { version = "0.8", features = ["multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "compression-br", "compression-gzip", "compression-deflate"] }
 base64 = "0.22.1"
 cfg-if = "1"
 config = { version = "0.14.1", features = ["yaml"] }
 console_error_panic_hook = "0.1"
 futures = "0.3.28"
 futures-util = "0.3.28"
-http = "0.2"
+http = "1.0"
 leptos = { version = "0.8.16", features = ["ssr", "nightly"] }
-leptos_actix = "0.8.7"
+leptos_axum = "0.8"
 leptos_meta = "0.8.6"
 leptos_router = { version = "0.8.12", features = ["nightly"] }
 rand = "0.8.5"
@@ -42,7 +41,6 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chron
 chrono = { version = "0.4", features = ["serde"] }
 tokio-stream = { version = "0.1", features = ["time"] }
 tracing = "0.1.19"
-tracing-actix-web = "0.7.15"
 tracing-bunyan-formatter = "0.3"
 tracing-log = "0.1.1"
 tracing-subscriber = { version = "0.3.20", features = ["registry", "env-filter"] }

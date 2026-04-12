@@ -9,48 +9,41 @@ pub enum LighthouseError {
     DisabledError(),
 }
 
-// Maximum file upload size: 10MB
 #[cfg(feature = "ssr")]
 const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
 
 #[cfg(feature = "ssr")]
 use {
-    actix_multipart::Multipart,
-    actix_web::http::header::HeaderMap,
-    actix_web::{Error, HttpRequest, HttpResponse},
+    axum::{
+        extract::Multipart,
+        http::{header::HeaderMap, StatusCode},
+        response::{IntoResponse, Response},
+    },
     base64::Engine,
-    futures_util::StreamExt as _,
-    std::io::Write,
     tracing::{instrument, log},
 };
 
 #[cfg(feature = "ssr")]
 fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
-    // Get Authorization header
     let header_value = headers
-        .get("Authorization")
+        .get("authorization")
         .ok_or(LighthouseError::InvalidCredentials())?;
 
-    // Convert to string
     let header_str = header_value
         .to_str()
         .map_err(|_| LighthouseError::InvalidCredentials())?;
 
-    // Strip "Basic " prefix
     let base64encoded_credentials = header_str
         .strip_prefix("Basic ")
         .ok_or(LighthouseError::InvalidCredentials())?;
 
-    // Decode base64
     let decoded_credentials = base64::engine::general_purpose::STANDARD
         .decode(base64encoded_credentials)
         .map_err(|_| LighthouseError::InvalidCredentials())?;
 
-    // Convert to UTF-8 string
     let decoded_credentials = String::from_utf8(decoded_credentials)
         .map_err(|_| LighthouseError::InvalidCredentials())?;
 
-    // Split on ':' to get username and password
     let mut credentials = decoded_credentials.splitn(2, ':');
     let username = credentials
         .next()
@@ -61,7 +54,6 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
         .ok_or(LighthouseError::InvalidCredentials())?
         .to_string();
 
-    // Validate credentials
     match std::env::var("LIGHTHOUSE_UPDATE_TOKEN") {
         Ok(val) => {
             if username != "jay" || password != val {
@@ -75,27 +67,34 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
 }
 
 #[cfg(feature = "ssr")]
-#[instrument(skip(payload))]
+#[instrument(skip(multipart))]
 pub async fn upload_lighthouse_report(
-    request: HttpRequest,
-    mut payload: Multipart,
-) -> Result<HttpResponse, Error> {
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> Response {
     log::info!("Received upload_lighthouse_report");
-    match basic_authentication(request.headers()) {
+    match basic_authentication(&headers) {
         Ok(()) => {}
         Err(LighthouseError::DisabledError()) => {
-            return Ok(HttpResponse::Forbidden().finish());
+            return StatusCode::FORBIDDEN.into_response();
         }
         Err(e) => {
-            let ip = request
-                .connection_info()
-                .realip_remote_addr()
-                .unwrap_or("unknown")
-                .to_string();
+            let ip = headers
+                .get("x-real-ip")
+                .or_else(|| headers.get("x-forwarded-for"))
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("unknown");
             log::warn!("Lighthouse auth failure from {ip}: {e}");
-            return Ok(HttpResponse::Unauthorized()
-                .insert_header(("WWW-Authenticate", "Basic realm=\"lighthouse\""))
-                .finish());
+            return (
+                StatusCode::UNAUTHORIZED,
+                [(
+                    axum::http::header::WWW_AUTHENTICATE,
+                    axum::http::header::HeaderValue::from_static(
+                        "Basic realm=\"lighthouse\"",
+                    ),
+                )],
+            )
+                .into_response();
         }
     }
 
@@ -105,33 +104,53 @@ pub async fn upload_lighthouse_report(
     let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate main");
     let file_path = format!("{}/lighthouse.html", assets_path.to_string_lossy());
 
-    let mut file = std::fs::OpenOptions::new()
+    let mut file = match std::fs::OpenOptions::new()
         .create(true)
         .truncate(true)
         .write(true)
         .open(&file_path)
-        .expect("Failed to open file");
+    {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!("Failed to open lighthouse file: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     let mut file_contents: Vec<u8> = Vec::new();
-    while let Some(item) = payload.next().await {
-        let mut field = item?;
-        while let Some(chunk) = field.next().await {
-            let chunk = chunk?;
-
-            // Check if adding this chunk would exceed the max file size
-            if file_contents.len() + chunk.len() > MAX_FILE_SIZE {
-                log::warn!("Upload rejected: file size exceeds {MAX_FILE_SIZE} bytes");
-                return Ok(HttpResponse::PayloadTooLarge()
-                    .body("File size exceeds maximum allowed size of 10MB"));
+    loop {
+        let field = match multipart.next_field().await {
+            Ok(Some(f)) => f,
+            Ok(None) => break,
+            Err(e) => {
+                log::warn!("Multipart error: {e}");
+                return StatusCode::BAD_REQUEST.into_response();
             }
+        };
 
-            file_contents.extend_from_slice(&chunk);
+        let data = match field.bytes().await {
+            Ok(d) => d,
+            Err(e) => {
+                log::warn!("Field bytes error: {e}");
+                return StatusCode::BAD_REQUEST.into_response();
+            }
+        };
+
+        if file_contents.len() + data.len() > MAX_FILE_SIZE {
+            log::warn!("Upload rejected: file size exceeds {MAX_FILE_SIZE} bytes");
+            return (
+                StatusCode::PAYLOAD_TOO_LARGE,
+                "File size exceeds maximum allowed size of 10MB",
+            )
+                .into_response();
         }
+
+        file_contents.extend_from_slice(&data);
     }
 
+    use std::io::Write;
     let _ = file.write_all(&file_contents);
 
     log::info!("Successfully written report to {}", &file_path);
-
-    Ok(HttpResponse::Ok().finish())
+    StatusCode::OK.into_response()
 }

@@ -1,5 +1,11 @@
-use actix_web::{web, HttpResponse};
+use axum::{
+    extract::Extension,
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+};
+use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct WorldMapSvg(pub String);
 
 const GEOJSON_URL: &str = concat!(
@@ -98,9 +104,16 @@ fn fallback_svg() -> String {
     .to_string()
 }
 
-pub async fn world_map(svg: web::Data<WorldMapSvg>) -> HttpResponse {
-    HttpResponse::Ok()
-        .content_type("image/svg+xml")
-        .append_header(("Cache-Control", "public, max-age=86400"))
-        .body(svg.get_ref().0.clone())
+pub async fn world_map(Extension(svg): Extension<Arc<WorldMapSvg>>) -> Response {
+    let content_type = header::HeaderValue::from_static("image/svg+xml");
+    let cache_control = header::HeaderValue::from_static("public, max-age=86400");
+    (
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, cache_control),
+        ],
+        svg.0.clone(),
+    )
+        .into_response()
 }

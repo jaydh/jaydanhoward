@@ -16,8 +16,8 @@ mod startup;
 mod telemtry;
 
 #[cfg(feature = "ssr")]
-#[actix_web::main]
-async fn main() -> () {
+#[tokio::main]
+async fn main() {
     use startup::run;
 
     rustls::crypto::ring::default_provider()

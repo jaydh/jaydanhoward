@@ -511,12 +511,14 @@ pub struct NetworkInsight {
 
 #[server(name = GetNetworkInsights, prefix = "/api", endpoint = "get_network_insights")]
 pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
-    let pool = extract::<Data<PgPool>>().await
-        .map_err(|_| ServerFnError::ServerError("no db".into()))?;
+    let pool = extract::<Extension<Arc<PgPool>>>().await
+        .map_err(|_| ServerFnError::ServerError("no db".into()))?
+        .0;
 
     let rows = crate::db::get_recent_network_insights(&pool, 5)
         .await
@@ -735,12 +737,14 @@ pub struct SpikeConfig {
 
 #[server(name = GetSpikeConfig, prefix = "/api", endpoint = "get_spike_config")]
 pub async fn get_spike_config() -> Result<SpikeConfig, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
-    let pool = extract::<Data<PgPool>>().await
-        .map_err(|_| ServerFnError::ServerError("no db".into()))?;
+    let pool = extract::<Extension<Arc<PgPool>>>().await
+        .map_err(|_| ServerFnError::ServerError("no db".into()))?
+        .0;
 
     let (multiplier, floor_mbps) = crate::db::load_spike_config(&pool).await;
     Ok(SpikeConfig { multiplier, floor_mbps })
@@ -827,12 +831,14 @@ pub struct ClaudeAuditEntry {
 
 #[server(name = GetClaudeAuditLog, prefix = "/api", endpoint = "get_claude_audit_log")]
 pub async fn get_claude_audit_log() -> Result<Vec<ClaudeAuditEntry>, ServerFnError<String>> {
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
-    let pool = extract::<Data<PgPool>>().await
-        .map_err(|_| ServerFnError::ServerError("no db".into()))?;
+    let pool = extract::<Extension<Arc<PgPool>>>().await
+        .map_err(|_| ServerFnError::ServerError("no db".into()))?
+        .0;
 
     let rows = crate::db::get_recent_claude_audits(&pool, 20)
         .await

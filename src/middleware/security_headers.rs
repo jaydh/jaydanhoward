@@ -1,131 +1,71 @@
-use actix_web::{
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error,
+use axum::{extract::Request, middleware::Next, response::Response};
+use axum::http::header::{
+    HeaderName, HeaderValue, CONTENT_SECURITY_POLICY, REFERRER_POLICY,
+    STRICT_TRANSPORT_SECURITY, X_CONTENT_TYPE_OPTIONS, X_FRAME_OPTIONS,
 };
-use std::future::{ready, Future, Ready};
-use std::pin::Pin;
 
-/// Middleware that adds security headers to all responses
-pub struct SecurityHeaders;
+pub async fn security_headers(req: Request, next: Next) -> Response {
+    let mut response = next.run(req).await;
+    let headers = response.headers_mut();
 
-impl<S, B> Transform<S, ServiceRequest> for SecurityHeaders
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<B>;
-    type Error = Error;
-    type InitError = ();
-    type Transform = SecurityHeadersMiddleware<S>;
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+    headers.insert(
+        CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static(
+            "default-src 'self'; \
+             script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; \
+             style-src 'self' 'unsafe-inline'; \
+             img-src 'self' https://caddy.jaydanhoward.com data:; \
+             media-src 'self' https://caddy.jaydanhoward.com; \
+             font-src 'self'; \
+             connect-src 'self' https://cloudflareinsights.com; \
+             frame-src 'self'; \
+             frame-ancestors 'self'; \
+             base-uri 'self'; \
+             form-action 'self';"
+        ),
+    );
 
-    fn new_transform(&self, service: S) -> Self::Future {
-        ready(Ok(SecurityHeadersMiddleware { service }))
-    }
-}
+    headers.insert(
+        X_FRAME_OPTIONS,
+        HeaderValue::from_static("SAMEORIGIN"),
+    );
 
-pub struct SecurityHeadersMiddleware<S> {
-    service: S,
-}
+    headers.insert(
+        X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
 
-impl<S, B> Service<ServiceRequest> for SecurityHeadersMiddleware<S>
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error>,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<B>;
-    type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+    headers.insert(
+        STRICT_TRANSPORT_SECURITY,
+        HeaderValue::from_static("max-age=31536000; includeSubDomains"),
+    );
 
-    forward_ready!(service);
+    headers.insert(
+        REFERRER_POLICY,
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
 
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        let fut = self.service.call(req);
+    headers.insert(
+        HeaderName::from_static("permissions-policy"),
+        HeaderValue::from_static(
+            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
+        ),
+    );
 
-        Box::pin(async move {
-            let mut res = fut.await?;
+    headers.insert(
+        HeaderName::from_static("x-xss-protection"),
+        HeaderValue::from_static("1; mode=block"),
+    );
 
-            let headers = res.headers_mut();
+    headers.insert(
+        HeaderName::from_static("cross-origin-opener-policy"),
+        HeaderValue::from_static("same-origin"),
+    );
 
-            // Content Security Policy - Restricts resource loading to prevent XSS
-            // Note: This is a strict policy. Adjust 'unsafe-inline' and 'unsafe-eval' based on your needs.
-            // For Leptos hydration, we need 'unsafe-inline' for styles and scripts
-            // Cloudflare Insights is allowed for analytics
-            headers.insert(
-                actix_web::http::header::CONTENT_SECURITY_POLICY,
-                actix_web::http::header::HeaderValue::from_static(
-                    "default-src 'self'; \
-                     script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; \
-                     style-src 'self' 'unsafe-inline'; \
-                     img-src 'self' https://caddy.jaydanhoward.com data:; \
-                     media-src 'self' https://caddy.jaydanhoward.com; \
-                     font-src 'self'; \
-                     connect-src 'self' https://cloudflareinsights.com; \
-                     frame-src 'self'; \
-                     frame-ancestors 'self'; \
-                     base-uri 'self'; \
-                     form-action 'self';"
-                ),
-            );
+    headers.insert(
+        HeaderName::from_static("cross-origin-resource-policy"),
+        HeaderValue::from_static("same-origin"),
+    );
 
-            // X-Frame-Options - Prevents clickjacking by disallowing embedding in iframes
-            headers.insert(
-                actix_web::http::header::X_FRAME_OPTIONS,
-                actix_web::http::header::HeaderValue::from_static("SAMEORIGIN"),
-            );
-
-            // X-Content-Type-Options - Prevents MIME type sniffing
-            headers.insert(
-                actix_web::http::header::X_CONTENT_TYPE_OPTIONS,
-                actix_web::http::header::HeaderValue::from_static("nosniff"),
-            );
-
-            // Strict-Transport-Security (HSTS) - Forces HTTPS for 1 year
-            // Note: Only enable this if you're serving over HTTPS
-            headers.insert(
-                actix_web::http::header::STRICT_TRANSPORT_SECURITY,
-                actix_web::http::header::HeaderValue::from_static(
-                    "max-age=31536000; includeSubDomains"
-                ),
-            );
-
-            // Referrer-Policy - Controls how much referrer information is sent
-            headers.insert(
-                actix_web::http::header::REFERRER_POLICY,
-                actix_web::http::header::HeaderValue::from_static("strict-origin-when-cross-origin"),
-            );
-
-            // Permissions-Policy - Controls which browser features can be used
-            headers.insert(
-                actix_web::http::header::HeaderName::from_static("permissions-policy"),
-                actix_web::http::header::HeaderValue::from_static(
-                    "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=()"
-                ),
-            );
-
-            // X-XSS-Protection - Legacy XSS protection (mostly superseded by CSP)
-            headers.insert(
-                actix_web::http::header::HeaderName::from_static("x-xss-protection"),
-                actix_web::http::header::HeaderValue::from_static("1; mode=block"),
-            );
-
-            // Cross-Origin-Opener-Policy - Isolates the browsing context from cross-origin
-            // documents, preventing cross-origin window.opener access (Spectre mitigation)
-            headers.insert(
-                actix_web::http::header::HeaderName::from_static("cross-origin-opener-policy"),
-                actix_web::http::header::HeaderValue::from_static("same-origin"),
-            );
-
-            // Cross-Origin-Resource-Policy - Prevents other origins from reading this
-            // resource's response (protects against Spectre-style side-channel attacks)
-            headers.insert(
-                actix_web::http::header::HeaderName::from_static("cross-origin-resource-policy"),
-                actix_web::http::header::HeaderValue::from_static("same-origin"),
-            );
-
-            Ok(res)
-        })
-    }
+    response
 }

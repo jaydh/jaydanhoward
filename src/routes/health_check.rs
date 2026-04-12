@@ -1,8 +1,7 @@
 #[cfg(feature = "ssr")]
-use {actix_web::HttpResponse, tracing::instrument};
+use axum::http::StatusCode;
 
 #[cfg(feature = "ssr")]
-#[instrument]
-pub async fn health_check() -> HttpResponse {
-    HttpResponse::Ok().finish()
+pub async fn health_check() -> StatusCode {
+    StatusCode::OK
 }

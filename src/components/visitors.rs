@@ -21,27 +21,22 @@ pub struct IpInfo {
 
 #[server(name = GetMyInfo, prefix = "/api", endpoint = "get_my_info")]
 pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
-    use actix_web::{web::Data, HttpRequest};
-    use leptos_actix::extract;
+    use axum::{extract::Extension, http::HeaderMap};
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
-    let req = extract::<HttpRequest>()
-        .await
-        .map_err(|_| ServerFnError::ServerError("Failed to extract request".into()))?;
+    let headers = extract::<HeaderMap>().await.unwrap_or_default();
 
-    let ip = {
-        let raw = req
-            .connection_info()
-            .realip_remote_addr()
-            .unwrap_or("unknown")
-            .to_string();
-        raw.parse::<std::net::SocketAddr>()
-            .map(|s| s.ip().to_string())
-            .unwrap_or(raw)
-    };
+    let ip = headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
 
-    let pool = match extract::<Data<PgPool>>().await {
-        Ok(p) => p,
+    let pool = match extract::<Extension<Arc<PgPool>>>().await {
+        Ok(e) => e.0,
         Err(_) => {
             return Ok(IpInfo {
                 ip,
@@ -78,29 +73,24 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
 
 #[server(name = ForgetMe, prefix = "/api", endpoint = "forget_me")]
 pub async fn forget_me() -> Result<(), ServerFnError<String>> {
-    use actix_web::HttpRequest;
-    use leptos_actix::extract;
-    use actix_web::web::Data;
+    use axum::{extract::Extension, http::HeaderMap};
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
-    let req = extract::<HttpRequest>()
+    let headers = extract::<HeaderMap>().await.unwrap_or_default();
+
+    let ip = headers
+        .get("x-real-ip")
+        .or_else(|| headers.get("x-forwarded-for"))
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let pool = extract::<Extension<Arc<PgPool>>>()
         .await
-        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
-
-    let ip = {
-        let raw = req
-            .connection_info()
-            .realip_remote_addr()
-            .unwrap_or("unknown")
-            .to_string();
-        raw.parse::<std::net::SocketAddr>()
-            .map(|s| s.ip().to_string())
-            .unwrap_or(raw)
-    };
-
-    let pool = extract::<Data<PgPool>>()
-        .await
-        .map_err(|_| ServerFnError::ServerError("Visitor tracking unavailable".into()))?;
+        .map_err(|_| ServerFnError::ServerError("Visitor tracking unavailable".into()))?
+        .0;
 
     crate::db::delete_ip_visits(&pool, &ip)
         .await
@@ -146,12 +136,13 @@ pub struct VisitorStats {
 #[server(name = GetVisitorStats, prefix = "/api", endpoint = "get_visitor_stats")]
 pub async fn get_visitor_stats() -> Result<VisitorStats, ServerFnError<String>> {
     use crate::db::get_visitor_stats as db_get_stats;
-    use actix_web::web::Data;
-    use leptos_actix::extract;
+    use axum::extract::Extension;
+    use leptos_axum::extract;
     use sqlx::PgPool;
+    use std::sync::Arc;
 
-    let pool = match extract::<Data<PgPool>>().await {
-        Ok(p) => p,
+    let pool = match extract::<Extension<Arc<PgPool>>>().await {
+        Ok(e) => e.0,
         Err(_) => {
             return Ok(VisitorStats {
                 unique_ips: 0,
