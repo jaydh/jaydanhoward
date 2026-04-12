@@ -516,9 +516,10 @@ pub async fn get_network_insights() -> Result<Vec<NetworkInsight>, ServerFnError
     use sqlx::PgPool;
     use std::sync::Arc;
 
-    let pool = extract::<Extension<Arc<PgPool>>>().await
+    let pool = extract::<Extension<Option<Arc<PgPool>>>>().await
         .map_err(|_| ServerFnError::ServerError("no db".into()))?
-        .0;
+        .0
+        .ok_or_else(|| ServerFnError::ServerError("no db".into()))?;
 
     let rows = crate::db::get_recent_network_insights(&pool, 5)
         .await
@@ -742,9 +743,10 @@ pub async fn get_spike_config() -> Result<SpikeConfig, ServerFnError<String>> {
     use sqlx::PgPool;
     use std::sync::Arc;
 
-    let pool = extract::<Extension<Arc<PgPool>>>().await
+    let pool = extract::<Extension<Option<Arc<PgPool>>>>().await
         .map_err(|_| ServerFnError::ServerError("no db".into()))?
-        .0;
+        .0
+        .ok_or_else(|| ServerFnError::ServerError("no db".into()))?;
 
     let (multiplier, floor_mbps) = crate::db::load_spike_config(&pool).await;
     Ok(SpikeConfig { multiplier, floor_mbps })
@@ -836,9 +838,10 @@ pub async fn get_claude_audit_log() -> Result<Vec<ClaudeAuditEntry>, ServerFnErr
     use sqlx::PgPool;
     use std::sync::Arc;
 
-    let pool = extract::<Extension<Arc<PgPool>>>().await
+    let pool = extract::<Extension<Option<Arc<PgPool>>>>().await
         .map_err(|_| ServerFnError::ServerError("no db".into()))?
-        .0;
+        .0
+        .ok_or_else(|| ServerFnError::ServerError("no db".into()))?;
 
     let rows = crate::db::get_recent_claude_audits(&pool, 20)
         .await

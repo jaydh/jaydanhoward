@@ -655,8 +655,8 @@ pub async fn get_conjunction_status(
     use std::sync::Arc;
 
     // Prefer DB when available
-    if let Ok(pool) = extract::<Extension<Arc<PgPool>>>().await {
-        let row = crate::db::get_latest_conjunction_screening(&pool.0, &group)
+    if let Some(pool) = extract::<Extension<Option<Arc<PgPool>>>>().await.ok().and_then(|e| e.0) {
+        let row = crate::db::get_latest_conjunction_screening(&pool, &group)
             .await
             .map_err(|e| ServerFnError::ServerError(format!("{e}")))?;
 
@@ -713,8 +713,8 @@ pub async fn get_conjunctions(
     use std::sync::Arc;
 
     // Prefer DB when available (returns events for Running and Complete screenings)
-    if let Ok(pool) = extract::<Extension<Arc<PgPool>>>().await {
-        return crate::db::get_latest_conjunction_events(&pool.0, &group)
+    if let Some(pool) = extract::<Extension<Option<Arc<PgPool>>>>().await.ok().and_then(|e| e.0) {
+        return crate::db::get_latest_conjunction_events(&pool, &group)
             .await
             .map_err(|e| ServerFnError::ServerError(format!("{e}")));
     }
@@ -741,7 +741,7 @@ pub async fn retrigger_conjunction() -> Result<(), ServerFnError<String>> {
 
     const GROUPS: &[&str] = &["stations", "gps-ops", "visual", "active", "starlink"];
 
-    let pool_opt = extract::<Extension<Arc<PgPool>>>().await.ok().map(|e| e.0);
+    let pool_opt = extract::<Extension<Option<Arc<PgPool>>>>().await.ok().and_then(|e| e.0);
     let cache = extract::<Extension<Arc<ConjunctionCache>>>().await.ok().map(|e| e.0);
     let tle_cache = extract::<Extension<Arc<crate::components::satellite_tracker::TleCache>>>()
         .await

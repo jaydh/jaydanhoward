@@ -130,7 +130,7 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
     {
         use crate::components::conjunction::ConjunctionCache;
         use std::sync::Arc;
-        let pool_opt = extract::<Extension<Arc<sqlx::PgPool>>>().await.ok().map(|e| e.0);
+        let pool_opt = extract::<Extension<Option<Arc<sqlx::PgPool>>>>().await.ok().and_then(|e| e.0);
         let cache_opt = extract::<Extension<Arc<ConjunctionCache>>>().await.ok().map(|e| e.0);
         let tles_clone = satellites.clone();
         let group_clone = group.clone();

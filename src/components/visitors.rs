@@ -35,9 +35,9 @@ pub async fn get_my_info() -> Result<IpInfo, ServerFnError<String>> {
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
-    let pool = match extract::<Extension<Arc<PgPool>>>().await {
-        Ok(e) => e.0,
-        Err(_) => {
+    let pool = match extract::<Extension<Option<Arc<PgPool>>>>().await.ok().and_then(|e| e.0) {
+        Some(p) => p,
+        None => {
             return Ok(IpInfo {
                 ip,
                 country: None,
@@ -87,10 +87,11 @@ pub async fn forget_me() -> Result<(), ServerFnError<String>> {
         .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
-    let pool = extract::<Extension<Arc<PgPool>>>()
+    let pool = extract::<Extension<Option<Arc<PgPool>>>>()
         .await
         .map_err(|_| ServerFnError::ServerError("Visitor tracking unavailable".into()))?
-        .0;
+        .0
+        .ok_or_else(|| ServerFnError::ServerError("Visitor tracking unavailable".into()))?;
 
     crate::db::delete_ip_visits(&pool, &ip)
         .await
@@ -141,9 +142,9 @@ pub async fn get_visitor_stats() -> Result<VisitorStats, ServerFnError<String>> 
     use sqlx::PgPool;
     use std::sync::Arc;
 
-    let pool = match extract::<Extension<Arc<PgPool>>>().await {
-        Ok(e) => e.0,
-        Err(_) => {
+    let pool = match extract::<Extension<Option<Arc<PgPool>>>>().await.ok().and_then(|e| e.0) {
+        Some(p) => p,
+        None => {
             return Ok(VisitorStats {
                 unique_ips: 0,
                 unique_countries: 0,
