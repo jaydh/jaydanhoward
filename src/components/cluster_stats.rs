@@ -769,21 +769,21 @@ pub async fn get_gitops_status() -> Result<Vec<FluxResource>, ServerFnError<Stri
         .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
 
     // Flux resource types and their API groups
-    let flux_types: &[(&str, &str, &str)] = &[
-        ("Kustomization", "kustomize.toolkit.fluxcd.io", "kustomizations"),
-        ("HelmRelease",   "helm.toolkit.fluxcd.io",      "helmreleases"),
-        ("GitRepository", "source.toolkit.fluxcd.io",    "gitrepositories"),
-        ("HelmRepository","source.toolkit.fluxcd.io",    "helmrepositories"),
-        ("HelmChart",     "source.toolkit.fluxcd.io",    "helmcharts"),
+    let flux_types: &[(&str, &str, &str, &str)] = &[
+        ("Kustomization", "kustomize.toolkit.fluxcd.io", "kustomizations", "v1"),
+        ("HelmRelease",   "helm.toolkit.fluxcd.io",      "helmreleases",   "v2"),
+        ("GitRepository", "source.toolkit.fluxcd.io",    "gitrepositories","v1"),
+        ("HelmRepository","source.toolkit.fluxcd.io",    "helmrepositories","v1"),
+        ("HelmChart",     "source.toolkit.fluxcd.io",    "helmcharts",     "v1"),
     ];
 
     let mut resources: Vec<FluxResource> = Vec::new();
 
-    for &(kind, group, plural) in flux_types {
+    for &(kind, group, plural, version) in flux_types {
         let ar = ApiResource {
             group: group.to_string(),
-            version: "v1".to_string(),
-            api_version: format!("{group}/v1"),
+            version: version.to_string(),
+            api_version: format!("{group}/{version}"),
             kind: kind.to_string(),
             plural: plural.to_string(),
         };
