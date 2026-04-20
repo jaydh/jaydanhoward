@@ -4,6 +4,8 @@ on:
     branches: ["main"]
   push:
     branches: ["main"]
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday 9am UTC
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -22,6 +24,27 @@ jobs:
       - name: Run security audit
         run: |
           bazel --bazelrc=.bazelrc.ci test //:security_audit
+      - name: Upload audit results to site
+        if: github.event_name == 'push' || github.event_name == 'schedule'
+        env:
+          LIGHTHOUSE_UPDATE_TOKEN: ${{ secrets.LIGHTHOUSE_UPDATE_TOKEN }}
+        run: |
+          IGNORE_FLAGS="--ignore RUSTSEC-2023-0071 \
+            --ignore RUSTSEC-2024-0436 \
+            --ignore RUSTSEC-2024-0370 \
+            --ignore RUSTSEC-2024-0384"
+          AUDIT_JSON=$(cargo-audit audit --no-fetch $IGNORE_FLAGS \
+            --json --file Cargo.server.lock 2>/dev/null | \
+            python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          d['scanned_at'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          print(json.dumps(d))
+          ")
+          curl -sf -X POST https://jaydanhoward.com/api/security-audit \
+            -H "Authorization: Basic $(printf 'jay:%s' "$LIGHTHOUSE_UPDATE_TOKEN" | base64 -w0)" \
+            -H "Content-Type: application/json" \
+            --data-raw "$AUDIT_JSON" || echo "Upload failed (non-fatal)"
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s

@@ -19,6 +19,7 @@ mod satellite_renderer;
 #[cfg(not(feature = "ssr"))]
 mod satellite_calculations;
 mod sd_sync_reports;
+pub mod security_audit;
 mod skills;
 mod work;
 
@@ -48,4 +49,5 @@ pub fn register_server_fns() {
     register_explicit::<conjunction::RetriggerConjunction>();
     register_explicit::<sd_sync_reports::FetchSdSyncReportList>();
     register_explicit::<sd_sync_reports::FetchSdSyncReport>();
+    register_explicit::<security_audit::GetSecurityAudit>();
 }

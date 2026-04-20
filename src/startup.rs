@@ -11,7 +11,7 @@ pub async fn run() -> Result<(), std::io::Error> {
     use crate::middleware::visitor_logger::visitor_logger_fn;
     use crate::routes::{
         fetch_world_map_svg, health_check, ingest_claude_audit, metrics_stream, robots_txt,
-        upload_lighthouse_report, world_map, WorldMapSvg,
+        upload_lighthouse_report, upload_security_audit, world_map, WorldMapSvg,
     };
     use crate::telemtry::{get_subscriber, init_subscriber};
     use axum::{
@@ -415,6 +415,7 @@ pub async fn run() -> Result<(), std::io::Error> {
             })),
         )
         .route("/api/audit/claude", post(ingest_claude_audit))
+        .route("/api/security-audit", post(upload_security_audit))
         .route("/api/metrics/stream", get(metrics_stream))
         .route("/world-map.svg", get(world_map))
         .route(

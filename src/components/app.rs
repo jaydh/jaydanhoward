@@ -9,6 +9,7 @@ use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
 use crate::components::satellite_tracker::SatelliteTracker;
 use crate::components::visitors::Visitors;
+use crate::components::security_audit::SecurityAudit;
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, Html, Link, Script, Style, Title};
 use leptos_router::components::*;
@@ -62,6 +63,10 @@ fn HomePage() -> impl IntoView {
                     <ClusterStats />
                     <Visitors />
                     <Lighthouse />
+                    <div class="flex flex-col gap-4 w-full">
+                        <h2 class="text-xl font-semibold text-charcoal">"Security Audit"</h2>
+                        <SecurityAudit />
+                    </div>
                 </div>
             </section>
             <section id="satellites" class="flex flex-col py-20 border-t border-border">

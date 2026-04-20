@@ -5,6 +5,8 @@ mod health_check;
 #[cfg(feature = "ssr")]
 mod lighthouse;
 #[cfg(feature = "ssr")]
+mod security_audit;
+#[cfg(feature = "ssr")]
 mod robots;
 #[cfg(feature = "ssr")]
 mod metrics_stream;
@@ -16,6 +18,8 @@ pub use audit::ingest_claude_audit;
 pub use health_check::*;
 #[cfg(feature = "ssr")]
 pub use lighthouse::*;
+#[cfg(feature = "ssr")]
+pub use security_audit::upload_security_audit;
 #[cfg(feature = "ssr")]
 pub use robots::*;
 #[cfg(feature = "ssr")]
