@@ -24,17 +24,13 @@ fi
 # Unmaintained transitive deps — no fix available upstream; ignoring until
 # the relevant upstream crates are updated:
 #
-# RUSTSEC-2024-0436: paste — unmaintained, pulled in by Leptos (tachys/reactive_graph/actix-service)
-# RUSTSEC-2024-0370: proc-macro-error — unmaintained, pulled in by rstml → leptos_macro
-# RUSTSEC-2025-0134: rustls-pemfile — unmaintained, pulled in by reqwest and kube-client
-# RUSTSEC-2024-0384: instant — unmaintained, pulled in by three-d (WASM only); three-d is at latest
-# RUSTSEC-2022-0081: json — unmaintained, pulled in by satkit (WASM only); major version upgrade needed
+# RUSTSEC-2024-0436: paste — unmaintained, pulled in by Leptos (tachys); present in latest Leptos
+# RUSTSEC-2024-0370: proc-macro-error — unmaintained, pulled in by rstml → leptos_macro (syn_derive 0.1.x)
+# RUSTSEC-2024-0384: instant — unmaintained, pulled in by winit → three-d (WASM only); still present in three-d 0.19
 IGNORE_FLAGS="--ignore RUSTSEC-2023-0071 \
   --ignore RUSTSEC-2024-0436 \
   --ignore RUSTSEC-2024-0370 \
-  --ignore RUSTSEC-2025-0134 \
-  --ignore RUSTSEC-2024-0384 \
-  --ignore RUSTSEC-2022-0081"
+  --ignore RUSTSEC-2024-0384"
 
 echo "Running cargo-audit on server dependencies..."
 "$CARGO_AUDIT" audit $AUDIT_FLAGS $IGNORE_FLAGS --file Cargo.server.lock
