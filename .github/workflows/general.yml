@@ -4,8 +4,6 @@ on:
     branches: ["main"]
   push:
     branches: ["main"]
-  schedule:
-    - cron: '0 9 * * 1'  # Every Monday 9am UTC
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -24,27 +22,6 @@ jobs:
       - name: Run security audit
         run: |
           bazel --bazelrc=.bazelrc.ci test //:security_audit
-      - name: Upload audit results to site
-        if: github.event_name == 'push' || github.event_name == 'schedule'
-        env:
-          LIGHTHOUSE_UPDATE_TOKEN: ${{ secrets.LIGHTHOUSE_UPDATE_TOKEN }}
-        run: |
-          IGNORE_FLAGS="--ignore RUSTSEC-2023-0071 \
-            --ignore RUSTSEC-2024-0436 \
-            --ignore RUSTSEC-2024-0370 \
-            --ignore RUSTSEC-2024-0384"
-          AUDIT_JSON=$(cargo-audit audit --no-fetch $IGNORE_FLAGS \
-            --json --file Cargo.server.lock 2>/dev/null | \
-            python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          d['scanned_at'] = '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
-          print(json.dumps(d))
-          ")
-          curl -sf -X POST https://jaydanhoward.com/api/security-audit \
-            -H "Authorization: Basic $(printf 'jay:%s' "$LIGHTHOUSE_UPDATE_TOKEN" | base64 -w0)" \
-            -H "Content-Type: application/json" \
-            --data-raw "$AUDIT_JSON" || echo "Upload failed (non-fatal)"
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s
@@ -101,6 +78,28 @@ jobs:
         run: |
           bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push -- \
             --repository=${{ vars.HARBOR_HOST }}/library/jaydanhoward
+  security-audit-image-push:
+    if: github.event_name == 'push'
+    name: Push Security Audit Image
+    runs-on: arc-runner-set-k8s
+    container:
+      image: docker:dind
+      options: --privileged
+    needs: [security-audit]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Login to Harbor
+        run: |
+          mkdir -p ~/.docker
+          printf '{"auths":{"%s":{"auth":"%s"}}}' \
+            "${{ vars.HARBOR_HOST }}" \
+            "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
+            > ~/.docker/config.json
+      - name: Build and push
+        run: |
+          docker build -t ${{ vars.HARBOR_HOST }}/library/security-audit:latest security-audit/
+          docker push ${{ vars.HARBOR_HOST }}/library/security-audit:latest
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
