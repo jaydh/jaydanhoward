@@ -18,10 +18,10 @@ console_error_panic_hook = "0.1"
 futures = "0.3.28"
 futures-util = "0.3.28"
 http = "1.0"
-leptos = { version = "0.8.16", features = ["ssr", "nightly"] }
+leptos = { version = "0.8.19", features = ["ssr", "nightly"] }
 leptos_axum = "0.8"
-leptos_meta = "0.8.6"
-leptos_router = { version = "0.8.12", features = ["nightly"] }
+leptos_meta = "0.8"
+leptos_router = { version = "0.8", features = ["nightly"] }
 rand = "0.9.4"
 rustls-webpki = "0.103.12"
 quinn-proto = "0.11.14"
