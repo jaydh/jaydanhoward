@@ -12,6 +12,8 @@ cfg-if = "1"
 console_log = "1.0.0"
 console_error_panic_hook = "0.1"
 getrandom = { version = "0.2", features = ["js"] }
+getrandom3 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+getrandom4 = { package = "getrandom", version = "0.4", features = ["wasm_js"] }
 js-sys = "0.3"
 leptos = { version = "0.8.19", features = ["hydrate", "nightly"] }
 leptos_meta = "0.8"
