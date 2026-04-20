@@ -94,11 +94,11 @@ pub fn life_worker_calculate(request_json: &str) -> String {
 
 #[cfg(not(feature = "ssr"))]
 fn randomize_cells(alive_probability: f64, grid_size: u32, set_cells: WriteSignal<AliveCells>) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut alive_cells = HashSet::new();
     for x in 0..grid_size {
         for y in 0..grid_size {
-            if rng.gen::<f64>() < alive_probability {
+            if rng.random::<f64>() < alive_probability {
                 alive_cells.insert((x as i32, y as i32));
             }
         }

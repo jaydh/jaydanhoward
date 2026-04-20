@@ -17,7 +17,8 @@ leptos = { version = "0.8.16", features = ["hydrate", "nightly"] }
 leptos_meta = "0.8.6"
 leptos_router = { version = "0.8.12", features = ["nightly"] }
 log = "0.4.22"
-rand = "0.8.5"
+rand = "0.9.4"
+rustls-webpki = "0.103.12"
 reactive_stores = "0.4.2"
 satkit = "0.3.4"
 xxhash-rust = "0.8.15"

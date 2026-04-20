@@ -119,7 +119,7 @@ fn randomize_cells(
     set_start: WriteSignal<Option<CoordinatePair>>,
     set_end: WriteSignal<Option<CoordinatePair>>,
 ) {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut grid = Grid(HashMap::new());
     let mut passable_cells = Vec::new();
 
@@ -129,7 +129,7 @@ fn randomize_cells(
                 x_pos: x as i64,
                 y_pos: y as i64,
             };
-            let is_passable = rng.gen::<f64>() > obstacle_probability;
+            let is_passable = rng.random::<f64>() > obstacle_probability;
 
             if is_passable {
                 passable_cells.push(coord);
