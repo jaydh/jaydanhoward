@@ -5,6 +5,9 @@ module.exports = {
     files: ["*.html", "./src/**/*.rs"],
   },
   theme: {
+    fontFamily: {
+      sans: ['IBM Plex Sans', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+    },
     extend: {
       colors: {
         "charcoal": "rgb(var(--color-charcoal) / <alpha-value>)",
