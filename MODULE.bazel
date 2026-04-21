@@ -74,6 +74,16 @@ wasm_crate.from_cargo(
     cargo_lockfile = "//:Cargo.wasm.lock",
     manifests = ["//:Cargo.wasm.toml"],
 )
+# wasm_split_macros::version_stamp!() calls std::env::var_os("CARGO_MANIFEST_PATH").unwrap()
+# which panics in Bazel's sandbox because Bazel doesn't set CARGO_MANIFEST_PATH.
+# Provide a stable value so the SHA256 hash it computes is consistent across builds.
+wasm_crate.annotation(
+    crate = "wasm_split_helpers",
+    version = "0.2.1",
+    rustc_env = {
+        "CARGO_MANIFEST_PATH": "wasm_split_helpers-0.2.1/Cargo.toml",
+    },
+)
 use_repo(wasm_crate, "wasm_crates")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
