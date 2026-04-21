@@ -348,6 +348,31 @@ oci_push(
     remote_tags = ["latest"]
 )
 
+# Security audit CronJob image
+pkg_tar(
+    name = "security_audit_image_tar",
+    srcs = [
+        "//security-audit:entrypoint_py",
+        "@cargo_audit_linux_x86_64//:binary",
+    ],
+    package_dir = "/app",
+    mode = "0755",
+)
+
+oci_image(
+    name = "security_audit_image",
+    base = "@distroless_python3_linux_amd64",
+    entrypoint = ["/usr/bin/python3", "/app/entrypoint.py"],
+    tars = [":security_audit_image_tar"],
+)
+
+oci_push(
+    name = "security_audit_image_push",
+    image = ":security_audit_image",
+    repository = "harbor.home.local/library/security-audit",
+    remote_tags = ["latest"],
+)
+
 # Convenience target to build all OCI images
 filegroup(
     name = "all_images",

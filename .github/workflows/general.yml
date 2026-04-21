@@ -82,13 +82,13 @@ jobs:
     if: github.event_name == 'push'
     name: Push Security Audit Image
     runs-on: arc-runner-set-k8s
-    container:
-      image: docker:dind
-      options: --privileged
+    container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [security-audit]
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
@@ -96,10 +96,10 @@ jobs:
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
-      - name: Build and push
+      - name: Bazel Push
         run: |
-          docker build -t ${{ vars.HARBOR_HOST }}/library/security-audit:latest security-audit/
-          docker push ${{ vars.HARBOR_HOST }}/library/security-audit:latest
+          bazel --bazelrc=.bazelrc.ci run security_audit_image_push -- \
+            --repository=${{ vars.HARBOR_HOST }}/library/security-audit
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
