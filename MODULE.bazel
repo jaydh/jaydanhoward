@@ -235,25 +235,25 @@ filegroup(
 http_archive(
     name = "wasm_bindgen_linux_x86_64",
     build_file = "//wasm_bindgen:wasm_bindgen_linux_x86_64.BUILD",
-    sha256 = "d15d7e476feec78d0ec9edc27b8f77279ec7a3e6227756e7036e5cd2066800f4",
-    strip_prefix = "wasm-bindgen-0.2.108-x86_64-unknown-linux-musl",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.108/wasm-bindgen-0.2.108-x86_64-unknown-linux-musl.tar.gz"],
+    sha256 = "00b519c9fc2d6e087265da1a00f29160bfcc6a823993482bc2e691910287427b",
+    strip_prefix = "wasm-bindgen-0.2.118-x86_64-unknown-linux-musl",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-x86_64-unknown-linux-musl.tar.gz"],
 )
 
 http_archive(
     name = "wasm_bindgen_linux_arm64",
     build_file = "//wasm_bindgen:wasm_bindgen_linux_arm64.BUILD",
-    sha256 = "0be1a37f175ab5aef3385016fc69039c4ca4fdda22ef6cccc50684b551606f83",
-    strip_prefix = "wasm-bindgen-0.2.108-aarch64-unknown-linux-gnu",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.108/wasm-bindgen-0.2.108-aarch64-unknown-linux-gnu.tar.gz"],
+    sha256 = "e8b75bf5055c189af5e4842bf7c58f616880fb8505a10f7cd575353a9f4e2dba",
+    strip_prefix = "wasm-bindgen-0.2.118-aarch64-unknown-linux-gnu",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-aarch64-unknown-linux-gnu.tar.gz"],
 )
 
 http_archive(
     name = "wasm_bindgen_mac_arm64",
     build_file = "//wasm_bindgen:wasm_bindgen_mac_arm64.BUILD",
-    sha256 = "3903c81dc8943592dfd9d98c8c21c9a05f8265aa6b0014f641a8457cec4925dd",
-    strip_prefix = "wasm-bindgen-0.2.108-aarch64-apple-darwin",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.108/wasm-bindgen-0.2.108-aarch64-apple-darwin.tar.gz"],
+    sha256 = "f76553ae8d084dc3e96a7cef748813bf2dac4d78326166409328fc74646eef76",
+    strip_prefix = "wasm-bindgen-0.2.118-aarch64-apple-darwin",
+    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-aarch64-apple-darwin.tar.gz"],
 )
 
 bazel_dep(name = "rules_oci", version = "2.2.0")
