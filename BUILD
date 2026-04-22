@@ -116,7 +116,7 @@ rust_shared_library(
 )
 
 rust_wasm_bindgen(
-    name = "jaydanhoward_wasm_unoptimized",
+    name = "jaydanhoward_wasm_unoptimized_wbg118",
     target = "web",
     wasm_file = ":jaydanhoward",
     visibility = ["//visibility:public"],
@@ -125,7 +125,7 @@ rust_wasm_bindgen(
 # Optimize WASM with wasm-opt for production
 genrule(
     name = "jaydanhoward_wasm_optimized",
-    srcs = [":jaydanhoward_wasm_unoptimized"],
+    srcs = [":jaydanhoward_wasm_unoptimized_wbg118"],
     outs = [
         "jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm",
         "jaydanhoward_wasm/jaydanhoward_wasm.js",
@@ -135,12 +135,12 @@ genrule(
     cmd = """
         set -e
         # Get the directory containing the unoptimized WASM files
-        WASM_DIR=$$(dirname $$(echo $(locations :jaydanhoward_wasm_unoptimized) | tr ' ' '\\n' | grep '\\.wasm$$' | head -1))
+        WASM_DIR=$$(dirname $$(echo $(locations :jaydanhoward_wasm_unoptimized_wbg118) | tr ' ' '\\n' | grep '\\.wasm$$' | head -1))
 
         # Copy JS and TypeScript declaration files as-is
-        cp $$WASM_DIR/jaydanhoward_wasm_unoptimized.js $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
-        cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_bg.wasm.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts)
-        cp $$WASM_DIR/jaydanhoward_wasm_unoptimized.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts)
+        cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118.js $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
+        cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts)
+        cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts)
 
         # Optimize WASM with wasm-opt (-Oz = optimize aggressively for size)
         WASM_OPT_BIN=""" + select({
@@ -149,7 +149,7 @@ genrule(
         ":macos_arm64": "$(location @wasm_opt_macos_arm64//:binary)",
         "//conditions:default": "$(location @wasm_opt_linux_x86_64//:binary)",
     }) + """
-        $$WASM_OPT_BIN -Oz --enable-bulk-memory --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int $$WASM_DIR/jaydanhoward_wasm_unoptimized_bg.wasm -o $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm)
+        $$WASM_OPT_BIN -Oz --enable-bulk-memory --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm -o $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm)
     """,
     tools = select({
         ":linux_x86_64": ["@wasm_opt_linux_x86_64//:binary"],
