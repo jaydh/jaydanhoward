@@ -142,6 +142,16 @@ genrule(
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts)
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts)
 
+        # Normalize the JS import module path to a stable name independent of the Bazel target.
+        # The wasm-bindgen CLI embeds the --out-name in the import module path; renaming the
+        # Bazel target would change this path and break the JS/WASM pairing if one is stale.
+        python3 -c "
+import re, sys
+js = open(sys.argv[1]).read()
+js = re.sub(r'\"(\\./[^\"]+_bg\\.js)\"', '\"./jaydanhoward_wasm_bg.js\"', js)
+open(sys.argv[1], 'w').write(js)
+" $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
+
         # Optimize WASM with wasm-opt (-Oz = optimize aggressively for size)
         WASM_OPT_BIN=""" + select({
         ":linux_x86_64": "$(location @wasm_opt_linux_x86_64//:binary)",
@@ -150,6 +160,54 @@ genrule(
         "//conditions:default": "$(location @wasm_opt_linux_x86_64//:binary)",
     }) + """
         $$WASM_OPT_BIN -Oz --enable-bulk-memory --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm -o $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm)
+
+        # Normalize WASM import section module name to stable path independent of Bazel target name.
+        # wasm-bindgen embeds --out-name in the import module path; renaming the target would change
+        # this and break JS/WASM pairing if one file is stale during a rolling deployment.
+        python3 -c "
+import sys
+def r_leb(d, p):
+    r, s = 0, 0
+    while True:
+        b = d[p]; p += 1
+        r |= (b & 0x7f) << s; s += 7
+        if not (b & 0x80): break
+    return r, p
+def w_leb(n):
+    o = []
+    while True:
+        b = n & 0x7f; n >>= 7
+        if n: b |= 0x80
+        o.append(b)
+        if not n: break
+    return bytes(o)
+STABLE = b'./jaydanhoward_wasm_bg.js'
+with open(sys.argv[1], 'rb') as f: data = bytearray(f.read())
+pos = 8
+while pos < len(data):
+    sid = data[pos]; pos += 1
+    slen, pos = r_leb(data, pos)
+    sstart = pos
+    if sid == 2:
+        n, pos = r_leb(data, pos)
+        parts = [w_leb(n)]
+        for _ in range(n):
+            mlen, pos = r_leb(data, pos)
+            mod = bytes(data[pos:pos+mlen]); pos += mlen
+            flen, pos = r_leb(data, pos)
+            fld = bytes(data[pos:pos+flen]); pos += flen
+            kind = data[pos]; pos += 1
+            tidx, pos = r_leb(data, pos)
+            if b'jaydanhoward' in mod: mod = STABLE
+            parts += [w_leb(len(mod)), mod, w_leb(len(fld)), fld, bytes([kind]), w_leb(tidx)]
+        new_sec = b''.join(parts)
+        new_hdr = bytes([2]) + w_leb(len(new_sec))
+        hdr_start = sstart - len(w_leb(slen)) - 1
+        data = bytes(data[:hdr_start]) + new_hdr + new_sec + bytes(data[sstart+slen:])
+        break
+    pos = sstart + slen
+with open(sys.argv[1], 'wb') as f: f.write(data)
+" $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm)
     """,
     tools = select({
         ":linux_x86_64": ["@wasm_opt_linux_x86_64//:binary"],

@@ -309,7 +309,7 @@
     "@@rules_oci+//oci:extensions.bzl%oci": {
       "general": {
         "bzlTransitiveDigest": "VnXPDBImKUyTX14gCJZ30baidZvw/HO+nq0vXiw5h5o=",
-        "usagesDigest": "teiSQu8VjYxxd65cCJFNxLQHtfrQWdERFKrx5OAjl4Y=",
+        "usagesDigest": "E09x3pFSRklbo2hN0cxORmXvNrO/0XTuRdkgUZ6mMnE=",
         "recordedInputs": [
           "REPO_MAPPING:aspect_bazel_lib+,bazel_tools bazel_tools",
           "REPO_MAPPING:bazel_features+,bazel_tools bazel_tools",
@@ -395,6 +395,46 @@
                 "@@platforms//cpu:arm64": "@distroless_cc_debian13_linux_arm64_v8"
               },
               "bzlmod_repository": "distroless_cc_debian13",
+              "reproducible": true
+            }
+          },
+          "distroless_python3_linux_amd64": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
+            "attributes": {
+              "scheme": "https",
+              "registry": "gcr.io",
+              "repository": "distroless/python3-debian12",
+              "identifier": "latest",
+              "platform": "linux/amd64",
+              "target_name": "distroless_python3_linux_amd64",
+              "bazel_tags": []
+            }
+          },
+          "distroless_python3_linux_arm64_v8": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_pull",
+            "attributes": {
+              "scheme": "https",
+              "registry": "gcr.io",
+              "repository": "distroless/python3-debian12",
+              "identifier": "latest",
+              "platform": "linux/arm64/v8",
+              "target_name": "distroless_python3_linux_arm64_v8",
+              "bazel_tags": []
+            }
+          },
+          "distroless_python3": {
+            "repoRuleId": "@@rules_oci+//oci/private:pull.bzl%oci_alias",
+            "attributes": {
+              "target_name": "distroless_python3",
+              "scheme": "https",
+              "registry": "gcr.io",
+              "repository": "distroless/python3-debian12",
+              "identifier": "latest",
+              "platforms": {
+                "@@platforms//cpu:x86_64": "@distroless_python3_linux_amd64",
+                "@@platforms//cpu:arm64": "@distroless_python3_linux_arm64_v8"
+              },
+              "bzlmod_repository": "distroless_python3",
               "reproducible": true
             }
           },
@@ -782,7 +822,10 @@
             "distroless_base_linux_arm64_v8",
             "distroless_cc_debian13",
             "distroless_cc_debian13_linux_amd64",
-            "distroless_cc_debian13_linux_arm64_v8"
+            "distroless_cc_debian13_linux_arm64_v8",
+            "distroless_python3",
+            "distroless_python3_linux_amd64",
+            "distroless_python3_linux_arm64_v8"
           ],
           "explicitRootModuleDirectDevDeps": [],
           "useAllRepos": "NO",
@@ -997,7 +1040,7 @@
           "ENV:CARGO_BAZEL_GENERATOR_SHA256 \\0",
           "ENV:CARGO_BAZEL_GENERATOR_URL \\0",
           "ENV:CARGO_BAZEL_ISOLATED \\0",
-          "ENV:CARGO_BAZEL_REPIN 1",
+          "ENV:CARGO_BAZEL_REPIN \\0",
           "ENV:CARGO_BAZEL_REPIN_ONLY \\0",
           "ENV:CARGO_BAZEL_TIMEOUT \\0",
           "ENV:REPIN \\0",
@@ -1017,7 +1060,7 @@
           "REPO_MAPPING:rules_rust+,rules_rust rules_rust+",
           "FILE:@@//Cargo.server.lock 161745e5e1282957c53bac61723faae498cff6c272ca27aa5021a865a3e00beb",
           "FILE:@@//Cargo.server.toml eb911a6b2fb5c615a1b937c2d272c1e951fbf89df6e6fd1bd4b9990162d4f357",
-          "FILE:@@//Cargo.wasm.lock b2cf81f64d8bafbd6bb7f8daa08d68f5b3b44d7ec324c25a4092290ad07d0e8a",
+          "FILE:@@//Cargo.wasm.lock 2df8dc60b0fc3e45e04680b03bc379bd44f79ce3f7a6fadb3f8fcccdffe0fc36",
           "FILE:@@//Cargo.wasm.toml 0bff565c651d64f6af3da460133107888ef29d638614ddcd1afa4ed13173dd7a"
         ],
         "generatedRepoSpecs": {
