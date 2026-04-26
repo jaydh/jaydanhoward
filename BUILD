@@ -185,6 +185,7 @@ STABLE = b'./jaydanhoward_wasm_bg.js'
 with open(sys.argv[1], 'rb') as f: data = bytearray(f.read())
 pos = 8
 while pos < len(data):
+    sec_start = pos
     sid = data[pos]; pos += 1
     slen, pos = r_leb(data, pos)
     sstart = pos
@@ -202,8 +203,7 @@ while pos < len(data):
             parts += [w_leb(len(mod)), mod, w_leb(len(fld)), fld, bytes([kind]), w_leb(tidx)]
         new_sec = b''.join(parts)
         new_hdr = bytes([2]) + w_leb(len(new_sec))
-        hdr_start = sstart - len(w_leb(slen)) - 1
-        data = bytes(data[:hdr_start]) + new_hdr + new_sec + bytes(data[sstart+slen:])
+        data = bytes(data[:sec_start]) + new_hdr + new_sec + bytes(data[sstart+slen:])
         break
     pos = sstart + slen
 with open(sys.argv[1], 'wb') as f: f.write(data)
