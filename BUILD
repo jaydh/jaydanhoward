@@ -139,6 +139,7 @@ genrule(
 
         # Copy JS and TypeScript declaration files as-is
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118.js $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
+        chmod u+w $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts)
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts)
 
@@ -147,8 +148,9 @@ genrule(
         # Bazel target would change this path and break the JS/WASM pairing if one is stale.
         python3 -c "
 import re, sys
+q = chr(34)
 js = open(sys.argv[1]).read()
-js = re.sub(r'\"(\\./[^\"]+_bg\\.js)\"', '\"./jaydanhoward_wasm_bg.js\"', js)
+js = re.sub(q + r'(\\./[^' + q + r']+_bg\\.js)' + q, q + './jaydanhoward_wasm_bg.js' + q, js)
 open(sys.argv[1], 'w').write(js)
 " $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
 
@@ -160,6 +162,7 @@ open(sys.argv[1], 'w').write(js)
         "//conditions:default": "$(location @wasm_opt_linux_x86_64//:binary)",
     }) + """
         $$WASM_OPT_BIN -Oz --enable-bulk-memory --enable-sign-ext --enable-mutable-globals --enable-nontrapping-float-to-int $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm -o $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm)
+        chmod u+w $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm)
 
         # Normalize WASM import section module name to stable path independent of Bazel target name.
         # wasm-bindgen embeds --out-name in the import module path; renaming the target would change
