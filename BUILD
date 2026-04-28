@@ -124,7 +124,7 @@ rust_wasm_bindgen(
 
 # Optimize WASM with wasm-opt for production
 genrule(
-    name = "jaydanhoward_wasm_optimized",
+    name = "jaydanhoward_wasm_optimized_v2",
     srcs = [":jaydanhoward_wasm_unoptimized_wbg118"],
     outs = [
         "jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm",
@@ -143,14 +143,20 @@ genrule(
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118_bg.wasm.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm.d.ts)
         cp $$WASM_DIR/jaydanhoward_wasm_unoptimized_wbg118.d.ts $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts) 2>/dev/null || touch $(location jaydanhoward_wasm/jaydanhoward_wasm.d.ts)
 
-        # Normalize the JS import module path to a stable name independent of the Bazel target.
-        # The wasm-bindgen CLI embeds the --out-name in the import module path; renaming the
-        # Bazel target would change this path and break the JS/WASM pairing if one is stale.
+        # Normalize the JS import module key and WASM binary URL to stable names independent
+        # of the Bazel target. wasm-bindgen embeds --out-name in both; renaming the target
+        # would change these and break JS/WASM pairing if one file is stale.
+        # Handles both single and double-quoted strings (wasm-bindgen uses single quotes for
+        # the default WASM URL and double quotes for the import object key).
         python3 -c "
 import re, sys
-q = chr(34)
 js = open(sys.argv[1]).read()
-js = re.sub(q + r'(\\./[^' + q + r']+_bg\\.js)' + q, q + './jaydanhoward_wasm_bg.js' + q, js)
+def norm(s, suffix, stable):
+    for q in (chr(39), chr(34)):
+        s = re.sub(q + r'[^' + q + r']*' + suffix + q, q + stable + q, s)
+    return s
+js = norm(js, r'_bg\\.js', './jaydanhoward_wasm_bg.js')
+js = norm(js, r'_bg\\.wasm', './jaydanhoward_wasm_bg.wasm')
 open(sys.argv[1], 'w').write(js)
 " $(location jaydanhoward_wasm/jaydanhoward_wasm.js)
 
@@ -224,7 +230,7 @@ with open(sys.argv[1], 'wb') as f: f.write(data)
 # Alias for convenience - use optimized version
 filegroup(
     name = "jaydanhoward_wasm",
-    srcs = [":jaydanhoward_wasm_optimized"],
+    srcs = [":jaydanhoward_wasm_optimized_v2"],
     visibility = ["//visibility:public"],
 )
 
