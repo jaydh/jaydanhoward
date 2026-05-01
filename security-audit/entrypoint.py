@@ -44,7 +44,7 @@ def dep_versions(crate, version, dep):
 
 def run_audit(cargo_audit, db_path, workdir, lock_file):
     result = subprocess.run(
-        [cargo_audit, "audit", "--no-fetch", "--db", db_path, "--json", "--file", lock_file] + IGNORE_FLAGS,
+        [cargo_audit, "audit", "--db", db_path, "--json", "--file", lock_file] + IGNORE_FLAGS,
         capture_output=True,
         text=True,
         cwd=workdir,
@@ -69,9 +69,6 @@ def main():
         content = fetch_bytes(f"{RAW}/{lock}")
         with open(os.path.join(workdir, lock), "wb") as f:
             f.write(content)
-
-    print("Updating advisory database...")
-    subprocess.run([cargo_audit, "fetch", "--db", db_path], check=True)
 
     print("Running cargo-audit...")
     server = run_audit(cargo_audit, db_path, workdir, "Cargo.server.lock")
