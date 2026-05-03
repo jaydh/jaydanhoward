@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
       - name: Run security audit
         run: |
-          bazel --bazelrc=.bazelrc.ci test //:security_audit
+          bazel --bazelrc=.bazelrc.ci test //:security_audit --test_output=all
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s
