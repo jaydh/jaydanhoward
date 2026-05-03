@@ -83,6 +83,20 @@ pub async fn run() -> Result<(), std::io::Error> {
     let tle_cache = Arc::new(TleCache::new(std::collections::HashMap::new()));
     let conjunction_cache = Arc::new(ConjunctionCache::new(std::collections::HashMap::new()));
 
+    // Seed in-memory TLE cache from DB so first requests don't cold-fetch CelesTrak.
+    if let Some(ref p) = pool {
+        match crate::db::load_all_tle_groups(p).await {
+            Ok(groups) => {
+                let mut w = tle_cache.write().await;
+                for (group, tles) in &groups {
+                    log::info!("TLE cache: restored {} satellites for group={group} from DB", tles.len());
+                    w.insert(group.clone(), (std::time::Instant::now(), tles.clone()));
+                }
+            }
+            Err(e) => log::warn!("TLE cache: failed to load from DB: {e}"),
+        }
+    }
+
     // Load persisted thresholds from DB, fall back to defaults.
     let (spike_multiplier, spike_floor_mbps) = if let Some(ref p) = pool {
         crate::db::load_spike_config(p).await
@@ -201,6 +215,80 @@ pub async fn run() -> Result<(), std::io::Error> {
                 }
             }
         });
+    }
+
+    // Pre-warm TLE cache at startup and refresh every 6 hours, regardless of DB availability.
+    // Without this, the first browser request cold-fetches from CelesTrak (up to 30s hang).
+    {
+        use crate::components::satellite_tracker::TleData;
+
+        const WARM_GROUPS: [&str; 5] = ["active", "starlink", "stations", "gps-ops", "visual"];
+        const TLE_REFRESH_SECS: u64 = 6 * 60 * 60;
+
+        fn parse_tles_warmup(text: &str) -> Vec<TleData> {
+            let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+            let mut tles = Vec::new();
+            for chunk in lines.chunks(3) {
+                if chunk.len() == 3
+                    && chunk[1].trim_start().starts_with("1 ")
+                    && chunk[2].trim_start().starts_with("2 ")
+                {
+                    tles.push(TleData {
+                        name:  chunk[0].trim().to_string(),
+                        line1: chunk[1].trim().to_string(),
+                        line2: chunk[2].trim().to_string(),
+                    });
+                }
+            }
+            tles
+        }
+
+        for group in WARM_GROUPS {
+            let cache = tle_cache.clone();
+            let client = http_client.clone();
+            let pool_opt = pool_arc.clone();
+            tokio::spawn(async move {
+                loop {
+                    let url = format!(
+                        "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
+                    );
+                    match client
+                        .get(&url)
+                        .timeout(Duration::from_secs(60))
+                        .send()
+                        .await
+                    {
+                        Ok(resp) if resp.status().is_success() => {
+                            if let Ok(text) = resp.text().await {
+                                let tles = parse_tles_warmup(&text);
+                                if !tles.is_empty() {
+                                    log::info!(
+                                        "TLE cache warm-up: {} satellites for group={group}",
+                                        tles.len()
+                                    );
+                                    cache.write().await.insert(
+                                        group.to_string(),
+                                        (std::time::Instant::now(), tles.clone()),
+                                    );
+                                    if let Some(ref p) = pool_opt {
+                                        if let Err(e) = crate::db::save_tle_group(p, group, &tles).await {
+                                            log::warn!("TLE warm-up: failed to persist group={group}: {e}");
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Ok(resp) => {
+                            log::warn!("TLE warm-up: HTTP {} for group={group}", resp.status());
+                        }
+                        Err(e) => {
+                            log::warn!("TLE warm-up: fetch failed for group={group}: {e}");
+                        }
+                    }
+                    tokio::time::sleep(Duration::from_secs(TLE_REFRESH_SECS)).await;
+                }
+            });
+        }
     }
 
     // Startup conjunction screening — chunk-based distributed approach.

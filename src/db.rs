@@ -974,6 +974,69 @@ mod inner {
         }
     }
 
+    /// Load all TLE groups from the persistent cache table.
+    pub async fn load_all_tle_groups(
+        pool: &PgPool,
+    ) -> Result<Vec<(String, Vec<crate::components::satellite_tracker::TleData>)>, sqlx::Error>
+    {
+        let rows = sqlx::query("SELECT group_name, satellites FROM tle_cache")
+            .fetch_all(pool)
+            .await?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            let group: String = row.try_get("group_name")?;
+            let json: serde_json::Value = row.try_get("satellites")?;
+            if let Ok(tles) =
+                serde_json::from_value::<Vec<crate::components::satellite_tracker::TleData>>(json)
+            {
+                out.push((group, tles));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Load one TLE group from the persistent cache (fallback when CelesTrak is unreachable).
+    pub async fn load_tle_group(
+        pool: &PgPool,
+        group: &str,
+    ) -> Result<Option<Vec<crate::components::satellite_tracker::TleData>>, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT satellites FROM tle_cache WHERE group_name = $1",
+        )
+        .bind(group)
+        .fetch_optional(pool)
+        .await?;
+
+        match row {
+            None => Ok(None),
+            Some(r) => {
+                let json: serde_json::Value = r.try_get("satellites")?;
+                Ok(serde_json::from_value(json).ok())
+            }
+        }
+    }
+
+    /// Upsert a TLE group into the persistent cache.
+    pub async fn save_tle_group(
+        pool: &PgPool,
+        group: &str,
+        satellites: &[crate::components::satellite_tracker::TleData],
+    ) -> Result<(), sqlx::Error> {
+        let json = serde_json::to_value(satellites).unwrap_or(serde_json::Value::Array(vec![]));
+        sqlx::query(
+            "INSERT INTO tle_cache (group_name, satellites, fetched_at) \
+             VALUES ($1, $2, NOW()) \
+             ON CONFLICT (group_name) DO UPDATE \
+             SET satellites = $2, fetched_at = NOW()",
+        )
+        .bind(group)
+        .bind(json)
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+
     /// Persist updated spike detector thresholds.
     pub async fn save_spike_config(
         pool: &PgPool,

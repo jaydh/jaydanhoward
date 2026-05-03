@@ -41,6 +41,11 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         .map_err(|e| ServerFnError::ServerError(format!("{e}")))?
         .0;
 
+    let pool_opt = extract::<Extension<Option<Arc<sqlx::PgPool>>>>()
+        .await
+        .ok()
+        .and_then(|e| e.0);
+
     // Return cached data if still fresh (6-hour TTL)
     {
         let read = cache.read().await;
@@ -50,29 +55,6 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
             }
         }
     }
-
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| ServerFnError::ServerError(format!("Failed to create HTTP client: {}", e)))?;
-
-    let response = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|e| ServerFnError::ServerError(format!("Failed to fetch TLE data: {}", e)))?;
-
-    if !response.status().is_success() {
-        return Err(ServerFnError::ServerError(format!(
-            "CelesTrak returned HTTP {}",
-            response.status()
-        )));
-    }
-
-    let text = response
-        .text()
-        .await
-        .map_err(|e| ServerFnError::ServerError(format!("Failed to read response: {}", e)))?;
 
     let parse_tle_text = |text: &str| -> Vec<TleData> {
         let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
@@ -92,45 +74,89 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         out
     };
 
-    let mut satellites = parse_tle_text(&text);
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| ServerFnError::ServerError(format!("Failed to create HTTP client: {}", e)))?;
 
-    // CelesTrak's "active" group omits some Astranis satellites (they appear in "geo"
-    // or in high-eccentricity transfer orbits not covered by any standard group).
-    // Fetch any missing ones individually by CATNR and merge them in.
-    if group == "active" {
-        // 56371=Arcturus, 62454=UtilitySat (no public TLE), 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
-        const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
-        let present: std::collections::HashSet<u32> = satellites
-            .iter()
-            .filter_map(|s| s.line1.get(2..7)?.trim().parse::<u32>().ok())
-            .collect();
-        for &id in ASTRANIS_IDS {
-            if present.contains(&id) {
-                continue;
-            }
-            let url = format!(
-                "https://celestrak.org/NORAD/elements/gp.php?CATNR={id}&FORMAT=tle"
-            );
-            if let Ok(resp) = client.get(&url).send().await {
-                if resp.status().is_success() {
-                    if let Ok(body) = resp.text().await {
-                        satellites.extend(parse_tle_text(&body));
+    // Fetch from CelesTrak; on failure fall back to DB-persisted data.
+    let fetch_result: Result<Vec<TleData>, String> = async {
+        let response = client
+            .get(url)
+            .send()
+            .await
+            .map_err(|e| format!("Failed to fetch TLE data: {}", e))?;
+
+        if !response.status().is_success() {
+            return Err(format!("CelesTrak returned HTTP {}", response.status()));
+        }
+
+        let text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read response: {}", e))?;
+
+        let mut satellites = parse_tle_text(&text);
+
+        // CelesTrak's "active" group omits some Astranis satellites (they appear in "geo"
+        // or in high-eccentricity transfer orbits not covered by any standard group).
+        // Fetch any missing ones individually by CATNR and merge them in.
+        if group == "active" {
+            // 56371=Arcturus, 62454=UtilitySat (no public TLE), 62455=NuView Alpha, 62456=Agila, 62457=NuView Bravo
+            const ASTRANIS_IDS: &[u32] = &[56371, 62454, 62455, 62456, 62457];
+            let present: std::collections::HashSet<u32> = satellites
+                .iter()
+                .filter_map(|s| s.line1.get(2..7)?.trim().parse::<u32>().ok())
+                .collect();
+            for &id in ASTRANIS_IDS {
+                if present.contains(&id) {
+                    continue;
+                }
+                let astranis_url = format!(
+                    "https://celestrak.org/NORAD/elements/gp.php?CATNR={id}&FORMAT=tle"
+                );
+                if let Ok(resp) = client.get(&astranis_url).send().await {
+                    if resp.status().is_success() {
+                        if let Ok(body) = resp.text().await {
+                            satellites.extend(parse_tle_text(&body));
+                        }
                     }
                 }
             }
         }
-    }
 
-    {
-        let mut write = cache.write().await;
-        write.insert(group.clone(), (std::time::Instant::now(), satellites.clone()));
+        Ok(satellites)
     }
+    .await;
+
+    let satellites = match fetch_result {
+        Ok(tles) => {
+            // Persist fresh data to DB and in-memory cache.
+            if let Some(ref p) = pool_opt {
+                if let Err(e) = crate::db::save_tle_group(p, &group, &tles).await {
+                    tracing::warn!("Failed to persist TLE group={group}: {e}");
+                }
+            }
+            cache.write().await.insert(group.clone(), (std::time::Instant::now(), tles.clone()));
+            tles
+        }
+        Err(fetch_err) => {
+            tracing::warn!("CelesTrak fetch failed for group={group}: {fetch_err}; trying DB fallback");
+            // Try DB-persisted copy (may be days old but better than nothing).
+            if let Some(ref p) = pool_opt {
+                if let Ok(Some(stale)) = crate::db::load_tle_group(p, &group).await {
+                    tracing::info!("Serving {} stale TLEs for group={group} from DB", stale.len());
+                    return Ok(stale);
+                }
+            }
+            // Nothing available anywhere.
+            return Err(ServerFnError::ServerError(fetch_err));
+        }
+    };
 
     // Spawn background conjunction screening (works with or without DB)
     {
         use crate::components::conjunction::ConjunctionCache;
-        use std::sync::Arc;
-        let pool_opt = extract::<Extension<Option<Arc<sqlx::PgPool>>>>().await.ok().and_then(|e| e.0);
         let cache_opt = extract::<Extension<Arc<ConjunctionCache>>>().await.ok().map(|e| e.0);
         let tles_clone = satellites.clone();
         let group_clone = group.clone();
