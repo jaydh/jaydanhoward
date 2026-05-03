@@ -19,6 +19,10 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
+      - name: Fetch advisory database
+        run: |
+          git clone --depth=1 https://github.com/RustSec/advisory-db.git ~/.cargo/advisory-db \
+            || git -C ~/.cargo/advisory-db pull --ff-only
       - name: Run security audit
         run: |
           bazel --bazelrc=.bazelrc.ci test //:security_audit --test_output=all
