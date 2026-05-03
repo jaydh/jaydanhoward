@@ -159,6 +159,7 @@ def main():
         headers={
             "Authorization": f"Basic {credentials}",
             "Content-Type": "application/json",
+            "User-Agent": "jaydanhoward-sec-audit/1.0",
         },
     )
     try:
