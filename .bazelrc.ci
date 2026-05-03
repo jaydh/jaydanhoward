@@ -1,2 +1,4 @@
 build --remote_cache=grpc://remote-cache.arc-controller.svc.cluster.local:9099
 build --compilation_mode opt
+build --http_timeout_scaling=5
+build --experimental_repository_downloader_retries=3
