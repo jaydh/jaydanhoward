@@ -428,8 +428,8 @@ pkg_tar(
 
 oci_image(
     name = "security_audit_image",
-    base = "@distroless_python3_linux_amd64",
-    entrypoint = ["/usr/bin/python3", "/app/entrypoint.py"],
+    base = "@python_slim_linux_amd64",
+    entrypoint = ["/usr/local/bin/python3", "/app/entrypoint.py"],
     tars = [":security_audit_image_tar"],
 )
 

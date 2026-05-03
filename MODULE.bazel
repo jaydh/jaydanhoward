@@ -279,13 +279,13 @@ oci.pull(
 )
 
 oci.pull(
-    name = "distroless_python3",
-    image = "harbor.home.local/library/distroless-python3",
+    name = "python_slim",
+    image = "index.docker.io/library/python",
     platforms = [
         "linux/amd64",
     ],
-    tag = "debian12",
+    digest = "sha256:ee710afcfb733f4a750d9be683cf054b5cd247b6c5f5237a6849ea568b90ab15",
 )
 
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8", "distroless_python3", "distroless_python3_linux_amd64")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8", "python_slim", "python_slim_linux_amd64")
 
