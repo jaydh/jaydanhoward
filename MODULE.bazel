@@ -280,13 +280,12 @@ oci.pull(
 
 oci.pull(
     name = "distroless_python3",
-    image = "gcr.io/distroless/python3-debian12",
+    image = "harbor.home.local/library/distroless-python3",
     platforms = [
         "linux/amd64",
-        "linux/arm64/v8",
     ],
-    tag = "latest",
+    tag = "debian12",
 )
 
-use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8", "distroless_python3", "distroless_python3_linux_amd64", "distroless_python3_linux_arm64_v8")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8", "distroless_python3", "distroless_python3_linux_amd64")
 
