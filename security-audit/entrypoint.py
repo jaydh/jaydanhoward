@@ -21,13 +21,13 @@ IGNORE_FLAGS = [
 
 def fetch_bytes(url):
     req = urllib.request.Request(url, headers={"User-Agent": "jaydanhoward-sec-audit/1.0"})
-    with urllib.request.urlopen(req) as r:
+    with urllib.request.urlopen(req, timeout=30) as r:
         return r.read()
 
 
 def crates_io_get(url):
     req = urllib.request.Request(url, headers={"User-Agent": "jaydanhoward-sec-audit/1.0"})
-    with urllib.request.urlopen(req) as r:
+    with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)
 
 
@@ -162,7 +162,7 @@ def main():
         },
     )
     try:
-        with urllib.request.urlopen(req) as r:
+        with urllib.request.urlopen(req, timeout=30) as r:
             if r.status == 200:
                 print("Report uploaded successfully.")
             else:
