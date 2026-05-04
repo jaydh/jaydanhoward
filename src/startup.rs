@@ -73,7 +73,10 @@ pub async fn run() -> Result<(), std::io::Error> {
 
     let pool_arc: Option<Arc<sqlx::PgPool>> = pool.clone().map(Arc::new);
 
-    let http_client = reqwest::Client::new();
+    let http_client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+        .build()
+        .expect("Failed to build HTTP client");
 
     log::info!("Fetching world map from Natural Earth...");
     let world_map_svg = fetch_world_map_svg(&http_client).await;
