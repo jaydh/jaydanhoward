@@ -3,10 +3,7 @@ module(
     version = "1.0",
 )
 
-bazel_dep(
-    name = "rules_pkg",
-    version = "1.0.1",
-)
+bazel_dep(name = "rules_pkg", version = "1.0.1")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "aspect_bazel_lib", version = "2.22.5")
@@ -16,6 +13,12 @@ bazel_dep(name = "rules_shell", version = "0.6.1")
 bazel_dep(name = "rules_rust", version = "0.68.1")
 bazel_dep(name = "rules_rust_wasm_bindgen", version = "0.68.1")
 bazel_dep(name = "rules_rust_bindgen", version = "0.68.1")
+bazel_dep(name = "jdh_rules", version = "0.1.0")
+
+local_path_override(
+    module_name = "jdh_rules",
+    path = "../jdh-bazel",
+)
 
 # rules_rust 0.68.1 (latest BCR release) doesn't support Bazel 9 because CcInfo
 # moved from a built-in to @rules_cc. Use HEAD of main which has the fix.
@@ -86,174 +89,25 @@ wasm_crate.annotation(
 )
 use_repo(wasm_crate, "wasm_crates")
 
-http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
-
-deb_archive = use_repo_rule("//bzl:deb_archive.bzl", "deb_archive")
-
-http_file(
-    name = "tailwind_linux_x86_64",
-    executable = True,
-    sha256 = "33f254b54c8754f16efbe2be1de38ca25192630dc36f164595a770d4bbf4d893",
-    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64",
-)
-
-http_file(
-    name = "tailwind_linux_arm64",
-    executable = True,
-    sha256 = "1e6746bba6f3d34d7550889a1a009ab90ee3794a5ebce60ed10688ad10680a87",
-    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64",
-)
-
-http_file(
-    name = "tailwind_mac_arm64",
-    executable = True,
-    sha256 = "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3",
-    url = "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64",
-)
-
-# wasm-opt from Binaryen for WASM optimization
-http_archive(
-    name = "wasm_opt_linux_x86_64",
-    build_file_content = """
-exports_files(["bin/wasm-opt"])
-filegroup(
-    name = "binary",
-    srcs = ["bin/wasm-opt"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "e487e0eac1f02a6739816c617270b033e5d3f8ca90439301fd0286460322fd76",
-    strip_prefix = "binaryen-version_126",
-    urls = ["https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-x86_64-linux.tar.gz"],
-)
-
-http_archive(
-    name = "wasm_opt_linux_arm64",
-    build_file_content = """
-exports_files(["bin/wasm-opt"])
-filegroup(
-    name = "binary",
-    srcs = ["bin/wasm-opt"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "4013cbcee8928abca015884e3f89d01804f6e1d9f40a4ea01dcdd0aba3e609f5",
-    strip_prefix = "binaryen-version_126",
-    urls = ["https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-aarch64-linux.tar.gz"],
-)
-
-http_archive(
-    name = "wasm_opt_macos_arm64",
-    build_file_content = """
-exports_files(["bin/wasm-opt"])
-filegroup(
-    name = "binary",
-    srcs = ["bin/wasm-opt"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "3f1e1379894944531501a8ccc6b59c57f0c7a00fc136dd933f8a6b0c53515a88",
-    strip_prefix = "binaryen-version_126",
-    urls = ["https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-arm64-macos.tar.gz"],
-)
-
-deb_archive(
-    name = "zstd_deb_amd64",
-    build_file_content = """
-exports_files(["usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7"])
-filegroup(
-    name = "file",
-    srcs = ["usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "2f6a2aeacfc925eba8b00ac9139bc4bfccf8cacb09eb93de067074b26948eef9",
-    urls = ["http://ftp.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.7+dfsg-1_amd64.deb"],
-)
-
-deb_archive(
-    name = "zstd_deb_arm64",
-    build_file_content = """
-exports_files(["usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7"])
-filegroup(
-    name = "file",
-    srcs = ["usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "924540bd59fdbfa77a0604360efdaca54411a43daf11c7e002a3c64791b67448",
-    urls = ["http://ftp.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.7+dfsg-1_arm64.deb"],
-)
-
-http_archive(
-    name = "cargo_audit_linux_x86_64",
-    build_file_content = """
-exports_files(["cargo-audit"])
-filegroup(
-    name = "binary",
-    srcs = ["cargo-audit"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "c32506f338bdcdaef5a17fb9f33abb6ecf9561324cfd34237fd335f9283a1eab",
-    strip_prefix = "cargo-audit-x86_64-unknown-linux-musl-v0.22.1",
-    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-unknown-linux-musl-v0.22.1.tgz"],
-)
-
-http_archive(
-    name = "cargo_audit_linux_arm64",
-    build_file_content = """
-exports_files(["cargo-audit"])
-filegroup(
-    name = "binary",
-    srcs = ["cargo-audit"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "4c8df835ee484441bd2c8c6bcac28c4ce4b4058ba9e7477cb9e0012fe7769f66",
-    strip_prefix = "cargo-audit-aarch64-unknown-linux-gnu-v0.22.1",
-    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-aarch64-unknown-linux-gnu-v0.22.1.tgz"],
-)
-
-http_archive(
-    name = "cargo_audit_macos_x86_64",
-    build_file_content = """
-exports_files(["cargo-audit"])
-filegroup(
-    name = "binary",
-    srcs = ["cargo-audit"],
-    visibility = ["//visibility:public"],
-)
-""",
-    sha256 = "582d104a2a4bdb127c6bf6d056d89eede40686d11f52e4bc1765132ec99d2fca",
-    strip_prefix = "cargo-audit-x86_64-apple-darwin-v0.22.1",
-    urls = ["https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-apple-darwin-v0.22.1.tgz"],
-)
-
-http_archive(
-    name = "wasm_bindgen_linux_x86_64",
-    build_file = "//wasm_bindgen:wasm_bindgen_linux_x86_64.BUILD",
-    sha256 = "00b519c9fc2d6e087265da1a00f29160bfcc6a823993482bc2e691910287427b",
-    strip_prefix = "wasm-bindgen-0.2.118-x86_64-unknown-linux-musl",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-x86_64-unknown-linux-musl.tar.gz"],
-)
-
-http_archive(
-    name = "wasm_bindgen_linux_arm64",
-    build_file = "//wasm_bindgen:wasm_bindgen_linux_arm64.BUILD",
-    sha256 = "e8b75bf5055c189af5e4842bf7c58f616880fb8505a10f7cd575353a9f4e2dba",
-    strip_prefix = "wasm-bindgen-0.2.118-aarch64-unknown-linux-gnu",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-aarch64-unknown-linux-gnu.tar.gz"],
-)
-
-http_archive(
-    name = "wasm_bindgen_mac_arm64",
-    build_file = "//wasm_bindgen:wasm_bindgen_mac_arm64.BUILD",
-    sha256 = "f76553ae8d084dc3e96a7cef748813bf2dac4d78326166409328fc74646eef76",
-    strip_prefix = "wasm-bindgen-0.2.118-aarch64-apple-darwin",
-    urls = ["https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-aarch64-apple-darwin.tar.gz"],
+# Platform-specific binaries (tailwind, wasm-opt, wasm-bindgen, cargo-audit, zstd)
+# — version pins live in jdh-bazel/extensions/binaries.bzl
+jdh_binaries = use_extension("@jdh_rules//extensions:binaries.bzl", "binaries")
+use_repo(
+    jdh_binaries,
+    "cargo_audit_linux_arm64",
+    "cargo_audit_linux_x86_64",
+    "cargo_audit_macos_x86_64",
+    "tailwind_linux_arm64",
+    "tailwind_linux_x86_64",
+    "tailwind_mac_arm64",
+    "wasm_bindgen_linux_arm64",
+    "wasm_bindgen_linux_x86_64",
+    "wasm_bindgen_mac_arm64",
+    "wasm_opt_linux_arm64",
+    "wasm_opt_linux_x86_64",
+    "wasm_opt_macos_arm64",
+    "zstd_deb_amd64",
+    "zstd_deb_arm64",
 )
 
 bazel_dep(name = "rules_oci", version = "2.2.0")
@@ -277,7 +131,6 @@ oci.pull(
     ],
     digest = "sha256:22fd4bd55e5f0ef1929985f111816ba1e43c00a0ddeb001c0fdfb2724b4e3cc2",
 )
-
 oci.pull(
     name = "python_slim",
     image = "index.docker.io/library/python",
@@ -286,6 +139,4 @@ oci.pull(
     ],
     digest = "sha256:ee710afcfb733f4a750d9be683cf054b5cd247b6c5f5237a6849ea568b90ab15",
 )
-
 use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64_v8", "distroless_cc_debian13", "distroless_cc_debian13_linux_amd64", "distroless_cc_debian13_linux_arm64_v8", "python_slim", "python_slim_linux_amd64")
-

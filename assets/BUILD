@@ -1,10 +1,10 @@
-load("//bzl:tailwindcss.bzl", "tailwindcss")
-
+load("@jdh_rules//bzl:tailwindcss.bzl", "tailwindcss")
 
 tailwindcss(
     name = "style",
     src = "tailwind.css",
     target = "//:jaydanhoward",
+    tailwind_config = "//:tailwind.config.js",
     binary = select({
         "//:linux_arm64": "@tailwind_linux_arm64//file",
         "//:linux_x86_64": "@tailwind_linux_x86_64//file",

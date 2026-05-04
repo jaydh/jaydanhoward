@@ -5,3 +5,9 @@ build --@rules_rust//rust/toolchain/channel=nightly
 build --aspects=@rules_rust//rust:defs.bzl%rust_clippy_aspect
 build --output_groups=+clippy_checks
 build --workspace_status_command="git log -1 --format=STABLE_GIT_COMMIT_SHA\\ %H"
+
+# Shared remote cache — http://bazel-cache.home.local on LAN,
+# https://bazel-cache-homelab.[tailnet].ts.net over Tailscale.
+# Falls back silently to local build if unreachable.
+build --remote_cache=http://bazel-cache.home.local
+build --remote_upload_local_results

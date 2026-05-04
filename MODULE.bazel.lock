@@ -227,6 +227,160 @@
   },
   "selectedYankedVersions": {},
   "moduleExtensions": {
+    "@@jdh_rules+//extensions:binaries.bzl%binaries": {
+      "general": {
+        "bzlTransitiveDigest": "1dlps9Y7kIsxurCD7cqgfkfo2ho/h0xajnz9sG3iEsw=",
+        "usagesDigest": "sv3K2WacXFo4w4QXmc9LFz9YyWDNT0zTglwH2PWnGqA=",
+        "recordedInputs": [
+          "REPO_MAPPING:jdh_rules+,bazel_tools bazel_tools"
+        ],
+        "generatedRepoSpecs": {
+          "tailwind_linux_x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_file",
+            "attributes": {
+              "executable": true,
+              "sha256": "33f254b54c8754f16efbe2be1de38ca25192630dc36f164595a770d4bbf4d893",
+              "url": "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-x64"
+            }
+          },
+          "tailwind_linux_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_file",
+            "attributes": {
+              "executable": true,
+              "sha256": "1e6746bba6f3d34d7550889a1a009ab90ee3794a5ebce60ed10688ad10680a87",
+              "url": "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.16/tailwindcss-linux-arm64"
+            }
+          },
+          "tailwind_mac_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_file",
+            "attributes": {
+              "executable": true,
+              "sha256": "a1d0c7985759accca0bf12e51ac1dcbf0f6cf2fffb62e6e0f62d091c477a10a3",
+              "url": "https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64"
+            }
+          },
+          "wasm_opt_linux_x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"bin/wasm-opt\"])\nfilegroup(name = \"binary\", srcs = [\"bin/wasm-opt\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "e487e0eac1f02a6739816c617270b033e5d3f8ca90439301fd0286460322fd76",
+              "strip_prefix": "binaryen-version_126",
+              "urls": [
+                "https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-x86_64-linux.tar.gz"
+              ]
+            }
+          },
+          "wasm_opt_linux_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"bin/wasm-opt\"])\nfilegroup(name = \"binary\", srcs = [\"bin/wasm-opt\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "4013cbcee8928abca015884e3f89d01804f6e1d9f40a4ea01dcdd0aba3e609f5",
+              "strip_prefix": "binaryen-version_126",
+              "urls": [
+                "https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-aarch64-linux.tar.gz"
+              ]
+            }
+          },
+          "wasm_opt_macos_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"bin/wasm-opt\"])\nfilegroup(name = \"binary\", srcs = [\"bin/wasm-opt\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "3f1e1379894944531501a8ccc6b59c57f0c7a00fc136dd933f8a6b0c53515a88",
+              "strip_prefix": "binaryen-version_126",
+              "urls": [
+                "https://github.com/WebAssembly/binaryen/releases/download/version_126/binaryen-version_126-arm64-macos.tar.gz"
+              ]
+            }
+          },
+          "wasm_bindgen_linux_x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nload(\"@bazel_skylib//rules:native_binary.bzl\", \"native_binary\")\nnative_binary(\n    name = \"wasm_bindgen_linux_x86_64\",\n    src = \"wasm-bindgen\",\n    out = \"wasm_bindgen_linux_x86_64\",\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "00b519c9fc2d6e087265da1a00f29160bfcc6a823993482bc2e691910287427b",
+              "strip_prefix": "wasm-bindgen-0.2.118-x86_64-unknown-linux-musl",
+              "urls": [
+                "https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-x86_64-unknown-linux-musl.tar.gz"
+              ]
+            }
+          },
+          "wasm_bindgen_linux_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nload(\"@bazel_skylib//rules:native_binary.bzl\", \"native_binary\")\nnative_binary(\n    name = \"wasm_bindgen_linux_arm64\",\n    src = \"wasm-bindgen\",\n    out = \"wasm_bindgen_linux_arm64\",\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "e8b75bf5055c189af5e4842bf7c58f616880fb8505a10f7cd575353a9f4e2dba",
+              "strip_prefix": "wasm-bindgen-0.2.118-aarch64-unknown-linux-gnu",
+              "urls": [
+                "https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-aarch64-unknown-linux-gnu.tar.gz"
+              ]
+            }
+          },
+          "wasm_bindgen_mac_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nload(\"@bazel_skylib//rules:native_binary.bzl\", \"native_binary\")\nnative_binary(\n    name = \"wasm_bindgen_mac_arm64\",\n    src = \"wasm-bindgen\",\n    out = \"wasm_bindgen_mac_arm64\",\n    visibility = [\"//visibility:public\"],\n)\n",
+              "sha256": "f76553ae8d084dc3e96a7cef748813bf2dac4d78326166409328fc74646eef76",
+              "strip_prefix": "wasm-bindgen-0.2.118-aarch64-apple-darwin",
+              "urls": [
+                "https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.118/wasm-bindgen-0.2.118-aarch64-apple-darwin.tar.gz"
+              ]
+            }
+          },
+          "cargo_audit_linux_x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"cargo-audit\"])\nfilegroup(name = \"binary\", srcs = [\"cargo-audit\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "c32506f338bdcdaef5a17fb9f33abb6ecf9561324cfd34237fd335f9283a1eab",
+              "strip_prefix": "cargo-audit-x86_64-unknown-linux-musl-v0.22.1",
+              "urls": [
+                "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-unknown-linux-musl-v0.22.1.tgz"
+              ]
+            }
+          },
+          "cargo_audit_linux_arm64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"cargo-audit\"])\nfilegroup(name = \"binary\", srcs = [\"cargo-audit\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "4c8df835ee484441bd2c8c6bcac28c4ce4b4058ba9e7477cb9e0012fe7769f66",
+              "strip_prefix": "cargo-audit-aarch64-unknown-linux-gnu-v0.22.1",
+              "urls": [
+                "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-aarch64-unknown-linux-gnu-v0.22.1.tgz"
+              ]
+            }
+          },
+          "cargo_audit_macos_x86_64": {
+            "repoRuleId": "@@bazel_tools//tools/build_defs/repo:http.bzl%http_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"cargo-audit\"])\nfilegroup(name = \"binary\", srcs = [\"cargo-audit\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "582d104a2a4bdb127c6bf6d056d89eede40686d11f52e4bc1765132ec99d2fca",
+              "strip_prefix": "cargo-audit-x86_64-apple-darwin-v0.22.1",
+              "urls": [
+                "https://github.com/rustsec/rustsec/releases/download/cargo-audit/v0.22.1/cargo-audit-x86_64-apple-darwin-v0.22.1.tgz"
+              ]
+            }
+          },
+          "zstd_deb_amd64": {
+            "repoRuleId": "@@jdh_rules+//bzl:deb_archive.bzl%deb_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7\"])\nfilegroup(name = \"file\", srcs = [\"usr/lib/x86_64-linux-gnu/libzstd.so.1.5.7\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "2f6a2aeacfc925eba8b00ac9139bc4bfccf8cacb09eb93de067074b26948eef9",
+              "urls": [
+                "http://ftp.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.7+dfsg-1_amd64.deb"
+              ]
+            }
+          },
+          "zstd_deb_arm64": {
+            "repoRuleId": "@@jdh_rules+//bzl:deb_archive.bzl%deb_archive",
+            "attributes": {
+              "build_file_content": "\nexports_files([\"usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7\"])\nfilegroup(name = \"file\", srcs = [\"usr/lib/aarch64-linux-gnu/libzstd.so.1.5.7\"], visibility = [\"//visibility:public\"])\n",
+              "sha256": "924540bd59fdbfa77a0604360efdaca54411a43daf11c7e002a3c64791b67448",
+              "urls": [
+                "http://ftp.us.debian.org/debian/pool/main/libz/libzstd/libzstd1_1.5.7+dfsg-1_arm64.deb"
+              ]
+            }
+          }
+        }
+      }
+    },
     "@@pybind11_bazel+//:internal_configure.bzl%internal_configure_extension": {
       "general": {
         "bzlTransitiveDigest": "06cynZ1bCvvy8zHPrrDlXq+Z68xmjctHpfFxi+zEpJY=",
