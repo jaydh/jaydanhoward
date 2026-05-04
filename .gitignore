@@ -23,3 +23,4 @@ bazel-*
 
 # Bazel symlinks
 /bazel-*
+.bazelrc.user
