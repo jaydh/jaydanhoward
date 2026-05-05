@@ -18,7 +18,7 @@ bazel_dep(name = "jdh_rules", version = "0.1.0")
 git_override(
     module_name = "jdh_rules",
     remote = "https://github.com/jaydh/jdh-bazel.git",
-    commit = "1d9af24cd0a710da2759c441f1f92f1ef0588a39",
+    commit = "6c5350c365243a2a204fae453dd5b89bb2cf1b18",
 )
 
 # rules_rust 0.68.1 (latest BCR release) doesn't support Bazel 9 because CcInfo
