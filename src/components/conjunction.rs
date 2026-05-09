@@ -1778,16 +1778,36 @@ fn ConjunctionDetailPanel(
                         let ecx = mx(0.0);
                         let ecy = my(0.0);
                         let mut s = format!(
-                            "<circle cx='{ecx:.1}' cy='{ecy:.1}' r='{earth_r_px:.1}' \
+                            "<style>\
+                             .sl .hit{{fill:none;stroke:transparent;stroke-width:6;pointer-events:stroke}}\
+                             .sl .vis{{stroke:#6b7280;stroke-width:0.5;opacity:0.4;\
+                                       transition:stroke 0.1s,stroke-width 0.1s,opacity 0.1s}}\
+                             .sl:hover .vis{{stroke:#e2e8f0;stroke-width:2;opacity:1}}\
+                             </style>\
+                             <circle cx='{ecx:.1}' cy='{ecy:.1}' r='{earth_r_px:.1}' \
                              fill='#0b1e30' stroke='#1d4ed8' stroke-width='1' opacity='0.8'/>"
                         );
 
                         // Time-matched step lines (A[i] ↔ B[i]) — drawn beneath dots
+                        // Each <g class="sl"> has a fat transparent hit area + visible line + tooltip
                         for (pa, pb) in d.proj_a.iter().zip(d.proj_b.iter()) {
+                            let dx = pa[0] - pb[0];
+                            let dy = pa[1] - pb[1];
+                            let dist_km = (dx * dx + dy * dy).sqrt();
+                            let dist_label = if dist_km < 10.0 {
+                                format!("{:.3} km", dist_km)
+                            } else if dist_km < 100.0 {
+                                format!("{:.1} km", dist_km)
+                            } else {
+                                format!("{:.0} km", dist_km)
+                            };
+                            let (x1, y1, x2, y2) = (mx(pa[0]), my(pa[1]), mx(pb[0]), my(pb[1]));
                             s.push_str(&format!(
-                                "<line x1='{:.1}' y1='{:.1}' x2='{:.1}' y2='{:.1}' \
-                                 stroke='#6b7280' stroke-width='0.5' opacity='0.4'/>",
-                                mx(pa[0]), my(pa[1]), mx(pb[0]), my(pb[1])
+                                "<g class='sl'>\
+                                 <line class='hit' x1='{x1:.1}' y1='{y1:.1}' x2='{x2:.1}' y2='{y2:.1}'/>\
+                                 <line class='vis' x1='{x1:.1}' y1='{y1:.1}' x2='{x2:.1}' y2='{y2:.1}'/>\
+                                 <title>{dist_label}</title>\
+                                 </g>"
                             ));
                         }
 
