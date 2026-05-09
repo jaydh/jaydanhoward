@@ -64,6 +64,13 @@ pub struct ConjunctionDetail {
     /// Inter-satellite distance (km) at each 5-minute step over 24 h (288 values).
     /// Values > 200 km are clamped to 200 for display purposes.
     pub distance_profile_km: Vec<f32>,
+    /// 2-D positions projected onto sat-A's orbital plane (km), 288 entries.
+    /// Coordinate origin is Earth's centre; x = first position vector direction.
+    pub proj_a: Vec<[f32; 2]>,
+    pub proj_b: Vec<[f32; 2]>,
+    /// Projected positions at TCA.
+    pub tca_proj_a: [f32; 2],
+    pub tca_proj_b: [f32; 2],
     pub hoots_overlap: bool,
     pub tca_unix_ms: f64,
     pub miss_distance_km: f32,
@@ -401,16 +408,26 @@ pub mod screening {
         let pa = SatProp::new(tle_a)?;
         let pb = SatProp::new(tle_b)?;
 
-        // Full 288-step distance profile (clamped to 200 km for chart readability).
-        let distance_profile_km: Vec<f32> = (0..STEPS)
-            .map(|i| {
-                let t = now_unix_ms + i as f64 * STEP_MS;
-                match (pa.eci_pos(t), pb.eci_pos(t)) {
-                    (Some(a), Some(b)) => dist(&a, &b).min(200.0) as f32,
-                    _ => 200.0,
+        // Collect ECI positions and build distance profile simultaneously.
+        let mut pos_a_eci: Vec<[f64; 3]> = Vec::with_capacity(STEPS);
+        let mut pos_b_eci: Vec<[f64; 3]> = Vec::with_capacity(STEPS);
+        let mut distance_profile_km: Vec<f32> = Vec::with_capacity(STEPS);
+
+        for i in 0..STEPS {
+            let t = now_unix_ms + i as f64 * STEP_MS;
+            match (pa.eci_pos(t), pb.eci_pos(t)) {
+                (Some(a), Some(b)) => {
+                    distance_profile_km.push(dist(&a, &b).min(200.0) as f32);
+                    pos_a_eci.push(a);
+                    pos_b_eci.push(b);
                 }
-            })
-            .collect();
+                _ => {
+                    distance_profile_km.push(200.0);
+                    pos_a_eci.push([0.0, 0.0, 0.0]);
+                    pos_b_eci.push([0.0, 0.0, 0.0]);
+                }
+            }
+        }
 
         // Find TCA: ternary-search around the minimum in the profile.
         let min_idx = distance_profile_km
@@ -446,10 +463,47 @@ pub mod screening {
             _ => 0.0,
         };
 
+        // ── Orbital-plane projection ──────────────────────────────────
+        // Orthonormal basis for sat-A's orbital plane:
+        //   e1 = unit radial at step 0
+        //   e3 = plane normal = normalize(e1 × pos_a[STEPS/2])
+        //   e2 = e3 × e1  (in-plane, 90° from e1)
+        #[inline]
+        fn norm3(v: [f64; 3]) -> [f64; 3] {
+            let len = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            if len < 1e-10 { [1.0, 0.0, 0.0] } else { [v[0] / len, v[1] / len, v[2] / len] }
+        }
+        #[inline]
+        fn cross3(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+            [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+        }
+        #[inline]
+        fn dot3(a: [f64; 3], b: [f64; 3]) -> f64 {
+            a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+        }
+
+        let e1 = norm3(pos_a_eci[0]);
+        let mid = pos_a_eci.get(STEPS / 2).copied().unwrap_or([0.0, 1.0, 0.0]);
+        let e3 = norm3(cross3(e1, mid));
+        let e2 = cross3(e3, e1);
+
+        let project = |p: [f64; 3]| -> [f32; 2] {
+            [dot3(p, e1) as f32, dot3(p, e2) as f32]
+        };
+
+        let proj_a: Vec<[f32; 2]> = pos_a_eci.iter().map(|&p| project(p)).collect();
+        let proj_b: Vec<[f32; 2]> = pos_b_eci.iter().map(|&p| project(p)).collect();
+        let tca_proj_a = project(tca_a);
+        let tca_proj_b = project(tca_b);
+
         Some(super::ConjunctionDetail {
             sat_a,
             sat_b,
             distance_profile_km,
+            proj_a,
+            proj_b,
+            tca_proj_a,
+            tca_proj_b,
             hoots_overlap,
             tca_unix_ms: tca_ms,
             miss_distance_km: miss_km,
@@ -1550,13 +1604,14 @@ fn ConjunctionDetailPanel(
                     let n = d.distance_profile_km.len();
                     let max_d = d.distance_profile_km.iter().cloned().fold(0.0_f32, f32::max).max(1.0);
                     let w = 560.0_f32;
-                    let h_svg = 90.0_f32;
+                    let h_svg = 104.0_f32;
                     let pad_l = 36.0_f32;
+                    let pad_t = 14.0_f32; // top padding so y-axis labels don't clip
                     let pad_b = 16.0_f32;
                     let chart_w = w - pad_l;
-                    let chart_h = h_svg - pad_b;
+                    let chart_h = h_svg - pad_t - pad_b;
                     let to_x = |i: usize| pad_l + (i as f32 / (n - 1).max(1) as f32) * chart_w;
-                    let to_y = |d: f32| h_svg - pad_b - (d / max_d) * chart_h;
+                    let to_y = |v: f32| pad_t + (1.0 - v / max_d) * chart_h;
 
                     let points: String = d.distance_profile_km.iter().enumerate()
                         .map(|(i, &v)| format!("{:.1},{:.1}", to_x(i), to_y(v)))
@@ -1575,6 +1630,72 @@ fn ConjunctionDetailPanel(
                     // Y-axis labels
                     let y_top_label = format!("{:.0}", max_d);
                     let y_mid_label = format!("{:.0}", max_d / 2.0);
+
+                    // ── Orbital-plane projection SVG (pre-built as inner_html string) ──
+                    let sat_a_name = d.sat_a.name.clone();
+                    let sat_b_name = d.sat_b.name.clone();
+                    let orbit_svg: Option<String> = if !d.proj_a.is_empty() && !d.proj_b.is_empty() {
+                        let orb_w = 400.0_f32;
+                        let orb_h = 160.0_f32;
+                        let orb_pad = 12.0_f32;
+
+                        // Bounding box anchored to include Earth (0,0)
+                        let min_x = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[0])
+                            .fold(0.0_f32, f32::min);
+                        let max_x = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[0])
+                            .fold(0.0_f32, f32::max);
+                        let min_y = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[1])
+                            .fold(0.0_f32, f32::min);
+                        let max_y = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[1])
+                            .fold(0.0_f32, f32::max);
+
+                        let range_x = (max_x - min_x).max(100.0);
+                        let range_y = (max_y - min_y).max(100.0);
+                        let scale = ((orb_w - 2.0 * orb_pad) / range_x)
+                            .min((orb_h - 2.0 * orb_pad) / range_y);
+
+                        let cx_data = (min_x + max_x) / 2.0;
+                        let cy_data = (min_y + max_y) / 2.0;
+                        let svg_cx = orb_w / 2.0;
+                        let svg_cy = orb_h / 2.0;
+
+                        let mx = |x: f32| svg_cx + (x - cx_data) * scale;
+                        let my = |y: f32| svg_cy - (y - cy_data) * scale;
+
+                        let earth_r_px = (6371.0_f32 * scale).clamp(3.0, orb_h / 2.5);
+                        let ecx = mx(0.0);
+                        let ecy = my(0.0);
+
+                        let mut s = format!(
+                            "<circle cx='{ecx:.1}' cy='{ecy:.1}' r='{earth_r_px:.1}' \
+                             fill='#0f2942' stroke='#3b82f6' stroke-width='0.5'/>"
+                        );
+                        for p in &d.proj_a {
+                            s.push_str(&format!(
+                                "<circle cx='{:.1}' cy='{:.1}' r='1.5' fill='#60a5fa' opacity='0.55'/>",
+                                mx(p[0]), my(p[1])
+                            ));
+                        }
+                        for p in &d.proj_b {
+                            s.push_str(&format!(
+                                "<circle cx='{:.1}' cy='{:.1}' r='1.5' fill='#fb923c' opacity='0.55'/>",
+                                mx(p[0]), my(p[1])
+                            ));
+                        }
+                        let ax = mx(d.tca_proj_a[0]); let ay = my(d.tca_proj_a[1]);
+                        let bx = mx(d.tca_proj_b[0]); let by_ = my(d.tca_proj_b[1]);
+                        s.push_str(&format!(
+                            "<line x1='{ax:.1}' y1='{ay:.1}' x2='{bx:.1}' y2='{by_:.1}' \
+                             stroke='#facc15' stroke-width='1.5' opacity='0.9'/>\
+                             <circle cx='{ax:.1}' cy='{ay:.1}' r='4' \
+                             fill='#60a5fa' stroke='#facc15' stroke-width='1.5'/>\
+                             <circle cx='{bx:.1}' cy='{by_:.1}' r='4' \
+                             fill='#fb923c' stroke='#facc15' stroke-width='1.5'/>"
+                        ));
+                        Some(s)
+                    } else {
+                        None
+                    };
 
                     // Hoots bands
                     let hoots_color = if d.hoots_overlap { "text-yellow-400" } else { "text-green-400" };
@@ -1595,7 +1716,7 @@ fn ConjunctionDetailPanel(
                                     style=format!("height:{}px", h_svg as u32)
                                 >
                                     // Y-axis labels
-                                    <text x="2" y={to_y(max_d) + 4.0} class="fill-current text-muted"
+                                    <text x="2" y={to_y(max_d) + 4.0}
                                           font-size="9" fill="#888">{y_top_label}</text>
                                     <text x="2" y={to_y(max_d / 2.0) + 4.0}
                                           font-size="9" fill="#888">{y_mid_label}</text>
@@ -1617,13 +1738,13 @@ fn ConjunctionDetailPanel(
                                         fill="none" stroke="#4ade80" stroke-width="1.5"
                                     />
 
-                                    // TCA marker
+                                    // TCA vertical marker
                                     <line
-                                        x1=tca_x y1="0" x2=tca_x y2=chart_h
+                                        x1=tca_x y1=pad_t x2=tca_x y2={h_svg - pad_b}
                                         stroke="#facc15" stroke-dasharray="3 3"
                                         stroke-width="1" opacity="0.8"
                                     />
-                                    <text x={tca_x + 2.0} y="10"
+                                    <text x={tca_x + 2.0} y={pad_t + 6.0}
                                           font-size="8" fill="#facc15">"TCA"</text>
 
                                     // X-axis labels
@@ -1635,6 +1756,35 @@ fn ConjunctionDetailPanel(
                                           font-size="8" fill="#666">"24h"</text>
                                 </svg>
                             </div>
+
+                            // ── Orbit visualization ───────────
+                            {orbit_svg.map(|inner| view! {
+                                <div>
+                                    <p class="text-xs text-muted mb-1">
+                                        "Orbital plane view · 288 steps × 5 min"
+                                    </p>
+                                    <div class="flex gap-3 text-xs text-muted mb-1">
+                                        <span class="flex items-center gap-1">
+                                            <span class="inline-block w-2 h-2 rounded-full bg-blue-400"></span>
+                                            {sat_a_name.clone()}
+                                        </span>
+                                        <span class="flex items-center gap-1">
+                                            <span class="inline-block w-2 h-2 rounded-full bg-orange-400"></span>
+                                            {sat_b_name.clone()}
+                                        </span>
+                                        <span class="flex items-center gap-1">
+                                            <span class="inline-block w-2 h-2 rounded-full bg-yellow-400"></span>
+                                            "TCA"
+                                        </span>
+                                    </div>
+                                    <svg
+                                        viewBox="0 0 400 160"
+                                        class="w-full rounded border border-border/40 bg-gray"
+                                        style="height:160px"
+                                        inner_html=inner
+                                    />
+                                </div>
+                            })}
 
                             // ── Orbital parameters ────────────
                             <div>
