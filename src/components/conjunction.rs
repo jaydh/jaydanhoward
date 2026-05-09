@@ -1248,24 +1248,31 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
     #[cfg(not(feature = "ssr"))]
     let (detail_loading, set_detail_loading) = signal(false);
 
-    // Fetch detail whenever selected changes.
+    // Fetch detail when selected changes — skip if the same pair is already loaded.
     #[cfg(not(feature = "ssr"))]
     Effect::new(move |_| {
-        let ev = selected.get();
-        set_detail.set(None);
-        if let Some(ev) = ev {
-            set_detail_loading.set(true);
-            leptos::task::spawn_local(async move {
-                match get_conjunction_detail(ev.sat_a.clone(), ev.sat_b.clone()).await {
-                    Ok(Some(d)) => set_detail.set(Some(d)),
-                    Ok(None) => {}
-                    Err(e) => web_sys::console::warn_1(
-                        &format!("conjunction detail error: {e:?}").into(),
-                    ),
-                }
-                set_detail_loading.set(false);
-            });
+        let Some(ev) = selected.get() else { return };
+
+        // If we already have detail for this exact pair, don't re-propagate.
+        let already_loaded = detail.get_untracked().map_or(false, |d| {
+            d.sat_a.name == ev.sat_a && d.sat_b.name == ev.sat_b
+        });
+        if already_loaded {
+            return;
         }
+
+        set_detail.set(None);
+        set_detail_loading.set(true);
+        leptos::task::spawn_local(async move {
+            match get_conjunction_detail(ev.sat_a.clone(), ev.sat_b.clone()).await {
+                Ok(Some(d)) => set_detail.set(Some(d)),
+                Ok(None) => {}
+                Err(e) => web_sys::console::warn_1(
+                    &format!("conjunction detail error: {e:?}").into(),
+                ),
+            }
+            set_detail_loading.set(false);
+        });
     });
 
     // Scroll offset — only ever written client-side, but both builds define it
