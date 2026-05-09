@@ -246,46 +246,65 @@ pub async fn run() -> Result<(), std::io::Error> {
             tles
         }
 
+        // Spread pod startup across up to 60s so replicas don't burst CelesTrak simultaneously.
+        let jitter_secs = rand::random::<u64>() % 60;
+
         for group in WARM_GROUPS {
             let cache = tle_cache.clone();
             let client = http_client.clone();
             let pool_opt = pool_arc.clone();
             tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(jitter_secs)).await;
+
                 loop {
-                    let url = format!(
-                        "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
-                    );
-                    match client
-                        .get(&url)
-                        .timeout(Duration::from_secs(60))
-                        .send()
-                        .await
-                    {
-                        Ok(resp) if resp.status().is_success() => {
-                            if let Ok(text) = resp.text().await {
-                                let tles = parse_tles_warmup(&text);
-                                if !tles.is_empty() {
-                                    log::info!(
-                                        "TLE cache warm-up: {} satellites for group={group}",
-                                        tles.len()
-                                    );
-                                    cache.write().await.insert(
-                                        group.to_string(),
-                                        (std::time::Instant::now(), tles.clone()),
-                                    );
-                                    if let Some(ref p) = pool_opt {
-                                        if let Err(e) = crate::db::save_tle_group(p, group, &tles).await {
-                                            log::warn!("TLE warm-up: failed to persist group={group}: {e}");
+                    // Skip CelesTrak if DB already has fresh data — lets one pod do the
+                    // fetch while others see fresh DB data on their next iteration.
+                    let db_fresh = match pool_opt {
+                        Some(ref p) => matches!(
+                            crate::db::tle_group_age(p, group).await,
+                            Ok(Some(t)) if chrono::Utc::now().signed_duration_since(t) < chrono::Duration::hours(6)
+                        ),
+                        None => false,
+                    };
+
+                    if db_fresh {
+                        log::info!("TLE warm-up: DB fresh for group={group}, skipping fetch");
+                    } else {
+                        let url = format!(
+                            "https://celestrak.org/NORAD/elements/gp.php?GROUP={group}&FORMAT=tle"
+                        );
+                        match client
+                            .get(&url)
+                            .timeout(Duration::from_secs(60))
+                            .send()
+                            .await
+                        {
+                            Ok(resp) if resp.status().is_success() => {
+                                if let Ok(text) = resp.text().await {
+                                    let tles = parse_tles_warmup(&text);
+                                    if !tles.is_empty() {
+                                        log::info!(
+                                            "TLE cache warm-up: {} satellites for group={group}",
+                                            tles.len()
+                                        );
+                                        cache.write().await.insert(
+                                            group.to_string(),
+                                            (std::time::Instant::now(), tles.clone()),
+                                        );
+                                        if let Some(ref p) = pool_opt {
+                                            if let Err(e) = crate::db::save_tle_group(p, group, &tles).await {
+                                                log::warn!("TLE warm-up: failed to persist group={group}: {e}");
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
-                        Ok(resp) => {
-                            log::warn!("TLE warm-up: HTTP {} for group={group}", resp.status());
-                        }
-                        Err(e) => {
-                            log::warn!("TLE warm-up: fetch failed for group={group}: {e}");
+                            Ok(resp) => {
+                                log::warn!("TLE warm-up: HTTP {} for group={group}", resp.status());
+                            }
+                            Err(e) => {
+                                log::warn!("TLE warm-up: fetch failed for group={group}: {e}");
+                            }
                         }
                     }
                     tokio::time::sleep(Duration::from_secs(TLE_REFRESH_SECS)).await;

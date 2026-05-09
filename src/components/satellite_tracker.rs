@@ -56,6 +56,22 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         }
     }
 
+    // Cache miss: check DB freshness. If DB has data < 6h old, serve it directly —
+    // this keeps all replicas coordinated behind a single CelesTrak fetch per TTL window.
+    // Also save the DB result here so the fallback path below doesn't need a second query.
+    let db_snapshot = if let Some(ref p) = pool_opt {
+        crate::db::load_tle_group(p, &group).await.ok().flatten()
+    } else {
+        None
+    };
+    if let Some((fetched_at, ref db_tles)) = db_snapshot {
+        let age = chrono::Utc::now().signed_duration_since(fetched_at);
+        if !db_tles.is_empty() && age < chrono::Duration::hours(6) {
+            cache.write().await.insert(group.clone(), (std::time::Instant::now(), db_tles.clone()));
+            return Ok(db_tles.clone());
+        }
+    }
+
     let parse_tle_text = |text: &str| -> Vec<TleData> {
         let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
         let mut out = Vec::new();
@@ -143,14 +159,13 @@ pub async fn get_tle_data(group: String) -> Result<Vec<TleData>, ServerFnError<S
         }
         Err(fetch_err) => {
             tracing::warn!("CelesTrak fetch failed for group={group}: {fetch_err}; trying DB fallback");
-            // Try DB-persisted copy (may be days old but better than nothing).
-            if let Some(ref p) = pool_opt {
-                if let Ok(Some(stale)) = crate::db::load_tle_group(p, &group).await {
-                    tracing::info!("Serving {} stale TLEs for group={group} from DB", stale.len());
-                    return Ok(stale);
+            // Reuse the snapshot already loaded above (avoids a second DB round-trip).
+            if let Some((_, stale_tles)) = db_snapshot {
+                if !stale_tles.is_empty() {
+                    tracing::info!("Serving {} stale TLEs for group={group} from DB", stale_tles.len());
+                    return Ok(stale_tles);
                 }
             }
-            // Nothing available anywhere.
             return Err(ServerFnError::ServerError(fetch_err));
         }
     };

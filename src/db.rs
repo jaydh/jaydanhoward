@@ -996,13 +996,25 @@ mod inner {
         Ok(out)
     }
 
-    /// Load one TLE group from the persistent cache (fallback when CelesTrak is unreachable).
+    /// Return the timestamp of the last successful TLE fetch for a group.
+    pub async fn tle_group_age(
+        pool: &PgPool,
+        group: &str,
+    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, sqlx::Error> {
+        let row = sqlx::query("SELECT fetched_at FROM tle_cache WHERE group_name = $1")
+            .bind(group)
+            .fetch_optional(pool)
+            .await?;
+        Ok(row.and_then(|r| r.try_get::<chrono::DateTime<chrono::Utc>, _>("fetched_at").ok()))
+    }
+
+    /// Load one TLE group from the persistent cache, returning the fetch timestamp alongside the data.
     pub async fn load_tle_group(
         pool: &PgPool,
         group: &str,
-    ) -> Result<Option<Vec<crate::components::satellite_tracker::TleData>>, sqlx::Error> {
+    ) -> Result<Option<(chrono::DateTime<chrono::Utc>, Vec<crate::components::satellite_tracker::TleData>)>, sqlx::Error> {
         let row = sqlx::query(
-            "SELECT satellites FROM tle_cache WHERE group_name = $1",
+            "SELECT satellites, fetched_at FROM tle_cache WHERE group_name = $1",
         )
         .bind(group)
         .fetch_optional(pool)
@@ -1012,7 +1024,8 @@ mod inner {
             None => Ok(None),
             Some(r) => {
                 let json: serde_json::Value = r.try_get("satellites")?;
-                Ok(serde_json::from_value(json).ok())
+                let fetched_at: chrono::DateTime<chrono::Utc> = r.try_get("fetched_at")?;
+                Ok(serde_json::from_value(json).ok().map(|tles| (fetched_at, tles)))
             }
         }
     }
