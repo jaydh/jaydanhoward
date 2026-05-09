@@ -46,6 +46,7 @@ pub fn register_server_fns() {
     register_explicit::<visitors::ForgetMe>();
     register_explicit::<conjunction::GetConjunctionStatus>();
     register_explicit::<conjunction::GetConjunctions>();
+    register_explicit::<conjunction::GetConjunctionDetail>();
     register_explicit::<conjunction::RetriggerConjunction>();
     register_explicit::<sd_sync_reports::FetchSdSyncReportList>();
     register_explicit::<sd_sync_reports::FetchSdSyncReport>();

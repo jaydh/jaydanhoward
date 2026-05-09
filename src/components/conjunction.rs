@@ -42,6 +42,38 @@ pub struct ConjunctionResult {
     pub events: Vec<ConjunctionEvent>,
 }
 
+/// Orbital elements and derived parameters for one satellite.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct OrbitalParams {
+    pub name: String,
+    pub semi_major_axis_km: f32,
+    pub period_minutes: f32,
+    pub eccentricity: f32,
+    pub inclination_deg: f32,
+    pub raan_deg: f32,
+    pub arg_perigee_deg: f32,
+    pub perigee_alt_km: f32,
+    pub apogee_alt_km: f32,
+}
+
+/// Full detail for one conjunction pair, computed on demand.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConjunctionDetail {
+    pub sat_a: OrbitalParams,
+    pub sat_b: OrbitalParams,
+    /// Inter-satellite distance (km) at each 5-minute step over 24 h (288 values).
+    /// Values > 200 km are clamped to 200 for display purposes.
+    pub distance_profile_km: Vec<f32>,
+    pub hoots_overlap: bool,
+    pub tca_unix_ms: f64,
+    pub miss_distance_km: f32,
+    pub rel_velocity_km_s: f32,
+    pub tle_a_line1: String,
+    pub tle_a_line2: String,
+    pub tle_b_line1: String,
+    pub tle_b_line2: String,
+}
+
 // ──────────────────────────────────────────────────────────────
 // In-memory cache (SSR only) — used for dev (no DB) and as live
 // preview during screening on all deployments
@@ -331,6 +363,102 @@ pub mod screening {
             events_found,
             elapsed_ms: 0, // filled in by caller
         }
+    }
+
+    /// Parse classical orbital elements from a TLE.
+    pub fn orbital_params(tle: &TleData) -> Option<super::OrbitalParams> {
+        let elements = sgp4::Elements::from_tle(
+            Some(tle.name.clone()),
+            tle.line1.as_bytes(),
+            tle.line2.as_bytes(),
+        )
+        .ok()?;
+        let n_rad_s = elements.mean_motion * 2.0 * std::f64::consts::PI / 86_400.0;
+        let a = (MU / (n_rad_s * n_rad_s)).cbrt();
+        let e = elements.eccentricity;
+        Some(super::OrbitalParams {
+            name: tle.name.clone(),
+            semi_major_axis_km: a as f32,
+            period_minutes: (1440.0 / elements.mean_motion) as f32,
+            eccentricity: e as f32,
+            inclination_deg: elements.inclination as f32,
+            raan_deg: elements.right_ascension as f32,
+            arg_perigee_deg: elements.argument_of_perigee as f32,
+            perigee_alt_km: (a * (1.0 - e) - EARTH_RADIUS) as f32,
+            apogee_alt_km: (a * (1.0 + e) - EARTH_RADIUS) as f32,
+        })
+    }
+
+    /// Re-propagate a specific pair and return full detail for the UI.
+    pub fn compute_pair_detail(
+        tle_a: &TleData,
+        tle_b: &TleData,
+        now_unix_ms: f64,
+    ) -> Option<super::ConjunctionDetail> {
+        let sat_a = orbital_params(tle_a)?;
+        let sat_b = orbital_params(tle_b)?;
+        let hoots_overlap = hoots_pass(tle_a, tle_b);
+        let pa = SatProp::new(tle_a)?;
+        let pb = SatProp::new(tle_b)?;
+
+        // Full 288-step distance profile (clamped to 200 km for chart readability).
+        let distance_profile_km: Vec<f32> = (0..STEPS)
+            .map(|i| {
+                let t = now_unix_ms + i as f64 * STEP_MS;
+                match (pa.eci_pos(t), pb.eci_pos(t)) {
+                    (Some(a), Some(b)) => dist(&a, &b).min(200.0) as f32,
+                    _ => 200.0,
+                }
+            })
+            .collect();
+
+        // Find TCA: ternary-search around the minimum in the profile.
+        let min_idx = distance_profile_km
+            .iter()
+            .enumerate()
+            .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|(i, _)| i)
+            .unwrap_or(0);
+
+        let t_lo = now_unix_ms + (min_idx.saturating_sub(1) as f64) * STEP_MS;
+        let t_hi = now_unix_ms + ((min_idx + 1).min(STEPS - 1) as f64) * STEP_MS;
+        let tca_ms = find_tca(&pa, &pb, t_lo, t_hi);
+
+        let (tca_a, tca_b) = match (pa.eci_pos(tca_ms), pb.eci_pos(tca_ms)) {
+            (Some(a), Some(b)) => (a, b),
+            _ => return None,
+        };
+        let miss_km = dist(&tca_a, &tca_b) as f32;
+
+        const DT_MS: f64 = 30_000.0;
+        let rel_vel = match (
+            pa.eci_pos(tca_ms + DT_MS),
+            pb.eci_pos(tca_ms + DT_MS),
+            pa.eci_pos(tca_ms - DT_MS),
+            pb.eci_pos(tca_ms - DT_MS),
+        ) {
+            (Some(a1), Some(b1), Some(a0), Some(b0)) => {
+                let vx = ((a1[0] - b1[0]) - (a0[0] - b0[0])) / (2.0 * DT_MS / 1000.0);
+                let vy = ((a1[1] - b1[1]) - (a0[1] - b0[1])) / (2.0 * DT_MS / 1000.0);
+                let vz = ((a1[2] - b1[2]) - (a0[2] - b0[2])) / (2.0 * DT_MS / 1000.0);
+                (vx * vx + vy * vy + vz * vz).sqrt() as f32
+            }
+            _ => 0.0,
+        };
+
+        Some(super::ConjunctionDetail {
+            sat_a,
+            sat_b,
+            distance_profile_km,
+            hoots_overlap,
+            tca_unix_ms: tca_ms,
+            miss_distance_km: miss_km,
+            rel_velocity_km_s: rel_vel,
+            tle_a_line1: tle_a.line1.clone(),
+            tle_a_line2: tle_a.line2.clone(),
+            tle_b_line1: tle_b.line1.clone(),
+            tle_b_line2: tle_b.line2.clone(),
+        })
     }
 }
 
@@ -728,6 +856,42 @@ pub async fn get_conjunctions(
     Ok(vec![])
 }
 
+/// Re-propagate a specific pair and return full orbital detail for display.
+#[server(name = GetConjunctionDetail, prefix = "/api", endpoint = "get_conjunction_detail")]
+pub async fn get_conjunction_detail(
+    sat_a_name: String,
+    sat_b_name: String,
+) -> Result<Option<ConjunctionDetail>, ServerFnError<String>> {
+    use axum::extract::Extension;
+    use leptos_axum::extract;
+    use std::sync::Arc;
+    use std::time::SystemTime;
+
+    let tle_cache = extract::<Extension<Arc<crate::components::satellite_tracker::TleCache>>>()
+        .await
+        .map_err(|e| ServerFnError::ServerError(format!("{e}")))?
+        .0;
+
+    let (tle_a, tle_b) = {
+        let read = tle_cache.read().await;
+        let find = |name: &str| -> Option<crate::components::satellite_tracker::TleData> {
+            read.values().find_map(|(_, tles)| tles.iter().find(|t| t.name == name).cloned())
+        };
+        (find(&sat_a_name), find(&sat_b_name))
+    };
+
+    let (Some(tle_a), Some(tle_b)) = (tle_a, tle_b) else {
+        return Ok(None);
+    };
+
+    let now_unix_ms = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as f64;
+
+    Ok(screening::compute_pair_detail(&tle_a, &tle_b, now_unix_ms))
+}
+
 /// Clear all results and kick off fresh screenings for every group.
 ///
 /// Uses TLEs already held in the TleCache (populated at startup / on first TLE
@@ -1014,6 +1178,42 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
     let (sort_dir, set_sort_dir) = signal(SortDir::Asc);
     let (search, set_search) = signal(String::new());
 
+    // Selected pair for the detail panel.
+    #[cfg(feature = "ssr")]
+    let (selected, set_selected) = signal(Option::<ConjunctionEvent>::None);
+    #[cfg(not(feature = "ssr"))]
+    let (selected, set_selected) = signal(Option::<ConjunctionEvent>::None);
+
+    // Detail fetch state — only used client-side.
+    #[cfg(feature = "ssr")]
+    let (detail, _set_detail) = signal(Option::<ConjunctionDetail>::None);
+    #[cfg(feature = "ssr")]
+    let (detail_loading, _set_detail_loading) = signal(false);
+    #[cfg(not(feature = "ssr"))]
+    let (detail, set_detail) = signal(Option::<ConjunctionDetail>::None);
+    #[cfg(not(feature = "ssr"))]
+    let (detail_loading, set_detail_loading) = signal(false);
+
+    // Fetch detail whenever selected changes.
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        let ev = selected.get();
+        set_detail.set(None);
+        if let Some(ev) = ev {
+            set_detail_loading.set(true);
+            leptos::task::spawn_local(async move {
+                match get_conjunction_detail(ev.sat_a.clone(), ev.sat_b.clone()).await {
+                    Ok(Some(d)) => set_detail.set(Some(d)),
+                    Ok(None) => {}
+                    Err(e) => web_sys::console::warn_1(
+                        &format!("conjunction detail error: {e:?}").into(),
+                    ),
+                }
+                set_detail_loading.set(false);
+            });
+        }
+    });
+
     // Scroll offset — only ever written client-side, but both builds define it
     // so view! captures compile cleanly on SSR.
     #[cfg(feature = "ssr")]
@@ -1185,7 +1385,9 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                             key=|e| {
                                 format!("{}-{}-{}", e.sat_a, e.sat_b, e.tca_unix_ms as u64)
                             }
-                            children=|e| view! { <ConjunctionRow event=e /> }
+                            children=move |e| view! {
+                                <ConjunctionRow event=e selected=selected set_selected=set_selected />
+                            }
                         />
 
                         // Bottom spacer
@@ -1198,12 +1400,29 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                     </tbody>
                 </table>
             </div>
+
+            // ── Detail panel ─────────────────────────────────
+            <Show when=move || selected.get().is_some()>
+                <ConjunctionDetailPanel
+                    selected=selected
+                    detail=detail
+                    loading=detail_loading
+                    on_close=move |_| {
+                        #[cfg(not(feature = "ssr"))]
+                        set_selected.set(None);
+                    }
+                />
+            </Show>
         </div>
     }
 }
 
 #[component]
-fn ConjunctionRow(event: ConjunctionEvent) -> impl IntoView {
+fn ConjunctionRow(
+    event: ConjunctionEvent,
+    selected: ReadSignal<Option<ConjunctionEvent>>,
+    set_selected: WriteSignal<Option<ConjunctionEvent>>,
+) -> impl IntoView {
     let tca_rel = {
         #[cfg(not(feature = "ssr"))]
         {
@@ -1215,15 +1434,38 @@ fn ConjunctionRow(event: ConjunctionEvent) -> impl IntoView {
         }
         #[cfg(feature = "ssr")]
         {
-            let _ = event.tca_unix_ms; // suppress unused
+            let _ = event.tca_unix_ms;
             String::new()
+        }
+    };
+
+    let ev = event.clone();
+    let is_selected = {
+        let ev_key = (event.sat_a.clone(), event.sat_b.clone(), event.tca_unix_ms as u64);
+        move || {
+            selected.get().map_or(false, |s| {
+                (s.sat_a.clone(), s.sat_b.clone(), s.tca_unix_ms as u64) == ev_key
+            })
         }
     };
 
     view! {
         <tr
-            class="border-b border-border hover:bg-surface-alt transition-colors"
+            class=move || {
+                let base = "border-b border-border transition-colors cursor-pointer";
+                if is_selected() { format!("{base} bg-surface-alt") }
+                else { format!("{base} hover:bg-surface-alt/60") }
+            }
             style="height:32px"
+            on:click=move |_| {
+                let key = (ev.sat_a.clone(), ev.sat_b.clone(), ev.tca_unix_ms as u64);
+                set_selected.update(|s| {
+                    let already = s.as_ref().map_or(false, |x| {
+                        (x.sat_a.clone(), x.sat_b.clone(), x.tca_unix_ms as u64) == key
+                    });
+                    *s = if already { None } else { Some(ev.clone()) };
+                });
+            }
         >
             <td class="px-3 font-mono text-xs whitespace-nowrap">{tca_rel}</td>
             <td class="px-3 font-mono text-xs whitespace-nowrap">{event.sat_a.clone()}</td>
@@ -1240,3 +1482,242 @@ fn ConjunctionRow(event: ConjunctionEvent) -> impl IntoView {
         </tr>
     }
 }
+
+// ── Detail panel ──────────────────────────────────────────────
+
+#[component]
+fn ConjunctionDetailPanel(
+    selected: ReadSignal<Option<ConjunctionEvent>>,
+    detail: ReadSignal<Option<ConjunctionDetail>>,
+    loading: ReadSignal<bool>,
+    on_close: impl Fn(leptos::ev::MouseEvent) + 'static,
+) -> impl IntoView {
+    let param_row = |name: &'static str, a: String, b: String| {
+        view! {
+            <tr class="border-b border-border/40">
+                <td class="py-1 pr-3 text-xs text-muted whitespace-nowrap">{name}</td>
+                <td class="py-1 pr-4 text-xs font-mono whitespace-nowrap">{a}</td>
+                <td class="py-1 text-xs font-mono whitespace-nowrap">{b}</td>
+            </tr>
+        }
+    };
+
+    view! {
+        <div class="mt-4 border border-border rounded-lg p-4 bg-surface text-sm">
+
+            // ── Header ───────────────────────────────────────
+            <div class="flex items-start justify-between gap-2 mb-3">
+                <div>
+                    {move || selected.get().map(|ev| view! {
+                        <p class="font-mono text-xs font-semibold">
+                            {ev.sat_a.clone()} " ↔ " {ev.sat_b.clone()}
+                        </p>
+                        <p class="text-xs text-muted mt-0.5">
+                            {
+                                #[cfg(not(feature = "ssr"))]
+                                {
+                                    let now_ms = js_sys::Date::now();
+                                    let delta_s = ((ev.tca_unix_ms - now_ms) / 1000.0).max(0.0) as u64;
+                                    let h = delta_s / 3600;
+                                    let m = (delta_s % 3600) / 60;
+                                    format!("TCA in {h}h {m:02}m  •  {:.3} km miss  •  {:.2} km/s",
+                                        ev.miss_distance_km, ev.rel_velocity_km_s)
+                                }
+                                #[cfg(feature = "ssr")]
+                                { String::new() }
+                            }
+                        </p>
+                    })}
+                </div>
+                <button
+                    class="text-muted hover:text-foreground transition-colors text-lg leading-none shrink-0"
+                    on:click=on_close
+                >
+                    "✕"
+                </button>
+            </div>
+
+            // ── Loading state ────────────────────────────────
+            <Show when=move || loading.get()>
+                <p class="text-xs text-muted animate-pulse">"Computing orbits…"</p>
+            </Show>
+
+            // ── Detail content ───────────────────────────────
+            <Show when=move || detail.get().is_some()>
+                {move || detail.get().map(|d| {
+
+                    // Build SVG distance chart
+                    let n = d.distance_profile_km.len();
+                    let max_d = d.distance_profile_km.iter().cloned().fold(0.0_f32, f32::max).max(1.0);
+                    let w = 560.0_f32;
+                    let h_svg = 90.0_f32;
+                    let pad_l = 36.0_f32;
+                    let pad_b = 16.0_f32;
+                    let chart_w = w - pad_l;
+                    let chart_h = h_svg - pad_b;
+                    let to_x = |i: usize| pad_l + (i as f32 / (n - 1).max(1) as f32) * chart_w;
+                    let to_y = |d: f32| h_svg - pad_b - (d / max_d) * chart_h;
+
+                    let points: String = d.distance_profile_km.iter().enumerate()
+                        .map(|(i, &v)| format!("{:.1},{:.1}", to_x(i), to_y(v)))
+                        .collect::<Vec<_>>()
+                        .join(" ");
+
+                    let threshold_y = to_y(10.0_f32.min(max_d));
+
+                    // TCA step index (approximate)
+                    let tca_step = d.distance_profile_km.iter().enumerate()
+                        .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+                    let tca_x = to_x(tca_step);
+
+                    // Y-axis labels
+                    let y_top_label = format!("{:.0}", max_d);
+                    let y_mid_label = format!("{:.0}", max_d / 2.0);
+
+                    // Hoots bands
+                    let hoots_color = if d.hoots_overlap { "text-yellow-400" } else { "text-green-400" };
+                    let hoots_label = if d.hoots_overlap { "Altitude bands overlap (Hoots pass)" }
+                                      else { "Altitude bands do not overlap (Hoots filtered)" };
+
+                    view! {
+                        <div class="space-y-4">
+
+                            // ── Distance chart ────────────────
+                            <div>
+                                <p class="text-xs text-muted mb-1">
+                                    "Inter-satellite distance over 24 h (km, capped at 200)"
+                                </p>
+                                <svg
+                                    viewBox=format!("0 0 {w} {h_svg}")
+                                    class="w-full rounded border border-border/40 bg-gray"
+                                    style=format!("height:{}px", h_svg as u32)
+                                >
+                                    // Y-axis labels
+                                    <text x="2" y={to_y(max_d) + 4.0} class="fill-current text-muted"
+                                          font-size="9" fill="#888">{y_top_label}</text>
+                                    <text x="2" y={to_y(max_d / 2.0) + 4.0}
+                                          font-size="9" fill="#888">{y_mid_label}</text>
+                                    <text x="2" y={h_svg - pad_b + 1.0}
+                                          font-size="9" fill="#888">"0"</text>
+
+                                    // 10 km threshold line
+                                    <line
+                                        x1=pad_l y1=threshold_y x2=w y2=threshold_y
+                                        stroke="#ef4444" stroke-dasharray="4 3"
+                                        stroke-width="1" opacity="0.7"
+                                    />
+                                    <text x={w - 28.0} y={threshold_y - 2.0}
+                                          font-size="8" fill="#ef4444">"10 km"</text>
+
+                                    // Distance polyline
+                                    <polyline
+                                        points=points
+                                        fill="none" stroke="#4ade80" stroke-width="1.5"
+                                    />
+
+                                    // TCA marker
+                                    <line
+                                        x1=tca_x y1="0" x2=tca_x y2=chart_h
+                                        stroke="#facc15" stroke-dasharray="3 3"
+                                        stroke-width="1" opacity="0.8"
+                                    />
+                                    <text x={tca_x + 2.0} y="10"
+                                          font-size="8" fill="#facc15">"TCA"</text>
+
+                                    // X-axis labels
+                                    <text x=pad_l y={h_svg - 2.0}
+                                          font-size="8" fill="#666">"0h"</text>
+                                    <text x={pad_l + chart_w / 2.0 - 4.0} y={h_svg - 2.0}
+                                          font-size="8" fill="#666">"12h"</text>
+                                    <text x={w - 14.0} y={h_svg - 2.0}
+                                          font-size="8" fill="#666">"24h"</text>
+                                </svg>
+                            </div>
+
+                            // ── Orbital parameters ────────────
+                            <div>
+                                <p class="text-xs text-muted mb-1">"Orbital Parameters"</p>
+                                <table class="w-full border-collapse">
+                                    <thead>
+                                        <tr class="border-b border-border">
+                                            <th class="py-1 pr-3 text-left text-xs text-muted font-normal w-28">""</th>
+                                            <th class="py-1 pr-4 text-left text-xs text-muted font-normal font-mono">
+                                                {d.sat_a.name.clone()}
+                                            </th>
+                                            <th class="py-1 text-left text-xs text-muted font-normal font-mono">
+                                                {d.sat_b.name.clone()}
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {param_row("Period",
+                                            format!("{:.1} min", d.sat_a.period_minutes),
+                                            format!("{:.1} min", d.sat_b.period_minutes))}
+                                        {param_row("Semi-major axis",
+                                            format!("{:.0} km", d.sat_a.semi_major_axis_km),
+                                            format!("{:.0} km", d.sat_b.semi_major_axis_km))}
+                                        {param_row("Eccentricity",
+                                            format!("{:.6}", d.sat_a.eccentricity),
+                                            format!("{:.6}", d.sat_b.eccentricity))}
+                                        {param_row("Inclination",
+                                            format!("{:.2}°", d.sat_a.inclination_deg),
+                                            format!("{:.2}°", d.sat_b.inclination_deg))}
+                                        {param_row("RAAN",
+                                            format!("{:.2}°", d.sat_a.raan_deg),
+                                            format!("{:.2}°", d.sat_b.raan_deg))}
+                                        {param_row("Arg perigee",
+                                            format!("{:.2}°", d.sat_a.arg_perigee_deg),
+                                            format!("{:.2}°", d.sat_b.arg_perigee_deg))}
+                                        {param_row("Perigee alt",
+                                            format!("{:.0} km", d.sat_a.perigee_alt_km),
+                                            format!("{:.0} km", d.sat_b.perigee_alt_km))}
+                                        {param_row("Apogee alt",
+                                            format!("{:.0} km", d.sat_a.apogee_alt_km),
+                                            format!("{:.0} km", d.sat_b.apogee_alt_km))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            // ── Hoots filter ──────────────────
+                            <div class="flex items-center gap-2">
+                                <span class=format!("text-xs font-mono {hoots_color}")>
+                                    {if d.hoots_overlap { "●" } else { "○" }}
+                                </span>
+                                <span class="text-xs text-muted">"Hoots filter: "</span>
+                                <span class="text-xs">{hoots_label}</span>
+                            </div>
+
+                            // ── TLE lines (collapsible) ───────
+                            <details class="text-xs">
+                                <summary class="cursor-pointer text-muted hover:text-foreground \
+                                               transition-colors select-none">
+                                    "TLE data"
+                                </summary>
+                                <div class="mt-2 space-y-2">
+                                    <div>
+                                        <p class="text-muted mb-0.5">{d.sat_a.name.clone()}</p>
+                                        <pre class="font-mono text-[10px] bg-gray rounded p-2 \
+                                                   overflow-x-auto border border-border/40">
+                                            {format!("{}\n{}", d.tle_a_line1, d.tle_a_line2)}
+                                        </pre>
+                                    </div>
+                                    <div>
+                                        <p class="text-muted mb-0.5">{d.sat_b.name.clone()}</p>
+                                        <pre class="font-mono text-[10px] bg-gray rounded p-2 \
+                                                   overflow-x-auto border border-border/40">
+                                            {format!("{}\n{}", d.tle_b_line1, d.tle_b_line2)}
+                                        </pre>
+                                    </div>
+                                </div>
+                            </details>
+
+                        </div>
+                    }.into_any()
+                })}
+            </Show>
+        </div>
+    }
+}
+
