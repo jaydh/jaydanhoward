@@ -1042,16 +1042,19 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
                                     matches!(s, ScreeningStatus::Running { .. });
                                 let is_complete =
                                     matches!(s, ScreeningStatus::Complete { .. });
+                                let is_failed =
+                                    matches!(s, ScreeningStatus::Failed(_));
                                 set_status.set(Some(s));
 
                                 // Fetch events:
                                 //   • Always during Running (live trickle).
-                                //   • Once on Complete if we have no events yet
+                                //   • Once on Complete/Failed if we have no events yet
                                 //     (initial page load or after a retrigger reset).
-                                //   • Never re-fetch once Complete with events present —
+                                //   • Never re-fetch once events are present —
                                 //     avoids the repeated set_events that causes flashing.
                                 let need_events = is_running
-                                    || (is_complete && events.get_untracked().is_empty());
+                                    || ((is_complete || is_failed)
+                                        && events.get_untracked().is_empty());
 
                                 if need_events && !loading_events.get_untracked() {
                                     set_loading_events.set(true);
@@ -1111,7 +1114,12 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
                     "Recalculate"
                 </button>
             </div>
-            <Show when=move || matches!(status.get(), Some(ScreeningStatus::Running { .. } | ScreeningStatus::Complete { .. }))>
+            <Show when=move || {
+                matches!(
+                    status.get(),
+                    Some(ScreeningStatus::Running { .. } | ScreeningStatus::Complete { .. })
+                ) || !events.get().is_empty()
+            }>
                 <ConjunctionTable events=events />
             </Show>
         </div>

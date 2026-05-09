@@ -793,9 +793,13 @@ mod inner {
                FROM conjunction_events ce
                JOIN conjunction_screenings cs ON ce.screening_id = cs.id
                WHERE cs.id = (
-                   SELECT id FROM conjunction_screenings
-                   WHERE group_name = $1 AND status IN ('complete', 'running')
-                   ORDER BY id DESC
+                   SELECT id FROM conjunction_screenings s
+                   WHERE s.group_name = $1
+                     AND s.status IN ('complete', 'running')
+                     AND EXISTS (
+                         SELECT 1 FROM conjunction_events e WHERE e.screening_id = s.id
+                     )
+                   ORDER BY s.id DESC
                    LIMIT 1
                )
                ORDER BY ce.tca_unix_ms ASC"#,
