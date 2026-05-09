@@ -1036,7 +1036,6 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
                 move || {
                     let g = current_group.clone();
                     leptos::task::spawn_local(async move {
-                        // Always poll status — never block this on events loading
                         match get_conjunction_status(g.clone()).await {
                             Ok(s) => {
                                 let is_running =
@@ -1045,20 +1044,22 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
                                     matches!(s, ScreeningStatus::Complete { .. });
                                 set_status.set(Some(s));
 
-                                // Fetch events during Running (trickle) and on Complete,
-                                // but skip if a fetch is already in flight
-                                if (is_running || is_complete) && !loading_events.get_untracked() {
+                                // Fetch events:
+                                //   • Always during Running (live trickle).
+                                //   • Once on Complete if we have no events yet
+                                //     (initial page load or after a retrigger reset).
+                                //   • Never re-fetch once Complete with events present —
+                                //     avoids the repeated set_events that causes flashing.
+                                let need_events = is_running
+                                    || (is_complete && events.get_untracked().is_empty());
+
+                                if need_events && !loading_events.get_untracked() {
                                     set_loading_events.set(true);
                                     match get_conjunctions(g).await {
-                                        Ok(ev) => {
-                                            set_events.set(ev);
-                                        }
-                                        Err(e) => {
-                                            web_sys::console::error_1(
-                                                &format!("get_conjunctions error: {e:?}")
-                                                    .into(),
-                                            );
-                                        }
+                                        Ok(ev) => set_events.set(ev),
+                                        Err(e) => web_sys::console::error_1(
+                                            &format!("get_conjunctions error: {e:?}").into(),
+                                        ),
                                     }
                                     set_loading_events.set(false);
                                 }
