@@ -1627,71 +1627,100 @@ fn ConjunctionDetailPanel(
                         .unwrap_or(0);
                     let tca_x = to_x(tca_step);
 
-                    // Y-axis labels
-                    let y_top_label = format!("{:.0}", max_d);
-                    let y_mid_label = format!("{:.0}", max_d / 2.0);
+                    // Y-axis labels — use enough precision for small distances
+                    let fmt_label = |v: f32| -> String {
+                        if v >= 10.0 { format!("{:.0}", v) }
+                        else if v >= 1.0 { format!("{:.1}", v) }
+                        else { format!("{:.2}", v) }
+                    };
+                    let y_top_label = fmt_label(max_d);
+                    let y_mid_label = fmt_label(max_d / 2.0);
 
-                    // ── Orbital-plane projection SVG (pre-built as inner_html string) ──
+                    // ── Orbital-plane projection SVG — TCA-centred zoom ──────────────
+                    // Centre on the TCA midpoint and zoom to ~1/6 of orbit radius so the
+                    // step-dots and close-approach geometry are actually visible.  Earth
+                    // is drawn to scale but will mostly be clipped below the view.
                     let sat_a_name = d.sat_a.name.clone();
                     let sat_b_name = d.sat_b.name.clone();
                     let orbit_svg: Option<String> = if !d.proj_a.is_empty() && !d.proj_b.is_empty() {
                         let orb_w = 400.0_f32;
-                        let orb_h = 160.0_f32;
-                        let orb_pad = 12.0_f32;
+                        let orb_h = 200.0_f32;
 
-                        // Bounding box anchored to include Earth (0,0)
-                        let min_x = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[0])
-                            .fold(0.0_f32, f32::min);
-                        let max_x = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[0])
-                            .fold(0.0_f32, f32::max);
-                        let min_y = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[1])
-                            .fold(0.0_f32, f32::min);
-                        let max_y = d.proj_a.iter().chain(d.proj_b.iter()).map(|p| p[1])
-                            .fold(0.0_f32, f32::max);
+                        // TCA midpoint (km, in orbital-plane coords)
+                        let tca_cx = (d.tca_proj_a[0] + d.tca_proj_b[0]) / 2.0;
+                        let tca_cy = (d.tca_proj_a[1] + d.tca_proj_b[1]) / 2.0;
 
-                        let range_x = (max_x - min_x).max(100.0);
-                        let range_y = (max_y - min_y).max(100.0);
-                        let scale = ((orb_w - 2.0 * orb_pad) / range_x)
-                            .min((orb_h - 2.0 * orb_pad) / range_y);
+                        // Orbit radius (km from Earth centre to TCA)
+                        let orbit_r = (tca_cx * tca_cx + tca_cy * tca_cy).sqrt();
 
-                        let cx_data = (min_x + max_x) / 2.0;
-                        let cy_data = (min_y + max_y) / 2.0;
-                        let svg_cx = orb_w / 2.0;
-                        let svg_cy = orb_h / 2.0;
+                        // Zoom range: ~1/5 of orbit radius, at least 300 km so the arc
+                        // shows clear curvature; expanded to fit the miss distance + margin
+                        let miss_margin = (d.miss_distance_km * 50.0).max(300.0_f32);
+                        let zoom_range = (orbit_r / 5.0).max(miss_margin);
 
-                        let mx = |x: f32| svg_cx + (x - cx_data) * scale;
-                        let my = |y: f32| svg_cy - (y - cy_data) * scale;
+                        // px/km scale so the zoom_range fills the shorter SVG axis
+                        let scale = (orb_w.min(orb_h) - 24.0) / (2.0 * zoom_range);
 
-                        let earth_r_px = (6371.0_f32 * scale).clamp(3.0, orb_h / 2.5);
+                        let mx = |x: f32| orb_w / 2.0 + (x - tca_cx) * scale;
+                        let my = |y: f32| orb_h / 2.0 - (y - tca_cy) * scale;
+
+                        // Earth — to scale, positioned correctly (mostly off-screen below)
+                        let earth_r_px = 6371.0_f32 * scale;
                         let ecx = mx(0.0);
                         let ecy = my(0.0);
-
                         let mut s = format!(
                             "<circle cx='{ecx:.1}' cy='{ecy:.1}' r='{earth_r_px:.1}' \
-                             fill='#0f2942' stroke='#3b82f6' stroke-width='0.5'/>"
+                             fill='#0b1e30' stroke='#1d4ed8' stroke-width='1' opacity='0.8'/>"
                         );
+
+                        // Step dots — only emit those inside a generous clip window
+                        let clip = zoom_range * 1.15;
                         for p in &d.proj_a {
-                            s.push_str(&format!(
-                                "<circle cx='{:.1}' cy='{:.1}' r='1.5' fill='#60a5fa' opacity='0.55'/>",
-                                mx(p[0]), my(p[1])
-                            ));
+                            if (p[0] - tca_cx).abs() < clip && (p[1] - tca_cy).abs() < clip {
+                                s.push_str(&format!(
+                                    "<circle cx='{:.1}' cy='{:.1}' r='2' fill='#60a5fa' opacity='0.65'/>",
+                                    mx(p[0]), my(p[1])
+                                ));
+                            }
                         }
                         for p in &d.proj_b {
-                            s.push_str(&format!(
-                                "<circle cx='{:.1}' cy='{:.1}' r='1.5' fill='#fb923c' opacity='0.55'/>",
-                                mx(p[0]), my(p[1])
-                            ));
+                            if (p[0] - tca_cx).abs() < clip && (p[1] - tca_cy).abs() < clip {
+                                s.push_str(&format!(
+                                    "<circle cx='{:.1}' cy='{:.1}' r='2' fill='#fb923c' opacity='0.65'/>",
+                                    mx(p[0]), my(p[1])
+                                ));
+                            }
                         }
+
+                        // TCA close-approach line + highlighted endpoints
                         let ax = mx(d.tca_proj_a[0]); let ay = my(d.tca_proj_a[1]);
                         let bx = mx(d.tca_proj_b[0]); let by_ = my(d.tca_proj_b[1]);
                         s.push_str(&format!(
                             "<line x1='{ax:.1}' y1='{ay:.1}' x2='{bx:.1}' y2='{by_:.1}' \
-                             stroke='#facc15' stroke-width='1.5' opacity='0.9'/>\
-                             <circle cx='{ax:.1}' cy='{ay:.1}' r='4' \
-                             fill='#60a5fa' stroke='#facc15' stroke-width='1.5'/>\
-                             <circle cx='{bx:.1}' cy='{by_:.1}' r='4' \
-                             fill='#fb923c' stroke='#facc15' stroke-width='1.5'/>"
+                             stroke='#facc15' stroke-width='2' opacity='0.95'/>\
+                             <circle cx='{ax:.1}' cy='{ay:.1}' r='5' \
+                             fill='#60a5fa' stroke='#facc15' stroke-width='2'/>\
+                             <circle cx='{bx:.1}' cy='{by_:.1}' r='5' \
+                             fill='#fb923c' stroke='#facc15' stroke-width='2'/>"
                         ));
+
+                        // Scale bar: 10% of zoom_range, rounded to a nice number
+                        let bar_km_raw = zoom_range * 0.2;
+                        let mag = 10.0_f32.powf(bar_km_raw.log10().floor());
+                        let bar_km = (bar_km_raw / mag).round() * mag;
+                        let bar_px = bar_km * scale;
+                        let bar_x1 = orb_w - 16.0 - bar_px;
+                        let bar_y = orb_h - 12.0;
+                        s.push_str(&format!(
+                            "<line x1='{bar_x1:.1}' y1='{bar_y}' x2='{:.1}' y2='{bar_y}' \
+                             stroke='#888' stroke-width='1.5'/>\
+                             <text x='{:.1}' y='{:.1}' font-size='8' fill='#888' text-anchor='middle'>\
+                             {bar_km:.0} km</text>",
+                            bar_x1 + bar_px,
+                            bar_x1 + bar_px / 2.0,
+                            bar_y - 3.0,
+                        ));
+
                         Some(s)
                     } else {
                         None
@@ -1778,9 +1807,9 @@ fn ConjunctionDetailPanel(
                                         </span>
                                     </div>
                                     <svg
-                                        viewBox="0 0 400 160"
+                                        viewBox="0 0 400 200"
                                         class="w-full rounded border border-border/40 bg-gray"
-                                        style="height:160px"
+                                        style="height:200px"
                                         inner_html=inner
                                     />
                                 </div>
