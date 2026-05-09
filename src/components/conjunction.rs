@@ -1572,6 +1572,99 @@ fn ConjunctionDetailPanel(
         }
     };
 
+    // ── Orbit pan / zoom state ────────────────────────────────────
+    let orbit_pan_x = RwSignal::new(0.0_f32);
+    let orbit_pan_y = RwSignal::new(0.0_f32);
+    let orbit_zoom  = RwSignal::new(1.0_f32);
+    // dragging: Some((start_client_x, start_client_y, start_pan_x, start_pan_y))
+    let orbit_drag: RwSignal<Option<(f32, f32, f32, f32)>> = RwSignal::new(None);
+
+    // Reset view whenever the loaded detail changes
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        let _ = detail.get();
+        orbit_pan_x.set(0.0);
+        orbit_pan_y.set(0.0);
+        orbit_zoom.set(1.0);
+        orbit_drag.set(None);
+    });
+
+    // ── Event handlers (SSR stubs / WASM implementations) ────────
+    #[cfg(feature = "ssr")]
+    let on_orbit_wheel       = move |_: leptos::ev::WheelEvent|   {};
+    #[cfg(feature = "ssr")]
+    let on_orbit_pointerdown = move |_: leptos::ev::PointerEvent| {};
+    #[cfg(feature = "ssr")]
+    let on_orbit_pointermove = move |_: leptos::ev::PointerEvent| {};
+    #[cfg(feature = "ssr")]
+    let on_orbit_pointerup   = move |_: leptos::ev::PointerEvent| {};
+    #[cfg(feature = "ssr")]
+    let on_orbit_pointercancel = move |_: leptos::ev::PointerEvent| {};
+
+    #[cfg(not(feature = "ssr"))]
+    let on_orbit_wheel = move |e: leptos::ev::WheelEvent| {
+        e.prevent_default();
+        use wasm_bindgen::JsCast;
+        let Some(target) = e.current_target() else { return };
+        let el = target.unchecked_ref::<web_sys::Element>();
+        let rect = el.get_bounding_client_rect();
+        let svg_w = rect.width() as f32;
+        let svg_h = rect.height() as f32;
+        if svg_w == 0.0 { return }
+        // Convert client coords → SVG viewBox coords (400 × 200)
+        let cx = (e.client_x() as f32 - rect.left() as f32) / svg_w * 400.0;
+        let cy = (e.client_y() as f32 - rect.top() as f32)  / svg_h * 200.0;
+        let factor = if e.delta_y() < 0.0 { 1.25 } else { 1.0 / 1.25 };
+        let old_z  = orbit_zoom.get_untracked();
+        let new_z  = (old_z * factor).clamp(0.1, 200.0);
+        let old_px = orbit_pan_x.get_untracked();
+        let old_py = orbit_pan_y.get_untracked();
+        // Zoom centred on cursor: keep the world-point under cursor fixed
+        orbit_pan_x.set(cx - (cx - old_px) * new_z / old_z);
+        orbit_pan_y.set(cy - (cy - old_py) * new_z / old_z);
+        orbit_zoom.set(new_z);
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let on_orbit_pointerdown = move |e: leptos::ev::PointerEvent| {
+        use wasm_bindgen::JsCast;
+        let Some(target) = e.current_target() else { return };
+        let el = target.unchecked_ref::<web_sys::Element>();
+        el.set_pointer_capture(e.pointer_id()).ok();
+        orbit_drag.set(Some((
+            e.client_x() as f32,
+            e.client_y() as f32,
+            orbit_pan_x.get_untracked(),
+            orbit_pan_y.get_untracked(),
+        )));
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let on_orbit_pointermove = move |e: leptos::ev::PointerEvent| {
+        let Some((sx, sy, px0, py0)) = orbit_drag.get_untracked() else { return };
+        use wasm_bindgen::JsCast;
+        let Some(target) = e.current_target() else { return };
+        let el = target.unchecked_ref::<web_sys::Element>();
+        let rect = el.get_bounding_client_rect();
+        let svg_w = rect.width() as f32;
+        let svg_h = rect.height() as f32;
+        if svg_w == 0.0 { return }
+        let dx = (e.client_x() as f32 - sx) / svg_w * 400.0;
+        let dy = (e.client_y() as f32 - sy) / svg_h * 200.0;
+        orbit_pan_x.set(px0 + dx);
+        orbit_pan_y.set(py0 + dy);
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let on_orbit_pointerup = move |_: leptos::ev::PointerEvent| {
+        orbit_drag.set(None);
+    };
+
+    #[cfg(not(feature = "ssr"))]
+    let on_orbit_pointercancel = move |_: leptos::ev::PointerEvent| {
+        orbit_drag.set(None);
+    };
+
     view! {
         <div class="mt-4 border border-border rounded-lg p-4 bg-surface text-sm">
 
@@ -1689,23 +1782,27 @@ fn ConjunctionDetailPanel(
                              fill='#0b1e30' stroke='#1d4ed8' stroke-width='1' opacity='0.8'/>"
                         );
 
-                        // Step dots — only emit those inside a generous clip window
-                        let clip = zoom_range * 1.15;
+                        // Time-matched step lines (A[i] ↔ B[i]) — drawn beneath dots
+                        for (pa, pb) in d.proj_a.iter().zip(d.proj_b.iter()) {
+                            s.push_str(&format!(
+                                "<line x1='{:.1}' y1='{:.1}' x2='{:.1}' y2='{:.1}' \
+                                 stroke='#6b7280' stroke-width='0.5' opacity='0.4'/>",
+                                mx(pa[0]), my(pa[1]), mx(pb[0]), my(pb[1])
+                            ));
+                        }
+
+                        // Step dots — all points rendered; user can pan/zoom to explore
                         for p in &d.proj_a {
-                            if (p[0] - tca_cx).abs() < clip && (p[1] - tca_cy).abs() < clip {
-                                s.push_str(&format!(
-                                    "<circle cx='{:.1}' cy='{:.1}' r='2' fill='#60a5fa' opacity='0.65'/>",
-                                    mx(p[0]), my(p[1])
-                                ));
-                            }
+                            s.push_str(&format!(
+                                "<circle cx='{:.1}' cy='{:.1}' r='2' fill='#60a5fa' opacity='0.65'/>",
+                                mx(p[0]), my(p[1])
+                            ));
                         }
                         for p in &d.proj_b {
-                            if (p[0] - tca_cx).abs() < clip && (p[1] - tca_cy).abs() < clip {
-                                s.push_str(&format!(
-                                    "<circle cx='{:.1}' cy='{:.1}' r='2' fill='#fb923c' opacity='0.65'/>",
-                                    mx(p[0]), my(p[1])
-                                ));
-                            }
+                            s.push_str(&format!(
+                                "<circle cx='{:.1}' cy='{:.1}' r='2' fill='#fb923c' opacity='0.65'/>",
+                                mx(p[0]), my(p[1])
+                            ));
                         }
 
                         // TCA close-approach line + highlighted endpoints
@@ -1825,9 +1922,24 @@ fn ConjunctionDetailPanel(
                                     <svg
                                         viewBox="0 0 400 200"
                                         class="w-full rounded border border-border/40 bg-gray"
-                                        style="height:200px"
-                                        inner_html=inner
-                                    />
+                                        style=move || format!(
+                                            "height:200px;cursor:{}",
+                                            if orbit_drag.get().is_some() { "grabbing" } else { "grab" }
+                                        )
+                                        on:wheel=on_orbit_wheel
+                                        on:pointerdown=on_orbit_pointerdown
+                                        on:pointermove=on_orbit_pointermove
+                                        on:pointerup=on_orbit_pointerup
+                                        on:pointercancel=on_orbit_pointercancel
+                                    >
+                                        <g
+                                            transform=move || format!(
+                                                "translate({:.2} {:.2}) scale({:.4})",
+                                                orbit_pan_x.get(), orbit_pan_y.get(), orbit_zoom.get()
+                                            )
+                                            inner_html=inner
+                                        />
+                                    </svg>
                                 </div>
                             })}
 
