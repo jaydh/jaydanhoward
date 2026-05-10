@@ -52,10 +52,9 @@ jobs:
         # Clippy already built this — Bazel remote cache makes this nearly instant
         run: bazel --bazelrc=.bazelrc.ci build :jaydanhoward_bin
       - name: Start app
-        # No DATABASE_URL: runs in memory-only mode (graceful no-op for DB features)
+        # No DATABASE_URL or PROMETHEUS_URL: runs in memory-only mode
         run: |
-          PROMETHEUS_URL="http://127.0.0.1:9090" \
-            ./bazel-bin/jaydanhoward_bin &
+          ./bazel-bin/jaydanhoward_bin &
           echo $! > /tmp/app.pid
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8000/health_check && break || sleep 2

@@ -118,15 +118,9 @@ pub async fn run() -> Result<(), std::io::Error> {
         let pool_opt = pool_arc.clone();
 
         tokio::spawn(async move {
-            use tokio::time::interval;
-            let mut ticker = interval(Duration::from_secs(1));
-            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
             let mut heartbeat_tick: u64 = 0;
+            let mut consecutive_failures: u32 = 0;
             loop {
-                ticker.tick().await;
-                heartbeat_tick += 1;
-
                 let tx_mbps = match crate::prometheus_client::query_prometheus(
                     "sum(rate(node_network_transmit_bytes_total{\
                       device!~\"lo|veth.*|docker.*|br-.*|cni.*|tunl.*|cilium.*|lxc.*|flannel.*|dummy.*\"\
@@ -134,17 +128,29 @@ pub async fn run() -> Result<(), std::io::Error> {
                 )
                 .await
                 {
-                    Ok(data) => data
-                        .data
-                        .result
-                        .first()
-                        .and_then(|m| m.value.1.parse::<f64>().ok())
-                        .unwrap_or(0.0),
+                    Ok(data) => {
+                        consecutive_failures = 0;
+                        data.data
+                            .result
+                            .first()
+                            .and_then(|m| m.value.1.parse::<f64>().ok())
+                            .unwrap_or(0.0)
+                    }
                     Err(e) => {
-                        log::warn!("Spike detector: Prometheus query failed: {e}");
+                        consecutive_failures += 1;
+                        // Exponential backoff: 2s, 4s, 8s, … capped at 5 minutes
+                        let backoff = Duration::from_secs(
+                            2_u64.pow(consecutive_failures.min(8)).min(300),
+                        );
+                        log::warn!(
+                            "Spike detector: Prometheus query failed \
+                             (attempt {consecutive_failures}, retry in {backoff:?}): {e}"
+                        );
+                        tokio::time::sleep(backoff).await;
                         continue;
                     }
                 };
+                heartbeat_tick += 1;
 
                 if heartbeat_tick % 300 == 1 {
                     let (mult, floor) = {
@@ -216,6 +222,8 @@ pub async fn run() -> Result<(), std::io::Error> {
                         });
                     }
                 }
+
+                tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });
     }
