@@ -54,7 +54,9 @@ test('server functions return non-500 on initial load', async ({ page }) => {
 });
 
 // Catches regressions in the conjunction screening pipeline.
-test('conjunction table populates within 60s', async ({ page }) => {
+// Skipped in CI: requires CelesTrak network access and a live DB.
+const isLocalCI = (process.env.BASE_URL ?? '').includes('127.0.0.1');
+test('conjunction table populates within 60s', { skip: isLocalCI }, async ({ page }) => {
   await page.goto('/');
   await page.locator('#satellites').scrollIntoViewIfNeeded();
 

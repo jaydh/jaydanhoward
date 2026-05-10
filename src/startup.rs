@@ -112,8 +112,8 @@ pub async fn run() -> Result<(), std::io::Error> {
         NetworkSpikeDetector::new(spike_multiplier, spike_floor_mbps, 180, 30),
     ));
 
-    // Background spike detection loop
-    {
+    // Background spike detection loop — skipped when Prometheus is not configured
+    if std::env::var("PROMETHEUS_URL").is_ok() {
         let detector = spike_detector.clone();
         let pool_opt = pool_arc.clone();
 
@@ -226,7 +226,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                 tokio::time::sleep(Duration::from_secs(1)).await;
             }
         });
-    }
+    } // end PROMETHEUS_URL check
 
     // Pre-warm TLE cache at startup and refresh every 6 hours, regardless of DB availability.
     // Without this, the first browser request cold-fetches from CelesTrak (up to 30s hang).
