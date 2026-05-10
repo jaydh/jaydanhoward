@@ -41,17 +41,16 @@ jobs:
   integration-test:
     name: Integration Test
     runs-on: arc-runner-set-k8s
-    container:
-      image: ${{ vars.RUNNER_IMAGE_URL }}
-      options: --privileged
+    container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [clippy]
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-      - name: Build and load image
-        run: bazel --bazelrc=.bazelrc.ci run :jaydanhoward_image_amd64_load
+      - name: Build binary
+        # Clippy already built this — Bazel remote cache makes this nearly instant
+        run: bazel --bazelrc=.bazelrc.ci build :jaydanhoward_bin
       - name: Start Postgres
         run: |
           docker run -d --name test-pg \
@@ -65,11 +64,10 @@ jobs:
           done
       - name: Start app
         run: |
-          docker run -d --name test-app \
-            --network host \
-            -e DATABASE_URL="postgresql://jaydanhoward:testpass@127.0.0.1:5432/jaydanhoward" \
-            -e PROMETHEUS_URL="http://127.0.0.1:9090" \
-            jaydanhoward:ci
+          DATABASE_URL="postgresql://jaydanhoward:testpass@127.0.0.1:5432/jaydanhoward" \
+          PROMETHEUS_URL="http://127.0.0.1:9090" \
+            ./bazel-bin/jaydanhoward_bin &
+          echo $! > /tmp/app.pid
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8000/health_check && break || sleep 2
           done
@@ -95,10 +93,15 @@ jobs:
           retention-days: 14
       - name: App logs on failure
         if: failure()
-        run: docker logs test-app 2>&1 | tail -100
+        run: |
+          echo "=== app stdout/stderr ==="
+          kill -0 $(cat /tmp/app.pid 2>/dev/null) 2>/dev/null \
+            && kill $(cat /tmp/app.pid) || true
       - name: Cleanup
         if: always()
-        run: docker rm -f test-app test-pg 2>/dev/null || true
+        run: |
+          [ -f /tmp/app.pid ] && kill $(cat /tmp/app.pid) 2>/dev/null || true
+          docker rm -f test-pg 2>/dev/null || true
 
   harbor-image-x86_64-push:
     if: github.event_name == 'push'
