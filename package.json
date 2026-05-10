@@ -1,0 +1,24 @@
+{
+  "name": "jaydanhoward",
+  "version": "1.0.0",
+  "description": "- Rust  - Bazel  - WASM-Bindgen  - Leptos  - Mutli-architecture OCI images  - TailwindCSS  - CICD integrated with self-hosted mult-cpu-architecture Kubernetes cluster utilizing https://github.com/actions/actions-runner-controller with both DinD and k8s mode runners",
+  "main": "tailwind.config.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaydh/jaydanhoward.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jaydh/jaydanhoward/issues"
+  },
+  "homepage": "https://github.com/jaydh/jaydanhoward#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

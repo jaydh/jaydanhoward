@@ -385,6 +385,12 @@ oci_image(
     workdir = "/app/jaydanhoward_bin_linux_arm64.runfiles",
 )
 
+oci_load(
+    name = "jaydanhoward_image_amd64_load",
+    image = ":jaydanhoward_image_amd64",
+    repo_tags = ["jaydanhoward:ci"],
+)
+
 oci_push(
     name = "jaydanhoward_image_amd64_push",
     image = ":jaydanhoward_image_amd64",
