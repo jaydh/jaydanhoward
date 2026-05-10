@@ -35,7 +35,7 @@ test('server functions return non-500 on initial load', async ({ page }) => {
     'get_visitor_stats', 'save_spike_config',
     // Requires Prometheus
     'get_top_network_pods', 'get_node_metrics', 'get_cluster_metrics',
-    'get_network_insights_chart', 'get_gitops_status',
+    'get_network_insights_chart', 'get_gitops_status', 'get_historical_metrics',
   ];
 
   page.on('response', res => {
@@ -55,8 +55,11 @@ test('server functions return non-500 on initial load', async ({ page }) => {
 
 // Catches regressions in the conjunction screening pipeline.
 // Skipped in CI: requires CelesTrak network access and a live DB.
-const isLocalCI = (process.env.BASE_URL ?? '').includes('127.0.0.1');
-test('conjunction table populates within 60s', { skip: isLocalCI }, async ({ page }) => {
+test('conjunction table populates within 60s', async ({ page }) => {
+  test.skip(
+    (process.env.BASE_URL ?? '').includes('127.0.0.1'),
+    'CelesTrak unreachable from CI runner',
+  );
   await page.goto('/');
   await page.locator('#satellites').scrollIntoViewIfNeeded();
 
