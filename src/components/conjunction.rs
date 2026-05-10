@@ -1937,6 +1937,7 @@ fn ConjunctionDetailPanel(
                                     </div>
                                     <svg
                                         viewBox="0 0 400 200"
+                                        preserveAspectRatio="none"
                                         class="w-full rounded border border-border/40 bg-gray"
                                         style=move || format!(
                                             "height:200px;cursor:{}",
