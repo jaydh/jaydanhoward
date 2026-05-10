@@ -51,20 +51,9 @@ jobs:
       - name: Build binary
         # Clippy already built this — Bazel remote cache makes this nearly instant
         run: bazel --bazelrc=.bazelrc.ci build :jaydanhoward_bin
-      - name: Start Postgres
-        run: |
-          docker run -d --name test-pg \
-            --network host \
-            -e POSTGRES_USER=jaydanhoward \
-            -e POSTGRES_PASSWORD=testpass \
-            -e POSTGRES_DB=jaydanhoward \
-            postgres:16-alpine
-          for i in $(seq 1 30); do
-            docker exec test-pg pg_isready -U jaydanhoward -q && break || sleep 1
-          done
       - name: Start app
+        # No DATABASE_URL: runs in memory-only mode (graceful no-op for DB features)
         run: |
-          DATABASE_URL="postgresql://jaydanhoward:testpass@127.0.0.1:5432/jaydanhoward" \
           PROMETHEUS_URL="http://127.0.0.1:9090" \
             ./bazel-bin/jaydanhoward_bin &
           echo $! > /tmp/app.pid
@@ -101,7 +90,6 @@ jobs:
         if: always()
         run: |
           [ -f /tmp/app.pid ] && kill $(cat /tmp/app.pid) 2>/dev/null || true
-          docker rm -f test-pg 2>/dev/null || true
 
   harbor-image-x86_64-push:
     if: github.event_name == 'push'

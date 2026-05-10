@@ -24,20 +24,25 @@ test('WASM instantiates and page loads without fatal errors', async ({ page }) =
 });
 
 // Catches broken server functions (500s) that would show blank panels to users.
-// Prometheus-backed endpoints are excluded — Prometheus is not available in CI.
+// DB-dependent and Prometheus-backed endpoints are excluded in CI since neither
+// is available — those are covered by testing against production.
 test('server functions return non-500 on initial load', async ({ page }) => {
   const failures: string[] = [];
+
+  const ciSkip = [
+    // Requires Postgres
+    'get_network_insights', 'get_claude_audit_log', 'get_spike_config',
+    'get_visitor_stats', 'save_spike_config',
+    // Requires Prometheus
+    'get_top_network_pods', 'get_node_metrics', 'get_cluster_metrics',
+    'get_network_insights_chart', 'get_gitops_status',
+  ];
 
   page.on('response', res => {
     const url = res.url();
     if (!url.includes('/api/')) return;
     if (res.status() < 500) return;
-    // Cluster-stats endpoints hit Prometheus, which isn't running in CI
-    const prometheusEndpoints = [
-      'get_top_network_pods', 'get_node_metrics', 'get_cluster_metrics',
-      'get_network_insights_chart', 'get_gitops_status',
-    ];
-    if (prometheusEndpoints.some(e => url.includes(e))) return;
+    if (ciSkip.some(e => url.includes(e))) return;
     failures.push(`${res.status()} ${url}`);
   });
 
