@@ -52,9 +52,11 @@ jobs:
         # Clippy already built this — Bazel remote cache makes this nearly instant
         run: bazel --bazelrc=.bazelrc.ci build :jaydanhoward_bin
       - name: Start app
-        # No DATABASE_URL or PROMETHEUS_URL: runs in memory-only mode
+        # No DATABASE_URL or PROMETHEUS_URL: runs in memory-only mode.
+        # Redirect output to file so the background process doesn't keep the
+        # step's stdout/stderr open (which would hang the step indefinitely).
         run: |
-          ./bazel-bin/jaydanhoward_bin &
+          ./bazel-bin/jaydanhoward_bin > /tmp/app.log 2>&1 &
           echo $! > /tmp/app.pid
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8000/health_check && break || sleep 2
@@ -83,8 +85,7 @@ jobs:
         if: failure()
         run: |
           echo "=== app stdout/stderr ==="
-          kill -0 $(cat /tmp/app.pid 2>/dev/null) 2>/dev/null \
-            && kill $(cat /tmp/app.pid) || true
+          cat /tmp/app.log 2>/dev/null || true
       - name: Cleanup
         if: always()
         run: |
