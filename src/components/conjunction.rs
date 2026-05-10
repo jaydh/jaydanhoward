@@ -1627,10 +1627,6 @@ fn ConjunctionDetailPanel(
 
     #[cfg(not(feature = "ssr"))]
     let on_orbit_pointerdown = move |e: leptos::ev::PointerEvent| {
-        use wasm_bindgen::JsCast;
-        let Some(target) = e.current_target() else { return };
-        let el = target.unchecked_ref::<web_sys::Element>();
-        el.set_pointer_capture(e.pointer_id()).ok();
         orbit_drag.set(Some((
             e.client_x() as f32,
             e.client_y() as f32,
