@@ -66,7 +66,11 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), SecurityAuditError> {
 
 #[cfg(feature = "ssr")]
 #[instrument(skip(body))]
-pub async fn upload_security_audit(headers: HeaderMap, body: Bytes) -> Response {
+pub async fn upload_security_audit(
+    axum::extract::Extension(pool): axum::extract::Extension<Option<std::sync::Arc<sqlx::PgPool>>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     log::info!("Received upload_security_audit");
 
     match basic_authentication(&headers) {
@@ -99,24 +103,26 @@ pub async fn upload_security_audit(headers: HeaderMap, body: Bytes) -> Response 
         return (StatusCode::PAYLOAD_TOO_LARGE, "Exceeds 1MB limit").into_response();
     }
 
-    // Validate it's parseable JSON before writing
-    if serde_json::from_slice::<serde_json::Value>(&body).is_err() {
-        log::warn!("Upload rejected: body is not valid JSON");
-        return (StatusCode::BAD_REQUEST, "Invalid JSON").into_response();
-    }
+    let report: serde_json::Value = match serde_json::from_slice(&body) {
+        Ok(v) => v,
+        Err(_) => {
+            log::warn!("Upload rejected: body is not valid JSON");
+            return (StatusCode::BAD_REQUEST, "Invalid JSON").into_response();
+        }
+    };
 
-    use runfiles::{rlocation, Runfiles};
-    let r = Runfiles::create().expect("Must run using bazel with runfiles");
-    let assets_path = rlocation!(r, "_main/assets").expect("Failed to locate assets");
-    let file_path = format!("{}/security-audit.json", assets_path.to_string_lossy());
+    let Some(pool) = pool else {
+        log::warn!("Security audit upload received but no database configured");
+        return StatusCode::SERVICE_UNAVAILABLE.into_response();
+    };
 
-    match std::fs::write(&file_path, &body) {
+    match crate::db::save_security_audit(&pool, &report).await {
         Ok(()) => {
-            log::info!("Written security audit to {file_path}");
+            log::info!("Security audit saved to DB");
             StatusCode::OK.into_response()
         }
         Err(e) => {
-            log::error!("Failed to write security audit: {e}");
+            log::error!("Failed to save security audit: {e}");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }

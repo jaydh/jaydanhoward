@@ -1054,6 +1054,28 @@ mod inner {
         Ok(())
     }
 
+    pub async fn save_security_audit(
+        pool: &PgPool,
+        report: &serde_json::Value,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query("INSERT INTO security_audit (report, uploaded_at) VALUES ($1, NOW())")
+            .bind(report)
+            .execute(pool)
+            .await?;
+        Ok(())
+    }
+
+    pub async fn load_security_audit(
+        pool: &PgPool,
+    ) -> Result<Option<serde_json::Value>, sqlx::Error> {
+        let row = sqlx::query_scalar::<_, serde_json::Value>(
+            "SELECT report FROM security_audit ORDER BY uploaded_at DESC LIMIT 1",
+        )
+        .fetch_optional(pool)
+        .await?;
+        Ok(row)
+    }
+
     /// Persist updated spike detector thresholds.
     pub async fn save_spike_config(
         pool: &PgPool,

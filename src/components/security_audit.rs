@@ -22,21 +22,26 @@ pub struct AuditReport {
 
 #[server(name = GetSecurityAudit, prefix = "/api", endpoint = "get_security_audit")]
 pub async fn get_security_audit() -> Result<Option<AuditReport>, ServerFnError<String>> {
-    use runfiles::{rlocation, Runfiles};
+    use axum::extract::Extension;
+    use leptos_axum::extract;
+    use std::sync::Arc;
 
-    let r = Runfiles::create().map_err(|e| ServerFnError::ServerError(e.to_string()))?;
-    let path = rlocation!(r, "_main/assets/security-audit.json")
-        .ok_or_else(|| ServerFnError::ServerError("security-audit.json not found".into()))?;
-
-    if !path.exists() {
-        return Ok(None);
-    }
-
-    let raw = std::fs::read_to_string(&path)
+    let Extension(pool): Extension<Option<Arc<sqlx::PgPool>>> = extract()
+        .await
         .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
 
-    let v: serde_json::Value =
-        serde_json::from_str(&raw).map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+    let pool = match pool {
+        Some(p) => p,
+        None => return Ok(None),
+    };
+
+    let v: serde_json::Value = match crate::db::load_security_audit(&pool)
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?
+    {
+        Some(v) => v,
+        None => return Ok(None),
+    };
 
     let scanned_at = v["scanned_at"].as_str().unwrap_or("unknown").to_string();
     let dependency_count = v["lockfile"]["dependency-count"].as_u64().unwrap_or(0) as u32;
