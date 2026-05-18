@@ -4,19 +4,23 @@ pub use inner::*;
 #[cfg(feature = "ssr")]
 mod inner {
     use std::collections::VecDeque;
+    use std::time::{Duration, Instant};
 
     use serde::{Deserialize, Serialize};
 
+    const IN_MEMORY_COOLDOWN: Duration = Duration::from_secs(5 * 60);
+
     /// Rolling-window spike detector for cluster network tx.
     /// Window size and thresholds are tuned dynamically via Claude feedback.
-    /// Cooldown / dedup is handled by the DB (spike_claims table), not in-memory,
-    /// so multiple HA replicas don't each fire a separate explanation.
+    /// Dedup is handled by both the DB (spike_claims table, cross-replica) and
+    /// an in-memory cooldown (per-replica fallback if the DB is unavailable).
     pub struct NetworkSpikeDetector {
         tx_window: VecDeque<f64>,
         window_capacity: usize,
         min_samples: usize,
         pub multiplier: f64,
         pub floor_mbps: f64,
+        last_spike_at: Option<Instant>,
     }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -36,11 +40,12 @@ mod inner {
                 min_samples,
                 multiplier,
                 floor_mbps,
+                last_spike_at: None,
             }
         }
 
         /// Feed the latest tx value. Returns `Some((spike, baseline))` when a
-        /// spike is detected and the cooldown has elapsed.
+        /// spike is detected and both cooldowns (in-memory + DB) have elapsed.
         pub fn check(&mut self, tx_mbps: f64) -> Option<(f64, f64)> {
             if self.tx_window.len() >= self.window_capacity {
                 self.tx_window.pop_front();
@@ -51,13 +56,28 @@ mod inner {
                 return None;
             }
 
-            let n = self.tx_window.len();
-            let baseline: f64 =
-                self.tx_window.iter().take(n - 1).sum::<f64>() / (n - 1) as f64;
+            // Baseline: median of the window excluding the current sample, which
+            // avoids the baseline creeping upward during a sustained spike.
+            let mut sorted: Vec<f64> = self.tx_window.iter().copied().take(self.tx_window.len() - 1).collect();
+            sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mid = sorted.len() / 2;
+            let baseline = if sorted.len() % 2 == 0 {
+                (sorted[mid - 1] + sorted[mid]) / 2.0
+            } else {
+                sorted[mid]
+            };
 
             if !(tx_mbps > baseline * self.multiplier && tx_mbps > self.floor_mbps) {
                 return None;
             }
+
+            // In-memory cooldown: even if the DB claim fails, don't spam Claude.
+            if let Some(t) = self.last_spike_at {
+                if t.elapsed() < IN_MEMORY_COOLDOWN {
+                    return None;
+                }
+            }
+            self.last_spike_at = Some(Instant::now());
 
             Some((tx_mbps, baseline))
         }
@@ -274,7 +294,15 @@ mod inner {
             .unwrap_or("{}")
             .to_string();
 
-        let parsed = serde_json::from_str::<serde_json::Value>(&raw).unwrap_or_default();
+        // Strip markdown code fences that Haiku sometimes wraps around JSON.
+        let json_str = raw
+            .trim()
+            .trim_start_matches("```json")
+            .trim_start_matches("```")
+            .trim_end_matches("```")
+            .trim();
+
+        let parsed = serde_json::from_str::<serde_json::Value>(json_str).unwrap_or_default();
         let explanation = parsed["explanation"]
             .as_str()
             .unwrap_or("Unable to generate explanation.")
