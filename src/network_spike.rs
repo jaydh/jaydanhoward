@@ -61,7 +61,7 @@ mod inner {
             let mut sorted: Vec<f64> = self.tx_window.iter().copied().take(self.tx_window.len() - 1).collect();
             sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
             let mid = sorted.len() / 2;
-            let baseline = if sorted.len() % 2 == 0 {
+            let baseline = if sorted.len().is_multiple_of(2) {
                 (sorted[mid - 1] + sorted[mid]) / 2.0
             } else {
                 sorted[mid]
