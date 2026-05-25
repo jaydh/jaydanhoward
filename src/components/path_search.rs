@@ -150,14 +150,14 @@ fn randomize_cells(
 
     // Pick random start and end from passable cells
     if passable_cells.len() >= 2 {
-        let start_idx = rng.gen_range(0..passable_cells.len());
+        let start_idx = rng.random_range(0..passable_cells.len());
         let start = passable_cells[start_idx];
         set_start(Some(start));
 
         // Pick a different cell for end
-        let mut end_idx = rng.gen_range(0..passable_cells.len());
+        let mut end_idx = rng.random_range(0..passable_cells.len());
         while end_idx == start_idx && passable_cells.len() > 1 {
-            end_idx = rng.gen_range(0..passable_cells.len());
+            end_idx = rng.random_range(0..passable_cells.len());
         }
         let end = passable_cells[end_idx];
         set_end(Some(end));
