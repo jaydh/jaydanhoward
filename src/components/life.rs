@@ -319,6 +319,7 @@ pub fn LifeGame(
     #[cfg(not(feature = "ssr"))]
     use std::rc::Rc;
 
+    #[cfg(not(feature = "ssr"))]
     const GRID_SIZE: u32 = 2048;
 
     let (alive_probability, set_alive_probability) =
