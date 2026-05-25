@@ -308,7 +308,6 @@ impl LifeGl {
 
 #[component]
 pub fn LifeGame(
-    #[prop(optional)] initial_grid_size: Option<u32>,
     #[prop(optional)] initial_alive_probability: Option<f64>,
     #[prop(optional)] initial_interval_ms: Option<u64>,
     #[prop(default = false)]
@@ -320,8 +319,8 @@ pub fn LifeGame(
     #[cfg(not(feature = "ssr"))]
     use std::rc::Rc;
 
-    let (grid_size, set_grid_size) =
-        signal(initial_grid_size.unwrap_or(512).clamp(128, 2048));
+    const GRID_SIZE: u32 = 2048;
+
     let (alive_probability, set_alive_probability) =
         signal(initial_alive_probability.unwrap_or(0.35));
     let (interval_ms, set_interval_ms) =
@@ -362,8 +361,7 @@ pub fn LifeGame(
                 if renderer.borrow().is_some() { return; }
 
                 let canvas_el: &web_sys::HtmlCanvasElement = canvas.as_ref();
-                let gsize = grid_size.get_untracked();
-                match LifeGl::new(canvas_el, gsize, gsize) {
+                match LifeGl::new(canvas_el, GRID_SIZE, GRID_SIZE) {
                     Ok(gl) => {
                         let prob = alive_probability.get_untracked() as f32;
                         gl.randomize(prob);
@@ -523,9 +521,7 @@ pub fn LifeGame(
                         <Icon name="cog" class="w-4 h-4" />
                     </button>
                 </div>
-                <span class="text-sm text-charcoal-light">
-                    {move || format!("{}×{} grid", grid_size(), grid_size())}
-                </span>
+                <span class="text-sm text-charcoal-light">"2048×2048"</span>
             </div>
 
             <Show when=move || show_settings()>
@@ -538,27 +534,6 @@ pub fn LifeGame(
                                 on:click=move |_| set_show_settings.set(false)
                                 aria-label="Close"
                             >"✕"</button>
-                        </div>
-
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-medium text-charcoal">"Grid Size"</label>
-                            <select
-                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent"
-                                on:change=move |ev| {
-                                    if let Ok(v) = event_target_value(&ev).parse::<u32>() {
-                                        set_grid_size(v);
-                                    }
-                                }
-                            >
-                                {[128u32, 256, 512, 1024, 2048].into_iter().map(|s| {
-                                    let label = format!("{s}×{s}  ({} cells)", s as u64 * s as u64);
-                                    view! {
-                                        <option value=s.to_string() selected=move || grid_size() == s>
-                                            {label}
-                                        </option>
-                                    }
-                                }).collect_view()}
-                            </select>
                         </div>
 
                         <div class="flex flex-col gap-2">
@@ -705,6 +680,6 @@ fn start_raf_loop(
 #[component]
 pub fn Life() -> impl IntoView {
     view! {
-        <LifeGame auto_start=true initial_grid_size=512 />
+        <LifeGame auto_start=true />
     }
 }
