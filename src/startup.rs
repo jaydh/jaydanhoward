@@ -559,6 +559,7 @@ pub async fn run() -> Result<(), std::io::Error> {
                                 />
                                 <HydrationScripts options=leptos_options.clone() />
                                 <MetaTags />
+                                <link rel="preload" as_="fetch" crossorigin="anonymous" href="/jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm" />
                             </head>
                             <body>
                                 <App />
