@@ -1150,8 +1150,11 @@ fn backup_display_name(name: &str) -> &str {
 }
 
 #[component]
-fn BackupPanel(jobs: Vec<BackupJobStatus>) -> impl IntoView {
-    let (selected_job, set_selected_job) = signal(None::<String>);
+fn BackupPanel(
+    jobs: Vec<BackupJobStatus>,
+    selected_job: ReadSignal<Option<String>>,
+    set_selected_job: WriteSignal<Option<String>>,
+) -> impl IntoView {
     let logs = Resource::new(
         move || selected_job.get(),
         |job| async move {
@@ -1495,6 +1498,7 @@ pub fn ClusterStats() -> impl IntoView {
     let (sd_sync_status, set_sd_sync_status) = signal(None::<SdSyncStatus>);
     #[allow(unused_variables)]
     let (backup_status, set_backup_status) = signal(None::<Vec<BackupJobStatus>>);
+    let (backup_selected_job, set_backup_selected_job) = signal(None::<String>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1878,7 +1882,7 @@ pub fn ClusterStats() -> impl IntoView {
                             view! { <div /> }.into_any()
                         }}
                         {if let Some(jobs) = backup_status.get() {
-                            view! { <BackupPanel jobs=jobs /> }.into_any()
+                            view! { <BackupPanel jobs=jobs selected_job=backup_selected_job set_selected_job=set_backup_selected_job /> }.into_any()
                         } else {
                             view! { <div /> }.into_any()
                         }}
