@@ -879,6 +879,7 @@ pub struct MetricsUpdate {
     pub ceph: Option<CephStatus>,
     pub latest_insight: Option<NetworkInsight>,
     pub sd_sync: Option<SdSyncStatus>,
+    pub backup: Option<Vec<BackupJobStatus>>,
 }
 
 fn fmt_ceph_bytes(bytes: f64) -> String {
@@ -1072,6 +1073,168 @@ fn ClaudeAuditPanel(entries: Vec<ClaudeAuditEntry>) -> impl IntoView {
                     }
                 }).collect::<Vec<_>>()}
             </div>
+        </div>
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BackupJobStatus {
+    pub name: String,
+    pub last_run_time: Option<String>,
+    pub last_duration_seconds: Option<i64>,
+    pub succeeded: bool,
+    pub active: bool,
+}
+
+#[server(name = GetBackupLogs, prefix = "/api", endpoint = "get_backup_logs")]
+pub async fn get_backup_logs(job_name: String) -> Result<String, ServerFnError<String>> {
+    use k8s_openapi::api::batch::v1::Job;
+    use k8s_openapi::api::core::v1::Pod;
+    use kube::{Api, Client, api::ListParams, api::LogParams};
+
+    let client = Client::try_default()
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    // Find the most recent Job for this CronJob
+    let jobs: Api<Job> = Api::namespaced(client.clone(), "media");
+    let list = jobs
+        .list(&ListParams::default())
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    let mut owned: Vec<_> = list.items.iter().filter(|job| {
+        job.metadata.owner_references.as_deref().unwrap_or_default()
+            .iter()
+            .any(|r| r.name == job_name)
+    }).collect();
+    owned.sort_by_key(|job| {
+        job.status.as_ref()
+            .and_then(|s| s.start_time.as_ref())
+            .map(|t| t.0.as_second())
+            .unwrap_or(0)
+    });
+
+    let latest_job = owned.last()
+        .and_then(|j| j.metadata.name.as_deref())
+        .ok_or_else(|| ServerFnError::ServerError("No job found".to_string()))?
+        .to_string();
+
+    // Find the pod for this job
+    let pods: Api<Pod> = Api::namespaced(client.clone(), "media");
+    let pod_list = pods
+        .list(&ListParams::default().labels(&format!("job-name={latest_job}")))
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    let pod_name = pod_list.items.first()
+        .and_then(|p| p.metadata.name.as_deref())
+        .ok_or_else(|| ServerFnError::ServerError("No pod found for job".to_string()))?
+        .to_string();
+
+    let logs = pods
+        .logs(&pod_name, &LogParams { tail_lines: Some(100), ..Default::default() })
+        .await
+        .map_err(|e| ServerFnError::ServerError(e.to_string()))?;
+
+    Ok(logs)
+}
+
+fn backup_display_name(name: &str) -> &str {
+    match name {
+        "backup-immich-photos" => "immich photos",
+        "backup-media" => "media",
+        "backup-backup-vol" => "backup vol",
+        _ => name,
+    }
+}
+
+#[component]
+fn BackupPanel(jobs: Vec<BackupJobStatus>) -> impl IntoView {
+    let (selected_job, set_selected_job) = signal(None::<String>);
+    let logs = Resource::new(
+        move || selected_job.get(),
+        |job| async move {
+            match job {
+                Some(name) => get_backup_logs(name).await.ok(),
+                None => None,
+            }
+        },
+    );
+
+    view! {
+        <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
+            <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Backups"</h3>
+            <div class="font-mono text-xs space-y-2">
+                {jobs.into_iter().map(|job| {
+                    let name = job.name.clone();
+                    let label = backup_display_name(&job.name).to_string();
+                    let (status_label, status_class) = if job.active {
+                        ("running", "text-blue-400")
+                    } else if job.succeeded {
+                        ("ok", "text-green-500")
+                    } else if job.last_run_time.is_some() {
+                        ("failed", "text-red-400")
+                    } else {
+                        ("never", "text-charcoal-lighter")
+                    };
+                    let time = job.last_run_time.clone().unwrap_or_else(|| "—".to_string());
+                    let duration = job.last_duration_seconds
+                        .map(|d| {
+                            if d >= 3600 { format!("{}h {}m", d / 3600, (d % 3600) / 60) }
+                            else if d >= 60 { format!("{}m {}s", d / 60, d % 60) }
+                            else { format!("{}s", d) }
+                        })
+                        .unwrap_or_else(|| "—".to_string());
+                    let name_for_click = name.clone();
+                    view! {
+                        <div class="border-b border-border last:border-0 pb-2 last:pb-0">
+                            <div class="flex items-center justify-between">
+                                <span class="text-charcoal">{label}</span>
+                                <span class={"font-semibold ".to_string() + status_class}>
+                                    {if job.active { "● " } else { "○ " }}
+                                    {status_label}
+                                </span>
+                            </div>
+                            <div class="flex justify-between text-charcoal-lighter mt-0.5">
+                                <span>{time}</span>
+                                <button
+                                    class="hover:text-charcoal transition-colors"
+                                    on:click=move |_| {
+                                        set_selected_job.set(Some(name_for_click.clone()))
+                                    }
+                                >
+                                    {duration} " · logs →"
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }).collect::<Vec<_>>()}
+            </div>
+            {move || selected_job.get().map(|name| {
+                let display = backup_display_name(&name).to_string();
+                view! {
+                    <div class="mt-3 border-t border-border pt-3">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs text-charcoal-lighter">{display} " · last run logs"</span>
+                            <button
+                                class="text-xs text-charcoal-lighter hover:text-charcoal"
+                                on:click=move |_| set_selected_job.set(None)
+                            >"✕"</button>
+                        </div>
+                        <Suspense fallback=|| view! { <div class="text-xs text-charcoal-lighter">"Loading…"</div> }>
+                            {move || logs.get().map(|result| {
+                                let text = result.unwrap_or_else(|| "No logs available.".to_string());
+                                view! {
+                                    <pre class="text-xs bg-slate-900 rounded p-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap text-slate-300">
+                                        {text}
+                                    </pre>
+                                }
+                            })}
+                        </Suspense>
+                    </div>
+                }
+            })}
         </div>
     }
 }
@@ -1330,6 +1493,8 @@ pub fn ClusterStats() -> impl IntoView {
     let (cloudflared, set_cloudflared) = signal(None::<CloudflaredStatus>);
     #[allow(unused_variables)]
     let (sd_sync_status, set_sd_sync_status) = signal(None::<SdSyncStatus>);
+    #[allow(unused_variables)]
+    let (backup_status, set_backup_status) = signal(None::<Vec<BackupJobStatus>>);
 
     // Note: set_last_refresh is used in the WASM-only closure below,
     // but Rust can't see through the .forget() pattern
@@ -1485,6 +1650,7 @@ pub fn ClusterStats() -> impl IntoView {
                             set_node_metrics.set(update.nodes);
                             set_ceph_status.set(update.ceph);
                             set_sd_sync_status.set(update.sd_sync);
+                            set_backup_status.set(update.backup);
                             if let Some(insight) = update.latest_insight {
                                 set_network_insights.update(|v| {
                                     if v.iter().all(|i| i.id != insight.id) {
@@ -1708,6 +1874,11 @@ pub fn ClusterStats() -> impl IntoView {
                         }}
                         {if let Some(sync) = sd_sync_status.get() {
                             view! { <SdSyncPanel sync=sync /> }.into_any()
+                        } else {
+                            view! { <div /> }.into_any()
+                        }}
+                        {if let Some(jobs) = backup_status.get() {
+                            view! { <BackupPanel jobs=jobs /> }.into_any()
                         } else {
                             view! { <div /> }.into_any()
                         }}

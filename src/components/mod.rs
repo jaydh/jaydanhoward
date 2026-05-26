@@ -51,4 +51,5 @@ pub fn register_server_fns() {
     register_explicit::<sd_sync_reports::FetchSdSyncReportList>();
     register_explicit::<sd_sync_reports::FetchSdSyncReport>();
     register_explicit::<security_audit::GetSecurityAudit>();
+    register_explicit::<cluster_stats::GetBackupLogs>();
 }

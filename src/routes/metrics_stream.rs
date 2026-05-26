@@ -109,12 +109,22 @@ pub struct SdSyncStatus {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct BackupJobStatus {
+    pub name: String,
+    pub last_run_time: Option<String>,
+    pub last_duration_seconds: Option<i64>,
+    pub succeeded: bool,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct MetricsUpdate {
     pub cluster: Option<ClusterMetrics>,
     pub nodes: Vec<NodeMetric>,
     pub ceph: Option<CephStatus>,
     pub latest_insight: Option<NetworkInsight>,
     pub sd_sync: Option<SdSyncStatus>,
+    pub backup: Option<Vec<BackupJobStatus>>,
 }
 
 async fn parse_prometheus_value(query: &str) -> Result<f64, anyhow::Error> {
@@ -432,17 +442,82 @@ async fn fetch_sd_sync_status() -> Option<SdSyncStatus> {
     })
 }
 
+async fn fetch_backup_status() -> Option<Vec<BackupJobStatus>> {
+    use k8s_openapi::api::batch::v1::Job;
+    use kube::{Api, Client, api::ListParams};
+
+    let client = Client::try_default().await.ok()?;
+    let jobs: Api<Job> = Api::namespaced(client, "media");
+    let list = jobs.list(&ListParams::default()).await.ok()?;
+
+    let cronjobs = [
+        "backup-immich-photos",
+        "backup-media",
+        "backup-backup-vol",
+    ];
+
+    let mut statuses: Vec<BackupJobStatus> = Vec::new();
+
+    for cronjob_name in cronjobs {
+        // Find jobs owned by this CronJob, pick the most recent one
+        let mut owned: Vec<_> = list.items.iter().filter(|job| {
+            job.metadata.owner_references.as_deref().unwrap_or_default()
+                .iter()
+                .any(|r| r.name == cronjob_name)
+        }).collect();
+
+        owned.sort_by_key(|job| {
+            job.status.as_ref()
+                .and_then(|s| s.start_time.as_ref())
+                .map(|t| t.0.as_second())
+                .unwrap_or(0)
+        });
+
+        if let Some(job) = owned.last() {
+            let status = job.status.as_ref();
+            let start = status.and_then(|s| s.start_time.as_ref()).map(|t| t.0.as_second());
+            let end = status.and_then(|s| s.completion_time.as_ref()).map(|t| t.0.as_second());
+            let last_run_time = end.or(start).and_then(|ts| {
+                k8s_openapi::jiff::Timestamp::from_second(ts).ok()
+                    .map(|t| t.strftime("%Y-%m-%d %H:%M UTC").to_string())
+            });
+            let last_duration_seconds = start.zip(end).map(|(s, e)| e - s);
+            let succeeded = status.and_then(|s| s.succeeded).unwrap_or(0) > 0;
+            let active = status.and_then(|s| s.active).unwrap_or(0) > 0;
+
+            statuses.push(BackupJobStatus {
+                name: cronjob_name.to_string(),
+                last_run_time,
+                last_duration_seconds,
+                succeeded,
+                active,
+            });
+        } else {
+            statuses.push(BackupJobStatus {
+                name: cronjob_name.to_string(),
+                last_run_time: None,
+                last_duration_seconds: None,
+                succeeded: false,
+                active: false,
+            });
+        }
+    }
+
+    Some(statuses)
+}
+
 pub async fn metrics_stream(
     Extension(pool): Extension<Option<Arc<PgPool>>>,
 ) -> Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>> {
     let stream = IntervalStream::new(interval(Duration::from_secs(1))).then(move |_| {
         let pool = pool.clone();
         async move {
-            let (cluster_metrics, node_metrics, ceph, sd_sync) = tokio::join!(
+            let (cluster_metrics, node_metrics, ceph, sd_sync, backup) = tokio::join!(
                 fetch_cluster_metrics(),
                 fetch_node_metrics(),
                 fetch_ceph_status(),
                 fetch_sd_sync_status(),
+                fetch_backup_status(),
             );
             let cluster_metrics = cluster_metrics.ok();
             let node_metrics = node_metrics.unwrap_or_default();
@@ -478,6 +553,7 @@ pub async fn metrics_stream(
                 ceph: Some(ceph),
                 latest_insight,
                 sd_sync,
+                backup,
             };
 
             let json = serde_json::to_string(&update).unwrap_or_else(|_| "{}".to_string());
