@@ -1151,7 +1151,7 @@ fn backup_display_name(name: &str) -> &str {
 
 #[component]
 fn BackupPanel(
-    jobs: Vec<BackupJobStatus>,
+    jobs: ReadSignal<Option<Vec<BackupJobStatus>>>,
     selected_job: ReadSignal<Option<String>>,
     set_selected_job: WriteSignal<Option<String>>,
 ) -> impl IntoView {
@@ -1169,7 +1169,7 @@ fn BackupPanel(
         <div class="bg-surface rounded-lg shadow-sm p-4 border border-border mt-4">
             <h3 class="text-xs font-medium text-charcoal-lighter mb-3">"Backups"</h3>
             <div class="font-mono text-xs space-y-2">
-                {jobs.into_iter().map(|job| {
+                {move || jobs.get().unwrap_or_default().into_iter().map(|job| {
                     let name = job.name.clone();
                     let label = backup_display_name(&job.name).to_string();
                     let (status_label, status_class) = if job.active {
@@ -1881,11 +1881,7 @@ pub fn ClusterStats() -> impl IntoView {
                         } else {
                             view! { <div /> }.into_any()
                         }}
-                        {if let Some(jobs) = backup_status.get() {
-                            view! { <BackupPanel jobs=jobs selected_job=backup_selected_job set_selected_job=set_backup_selected_job /> }.into_any()
-                        } else {
-                            view! { <div /> }.into_any()
-                        }}
+                        <BackupPanel jobs=backup_status selected_job=backup_selected_job set_selected_job=set_backup_selected_job />
                     </div>
                 }.into_any()
             })}
