@@ -1,1413 +1,722 @@
+#![allow(clippy::all)]
 use crate::components::icons::Icon;
 use leptos::prelude::*;
-#[cfg(not(feature = "ssr"))]
-use rand::Rng;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
 
-#[derive(Clone, Debug, PartialEq)]
-enum Algorithm {
-    Corner,
-    Wall,
-    Bfs,
-    Dfs,
-    AStar,
-    Greedy,
-    RandomWalk,
-}
-
-impl std::fmt::Display for Algorithm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Algorithm::Wall => write!(f, "Wall"),
-            Algorithm::Corner => write!(f, "Corner"),
-            Algorithm::Bfs => write!(f, "BFS"),
-            Algorithm::Dfs => write!(f, "DFS"),
-            Algorithm::AStar => write!(f, "A*"),
-            Algorithm::Greedy => write!(f, "Greedy Best-First"),
-            Algorithm::RandomWalk => write!(f, "Random Walk"),
-        }
-    }
-}
-
-impl std::str::FromStr for Algorithm {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Wall" => Ok(Algorithm::Wall),
-            "Corner" => Ok(Algorithm::Corner),
-            "BFS" => Ok(Algorithm::Bfs),
-            "DFS" => Ok(Algorithm::Dfs),
-            "A*" => Ok(Algorithm::AStar),
-            "Greedy Best-First" => Ok(Algorithm::Greedy),
-            "Random Walk" => Ok(Algorithm::RandomWalk),
-            _ => Err(()),
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-struct CoordinatePair {
-    x_pos: i64,
-    y_pos: i64,
-}
-
-impl std::ops::Add for CoordinatePair {
-    type Output = CoordinatePair;
-
-    fn add(self, other: CoordinatePair) -> CoordinatePair {
-        CoordinatePair {
-            x_pos: self.x_pos + other.x_pos,
-            y_pos: self.y_pos + other.y_pos,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-struct Cell {
-    is_passable: bool,
-    visited: bool,
-    coordiantes: CoordinatePair,
-    parent: Option<CoordinatePair>,
-    // Track when cell was visited for visual fading
-    #[allow(dead_code)]
-    visit_step: Option<u64>,
-}
-
-impl fmt::Display for CoordinatePair {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "x_pos: {}, y_pos: {}", self.x_pos, self.y_pos)
-    }
-}
-
-impl fmt::Display for Cell {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "is_passable: {}, x_pos: {}, y_pos: {}, visited: {}, parent: {:?}",
-            self.is_passable,
-            self.coordiantes.x_pos,
-            self.coordiantes.y_pos,
-            self.visited,
-            self.parent
-        )
-    }
-}
-
-#[derive(Debug, Clone)]
-struct VecCoordinate(Vec<CoordinatePair>);
-
-impl fmt::Display for VecCoordinate {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (i, item) in self.0.iter().enumerate() {
-            writeln!(f, "Item {i}: {item}")?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct Grid(HashMap<CoordinatePair, Cell>);
+// ── Shaders ───────────────────────────────────────────────────────────────────
 
 #[cfg(not(feature = "ssr"))]
-fn randomize_cells(
-    obstacle_probability: f64,
-    grid_size: u64,
-    set_grid: WriteSignal<Grid>,
-    set_start: WriteSignal<Option<CoordinatePair>>,
-    set_end: WriteSignal<Option<CoordinatePair>>,
-) {
-    let mut rng = rand::rng();
-    let mut grid = Grid(HashMap::new());
-    let mut passable_cells = Vec::new();
+const VERT: &str = r#"#version 300 es
+in vec2 a_pos;
+out vec2 v_uv;
+void main() {
+    v_uv = a_pos * 0.5 + 0.5;
+    gl_Position = vec4(a_pos, 0.0, 1.0);
+}"#;
 
-    for x in 0..grid_size {
-        for y in 0..grid_size {
-            let coord = CoordinatePair {
-                x_pos: x as i64,
-                y_pos: y as i64,
-            };
-            let is_passable = rng.random::<f64>() > obstacle_probability;
+// BFS wavefront expansion with MRT.
+// State (R8):  0=obstacle  64=unvisited  128=frontier  192=visited
+// Parent (R8): 0=none  64=from_left  128=from_right  192=from_below  255=from_above
+#[cfg(not(feature = "ssr"))]
+const STEP_FRAG: &str = r#"#version 300 es
+precision highp float;
+in vec2 v_uv;
+layout(location = 0) out vec4 out_state;
+layout(location = 1) out vec4 out_parent;
+uniform sampler2D u_state;
+uniform sampler2D u_parent;
+uniform vec2 u_res;
+void main() {
+    vec2 d = 1.0 / u_res;
+    float s = floor(texture(u_state, v_uv).r * 255.0 + 0.5);
+    float p = texture(u_parent, v_uv).r;
 
-            if is_passable {
-                passable_cells.push(coord);
-            }
+    // Obstacle (0) or already visited+ (>=192): pass through.
+    if (s < 32.0 || s > 160.0) {
+        out_state  = vec4(s / 255.0, 0.0, 0.0, 1.0);
+        out_parent = vec4(p, 0.0, 0.0, 1.0);
+        return;
+    }
+    // Frontier (128) -> visited (192).
+    if (s > 96.0) {
+        out_state  = vec4(192.0 / 255.0, 0.0, 0.0, 1.0);
+        out_parent = vec4(p, 0.0, 0.0, 1.0);
+        return;
+    }
+    // Unvisited (64): become frontier if a 4-neighbor is currently frontier.
+    float sl = floor(texture(u_state, v_uv + vec2(-d.x,  0.0)).r * 255.0 + 0.5);
+    float sr = floor(texture(u_state, v_uv + vec2( d.x,  0.0)).r * 255.0 + 0.5);
+    float sb = floor(texture(u_state, v_uv + vec2( 0.0, -d.y)).r * 255.0 + 0.5);
+    float st = floor(texture(u_state, v_uv + vec2( 0.0,  d.y)).r * 255.0 + 0.5);
+    bool fl = sl > 96.0 && sl < 160.0;
+    bool fr = sr > 96.0 && sr < 160.0;
+    bool fb = sb > 96.0 && sb < 160.0;
+    bool ft = st > 96.0 && st < 160.0;
+    if (fl || fr || fb || ft) {
+        // Encode which neighbor was frontier so we can trace back later.
+        float np = fl ? (64.0/255.0) : (fr ? (128.0/255.0) : (fb ? (192.0/255.0) : 1.0));
+        out_state  = vec4(128.0 / 255.0, 0.0, 0.0, 1.0);
+        out_parent = vec4(np, 0.0, 0.0, 1.0);
+    } else {
+        out_state  = vec4(s / 255.0, 0.0, 0.0, 1.0);
+        out_parent = vec4(p, 0.0, 0.0, 1.0);
+    }
+}
+"#;
 
-            grid.0.insert(
-                coord,
-                Cell {
-                    coordiantes: coord,
-                    is_passable,
-                    visited: false,
-                    parent: None,
-                    visit_step: None,
-                },
+// Display shader: maps state values to colors, overlays start/end markers.
+#[cfg(not(feature = "ssr"))]
+const DRAW_FRAG: &str = r#"#version 300 es
+precision mediump float;
+in vec2 v_uv;
+out vec4 o;
+uniform sampler2D u_state;
+uniform vec3 u_visited;
+uniform vec3 u_bg;
+uniform vec3 u_wall;
+uniform vec2 u_start;
+uniform vec2 u_end;
+uniform vec2 u_res;
+void main() {
+    float s = floor(texture(u_state, v_uv).r * 255.0 + 0.5);
+    vec3 col;
+    if      (s < 32.0)  { col = u_wall; }
+    else if (s > 224.0) { col = vec3(0.753, 0.518, 0.988); } // purple-400: path
+    else if (s > 160.0) { col = u_visited; }
+    else if (s > 96.0)  { col = vec3(0.937, 0.267, 0.267); } // red-500: frontier
+    else                { col = u_bg; }
+
+    // Start (green) and end (amber) circles, radius 5px in grid space.
+    vec2 ps = (v_uv - u_start) * u_res;
+    if (dot(ps, ps) < 25.0) { col = vec3(0.133, 0.773, 0.369); }
+    vec2 pe = (v_uv - u_end) * u_res;
+    if (dot(pe, pe) < 25.0) { col = vec3(0.961, 0.620, 0.043); }
+    o = vec4(col, 1.0);
+}
+"#;
+
+// ── PathGl ────────────────────────────────────────────────────────────────────
+
+#[cfg(not(feature = "ssr"))]
+pub struct PathGl {
+    gl: web_sys::WebGl2RenderingContext,
+    step_prog: web_sys::WebGlProgram,
+    draw_prog: web_sys::WebGlProgram,
+    // fbs[i] writes to state_texs[i] (attach 0) + parent_texs[i] (attach 1).
+    state_texs: [web_sys::WebGlTexture; 2],
+    parent_texs: [web_sys::WebGlTexture; 2],
+    fbs: [web_sys::WebGlFramebuffer; 2],
+    quad_vao: web_sys::WebGlVertexArrayObject,
+    current: usize,
+    pub grid_w: u32,
+    pub grid_h: u32,
+    pub start: (u32, u32),
+    pub end: (u32, u32),
+}
+
+#[cfg(not(feature = "ssr"))]
+impl PathGl {
+    pub fn new(canvas: &web_sys::HtmlCanvasElement, grid_w: u32, grid_h: u32) -> Result<Self, String> {
+        use wasm_bindgen::JsCast;
+        use web_sys::WebGl2RenderingContext as GL;
+
+        let gl = canvas
+            .get_context("webgl2").map_err(|_| "get_context")?
+            .ok_or("no webgl2")?
+            .dyn_into::<GL>().map_err(|_| "cast")?;
+
+        let step_prog = Self::compile_prog(&gl, VERT, STEP_FRAG)?;
+        let draw_prog = Self::compile_prog(&gl, VERT, DRAW_FRAG)?;
+
+        let quad_vao = gl.create_vertex_array().ok_or("vao")?;
+        gl.bind_vertex_array(Some(&quad_vao));
+        let buf = gl.create_buffer().ok_or("buf")?;
+        gl.bind_buffer(GL::ARRAY_BUFFER, Some(&buf));
+        let verts: [f32; 12] = [-1., -1., 1., -1., -1., 1., -1., 1., 1., -1., 1., 1.];
+        unsafe {
+            gl.buffer_data_with_array_buffer_view(
+                GL::ARRAY_BUFFER,
+                &js_sys::Float32Array::view(&verts),
+                GL::STATIC_DRAW,
             );
         }
+        let loc = gl.get_attrib_location(&step_prog, "a_pos") as u32;
+        gl.enable_vertex_attrib_array(loc);
+        gl.vertex_attrib_pointer_with_i32(loc, 2, GL::FLOAT, false, 0, 0);
+        gl.bind_vertex_array(None);
+
+        let st0 = Self::make_r8(&gl, grid_w, grid_h)?;
+        let st1 = Self::make_r8(&gl, grid_w, grid_h)?;
+        let pt0 = Self::make_r8(&gl, grid_w, grid_h)?;
+        let pt1 = Self::make_r8(&gl, grid_w, grid_h)?;
+        let fb0 = Self::make_mrt_fb(&gl, &st0, &pt0)?;
+        let fb1 = Self::make_mrt_fb(&gl, &st1, &pt1)?;
+
+        Ok(Self {
+            gl, step_prog, draw_prog,
+            state_texs: [st0, st1],
+            parent_texs: [pt0, pt1],
+            fbs: [fb0, fb1],
+            quad_vao, current: 0,
+            grid_w, grid_h,
+            start: (0, 0),
+            end: (grid_w - 1, grid_h - 1),
+        })
     }
 
-    // Pick random start and end from passable cells
-    if passable_cells.len() >= 2 {
-        let start_idx = rng.random_range(0..passable_cells.len());
-        let start = passable_cells[start_idx];
-        set_start(Some(start));
+    pub fn reset(&mut self, obstacle_prob: f32) {
+        use rand::Rng;
+        use web_sys::WebGl2RenderingContext as GL;
 
-        // Pick a different cell for end
-        let mut end_idx = rng.random_range(0..passable_cells.len());
-        while end_idx == start_idx && passable_cells.len() > 1 {
-            end_idx = rng.random_range(0..passable_cells.len());
+        let mut rng = rand::rng();
+        let n = (self.grid_w * self.grid_h) as usize;
+
+        let mut state = vec![0u8; n];
+        for v in state.iter_mut() {
+            if rng.random::<f32>() >= obstacle_prob { *v = 64; }
         }
-        let end = passable_cells[end_idx];
-        set_end(Some(end));
+
+        let start = Self::find_passable_near(&state, self.grid_w, 0, 0);
+        let end = Self::find_passable_near(&state, self.grid_w, self.grid_w - 1, self.grid_h - 1);
+        self.start = start;
+        self.end = end;
+
+        state[(start.1 * self.grid_w + start.0) as usize] = 128; // mark start as frontier
+
+        self.current = 0;
+        let gl = &self.gl;
+
+        gl.bind_texture(GL::TEXTURE_2D, Some(&self.state_texs[0]));
+        let _ = gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+            GL::TEXTURE_2D, 0, GL::R8 as i32,
+            self.grid_w as i32, self.grid_h as i32, 0,
+            GL::RED, GL::UNSIGNED_BYTE, Some(&state),
+        );
+        gl.bind_texture(GL::TEXTURE_2D, None);
+
+        let dead = vec![0u8; n];
+        for tex in [&self.state_texs[1], &self.parent_texs[0], &self.parent_texs[1]] {
+            gl.bind_texture(GL::TEXTURE_2D, Some(tex));
+            let _ = gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+                GL::TEXTURE_2D, 0, GL::R8 as i32,
+                self.grid_w as i32, self.grid_h as i32, 0,
+                GL::RED, GL::UNSIGNED_BYTE, Some(&dead),
+            );
+        }
+        gl.bind_texture(GL::TEXTURE_2D, None);
     }
 
-    set_grid(grid);
-}
-
-#[cfg(not(feature = "ssr"))]
-fn find_shortest_path_in_visited(
-    start: CoordinatePair,
-    end: CoordinatePair,
-    grid: &HashMap<CoordinatePair, Cell>,
-    visited_cells: &HashSet<CoordinatePair>,
-) -> HashSet<CoordinatePair> {
-    use std::collections::VecDeque;
-
-    let mut queue = VecDeque::new();
-    let mut visited = HashSet::new();
-    let mut parent_map: HashMap<CoordinatePair, CoordinatePair> = HashMap::new();
-
-    queue.push_back(start);
-    visited.insert(start);
-
-    while let Some(current) = queue.pop_front() {
-        if current == end {
-            // Found the end, backtrack to build path
-            let mut path = HashSet::new();
-            let mut curr = end;
-            path.insert(curr);
-
-            while let Some(&p) = parent_map.get(&curr) {
-                path.insert(p);
-                curr = p;
-                if curr == start {
-                    break;
-                }
-            }
-
-            return path;
-        }
-
-        // Explore neighbors (only within visited cells)
-        for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
-            let neighbor = CoordinatePair {
-                x_pos: current.x_pos + dx,
-                y_pos: current.y_pos + dy,
-            };
-
-            if let Some(cell) = grid.get(&neighbor) {
-                // Only explore if the cell was visited by the original algorithm
-                if cell.is_passable
-                    && visited_cells.contains(&neighbor)
-                    && !visited.contains(&neighbor)
-                {
-                    visited.insert(neighbor);
-                    parent_map.insert(neighbor, current);
-                    queue.push_back(neighbor);
-                }
-            }
-        }
-    }
-
-    // No path found, return empty set
-    HashSet::new()
-}
-
-#[cfg(not(feature = "ssr"))]
-fn distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> f64 {
-    let dx = (coord1.x_pos - coord2.x_pos) as f64;
-    let dy = (coord1.y_pos - coord2.y_pos) as f64;
-    (dx * dx + dy * dy).sqrt()
-}
-
-#[cfg(not(feature = "ssr"))]
-fn manhattan_distance(coord1: &CoordinatePair, coord2: &CoordinatePair) -> i64 {
-    (coord1.x_pos - coord2.x_pos).abs() + (coord1.y_pos - coord2.y_pos).abs()
-}
-
-#[cfg(not(feature = "ssr"))]
-fn distance_to_closest_walls(point: &CoordinatePair, grid_size: ReadSignal<u64>) -> i64 {
-    let distance_left = point.x_pos;
-    let distance_right = grid_size.get_untracked() as i64 - point.x_pos - 1;
-    let distance_top = point.y_pos;
-    let distance_bottom = grid_size.get_untracked() as i64 - point.y_pos - 1;
-
-    *[distance_left, distance_right, distance_top, distance_bottom]
-        .iter()
-        .min()
-        .unwrap()
-}
-
-#[cfg(not(feature = "ssr"))]
-fn add_candidates(
-    grid_size: ReadSignal<u64>,
-    current_cell: ReadSignal<Option<CoordinatePair>>,
-    grid: ReadSignal<Grid>,
-    current_path_candidates: ReadSignal<VecCoordinate>,
-    set_current_path_candidates: WriteSignal<VecCoordinate>,
-) {
-    let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        .map(|(x, y)| {
-            grid.get_untracked()
-                .0
-                .get(&CoordinatePair {
-                    x_pos: current_cell.get_untracked().unwrap().x_pos + x,
-                    y_pos: current_cell.get_untracked().unwrap().y_pos + y,
-                })
-                .cloned()
-        })
-        .into_iter()
-        .filter(|n| {
-            n.as_ref()
-                .map(|c| {
-                    c.is_passable
-                        && !c.visited
-                        && !current_path_candidates
-                            .get_untracked()
-                            .0
-                            .contains(&c.coordiantes)
-                })
-                .unwrap_or(false)
-        })
-        .map(|cell| cell.unwrap().coordiantes)
-        .collect::<Vec<CoordinatePair>>();
-
-    let mut corners = [
-        CoordinatePair { x_pos: 0, y_pos: 0 },
-        CoordinatePair {
-            x_pos: 0,
-            y_pos: grid_size.get_untracked() as i64,
-        },
-        CoordinatePair {
-            x_pos: grid_size.get_untracked() as i64,
-            y_pos: 0,
-        },
-        CoordinatePair {
-            x_pos: grid_size.get_untracked() as i64,
-            y_pos: grid_size.get_untracked() as i64,
-        },
-    ];
-    corners.sort_by(|a, b| {
-        let distance_a = distance(&current_cell.get_untracked().unwrap(), a);
-        let distance_b = distance(&current_cell.get_untracked().unwrap(), b);
-        distance_a.partial_cmp(&distance_b).unwrap()
-    });
-
-    set_current_path_candidates.update(|path| {
-        if viable_neighbors.iter().any(|c| {
-            distance(corners.first().unwrap(), c)
-                < distance(
-                    corners.first().unwrap(),
-                    &current_cell.get_untracked().unwrap(),
-                )
-        }) {
-            path.0.extend(viable_neighbors);
-            path.0.sort_by(|a, b| {
-                let distance_a = distance(&corners[0], a);
-                let distance_b = distance(&corners[0], b);
-                distance_b.partial_cmp(&distance_a).unwrap()
-            });
-        } else {
-            path.0.extend(viable_neighbors);
-            path.0.sort_by(|a, b| {
-                let distance_a = distance(&corners[1], a);
-                let distance_b = distance(&corners[1], b);
-                distance_b.partial_cmp(&distance_a).unwrap()
-            });
-        }
-    });
-}
-
-#[cfg(not(feature = "ssr"))]
-fn add_candidates_walls(
-    grid_size: ReadSignal<u64>,
-    current_cell: ReadSignal<Option<CoordinatePair>>,
-    grid: ReadSignal<Grid>,
-    current_path_candidates: ReadSignal<VecCoordinate>,
-    set_current_path_candidates: WriteSignal<VecCoordinate>,
-) {
-    let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        .map(|(x, y)| {
-            grid.get_untracked()
-                .0
-                .get(&CoordinatePair {
-                    x_pos: current_cell.get_untracked().unwrap().x_pos + x,
-                    y_pos: current_cell.get_untracked().unwrap().y_pos + y,
-                })
-                .cloned()
-        })
-        .into_iter()
-        .filter(|n| {
-            n.as_ref()
-                .map(|c| {
-                    c.is_passable
-                        && !c.visited
-                        && !current_path_candidates
-                            .get_untracked()
-                            .0
-                            .contains(&c.coordiantes)
-                })
-                .unwrap_or(false)
-        })
-        .map(|cell| cell.unwrap().coordiantes)
-        .collect::<Vec<CoordinatePair>>();
-
-    let mut corners = [
-        CoordinatePair { x_pos: 0, y_pos: 0 },
-        CoordinatePair {
-            x_pos: 0,
-            y_pos: grid_size.get_untracked() as i64,
-        },
-        CoordinatePair {
-            x_pos: grid_size.get_untracked() as i64,
-            y_pos: 0,
-        },
-        CoordinatePair {
-            x_pos: grid_size.get_untracked() as i64,
-            y_pos: grid_size.get_untracked() as i64,
-        },
-    ];
-    corners.sort_by(|a, b| {
-        let distance_a = distance(&current_cell.get_untracked().unwrap(), a);
-        let distance_b = distance(&current_cell.get_untracked().unwrap(), b);
-        distance_a.partial_cmp(&distance_b).unwrap()
-    });
-
-    set_current_path_candidates.update(|path| {
-        path.0.extend(viable_neighbors);
-        path.0.sort_by(|a, b| {
-            let a_wall_distance = distance_to_closest_walls(a, grid_size);
-            let b_wall_distance = distance_to_closest_walls(b, grid_size);
-
-            if a_wall_distance == b_wall_distance {
-                let distance_a = distance(&corners[0], a);
-                let distance_b = distance(&corners[0], b);
-                distance_b.partial_cmp(&distance_a).unwrap()
-            } else {
-                b_wall_distance.partial_cmp(&a_wall_distance).unwrap()
-            }
-        });
-    });
-}
-
-#[cfg(not(feature = "ssr"))]
-#[allow(clippy::too_many_arguments)]
-fn calculate_next(
-    grid_size: ReadSignal<u64>,
-    grid: ReadSignal<Grid>,
-    set_grid: WriteSignal<Grid>,
-    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    current_path_candidates: ReadSignal<VecCoordinate>,
-    set_current_path_candidates: WriteSignal<VecCoordinate>,
-    current_cell: ReadSignal<Option<CoordinatePair>>,
-    set_current_cell: WriteSignal<Option<CoordinatePair>>,
-    algorithm: ReadSignal<Algorithm>,
-    step_count: ReadSignal<u64>,
-) {
-    if current_cell.get_untracked().is_none() {
-        // For other algorithms, set current_cell and mark as visited
-        set_current_cell(start_cell_coord.get_untracked());
-        set_grid.update(|grid| {
-            let cell = grid
-                .0
-                .get_mut(&start_cell_coord.get_untracked().unwrap())
-                .unwrap();
-            cell.visited = true;
-            cell.parent = None;
-            cell.visit_step = Some(0);
-        });
-    } else {
-        match algorithm.get_untracked() {
-            Algorithm::Wall => add_candidates_walls(
-                grid_size,
-                current_cell,
-                grid,
-                current_path_candidates,
-                set_current_path_candidates,
-            ),
-            Algorithm::Corner => add_candidates(
-                grid_size,
-                current_cell,
-                grid,
-                current_path_candidates,
-                set_current_path_candidates,
-            ),
-            Algorithm::Bfs => {
-                // BFS: mark visited when adding to queue (FIFO needs this)
-                let viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-                    .iter()
-                    .filter_map(|(x, y)| {
-                        let coord = CoordinatePair {
-                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
-                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
-                        };
-                        grid.get_untracked().0.get(&coord).and_then(|c| {
-                            if c.is_passable && !c.visited {
-                                Some(coord)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect::<Vec<CoordinatePair>>();
-
-                // Mark all neighbors as visited NOW and set their parent
-                let current_cell_value = current_cell.get_untracked();
-                let current_step = step_count.get_untracked();
-                for neighbor in &viable_neighbors {
-                    set_grid.update(|grid| {
-                        if let Some(cell) = grid.0.get_mut(neighbor) {
-                            if !cell.visited {
-                                cell.visited = true;
-                                cell.parent = current_cell_value;
-                                cell.visit_step = Some(current_step);
-                            }
-                        }
-                    });
-                }
-
-                set_current_path_candidates.update(|path| {
-                    path.0.extend(viable_neighbors);
-                });
-            }
-            Algorithm::Dfs => {
-                // DFS: don't mark when adding, let pop logic handle it (LIFO behavior)
-                // Explore clockwise: up, right, down, left
-                // Since we pop from back (LIFO), add in reverse: left, down, right, up
-                let viable_neighbors = [(-1, 0), (0, 1), (1, 0), (0, -1)]
-                    .iter()
-                    .filter_map(|(x, y)| {
-                        let coord = CoordinatePair {
-                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
-                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
-                        };
-                        grid.get_untracked().0.get(&coord).and_then(|c| {
-                            if c.is_passable && !c.visited {
-                                Some(coord)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect::<Vec<CoordinatePair>>();
-
-                set_current_path_candidates.update(|path| {
-                    path.0.extend(viable_neighbors);
-                });
-            }
-            Algorithm::RandomWalk => {
-                // Random Walk: explore neighbors in random order (allows backtracking)
-                let mut viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-                    .iter()
-                    .filter_map(|(x, y)| {
-                        let coord = CoordinatePair {
-                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
-                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
-                        };
-                        grid.get_untracked().0.get(&coord).and_then(|c| {
-                            if c.is_passable && !c.visited {
-                                Some(coord)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect::<Vec<CoordinatePair>>();
-
-                // Shuffle neighbors using coordinate-based pseudo-random ordering
-                // This gives random exploration with backtracking capability
-                let curr = current_cell.get_untracked().unwrap();
-                viable_neighbors.sort_by_key(|coord| {
-                    ((coord.x_pos * 73856093)
-                        ^ (coord.y_pos * 19349663)
-                        ^ (curr.x_pos * 83492791)) as usize
-                });
-
-                set_current_path_candidates.update(|path| {
-                    path.0.extend(viable_neighbors);
-                });
-            }
-            Algorithm::AStar | Algorithm::Greedy => {
-                // A* / Greedy: don't mark when adding, let pop logic handle it
-                let mut viable_neighbors = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-                    .iter()
-                    .filter_map(|(x, y)| {
-                        let coord = CoordinatePair {
-                            x_pos: current_cell.get_untracked().unwrap().x_pos + x,
-                            y_pos: current_cell.get_untracked().unwrap().y_pos + y,
-                        };
-                        grid.get_untracked().0.get(&coord).and_then(|c| {
-                            if c.is_passable && !c.visited {
-                                Some(coord)
-                            } else {
-                                None
-                            }
-                        })
-                    })
-                    .collect::<Vec<CoordinatePair>>();
-
-                // Sort by heuristic (Manhattan distance to goal) - higher distance last so we pop best first
-                if let Some(end) = end_cell_coord.get_untracked() {
-                    viable_neighbors.sort_by_key(|coord| -(manhattan_distance(coord, &end)));
-                }
-
-                set_current_path_candidates.update(|path| {
-                    path.0.extend(viable_neighbors);
-                    // Keep sorted by heuristic
-                    if let Some(end) = end_cell_coord.get_untracked() {
-                        path.0
-                            .sort_by_key(|coord| -(manhattan_distance(coord, &end)));
+    fn find_passable_near(state: &[u8], grid_w: u32, tx: u32, ty: u32) -> (u32, u32) {
+        let w = grid_w as i64;
+        let h = state.len() as i64 / w;
+        for r in 0i64.. {
+            for dy in -r..=r {
+                for dx in -r..=r {
+                    if dx.abs() != r && dy.abs() != r { continue; }
+                    let nx = tx as i64 + dx;
+                    let ny = ty as i64 + dy;
+                    if nx < 0 || ny < 0 || nx >= w || ny >= h { continue; }
+                    if state[(ny * w + nx) as usize] == 64 {
+                        return (nx as u32, ny as u32);
                     }
-                });
+                }
             }
+            if r > 200 { return (tx.min(grid_w - 1), ty); }
+        }
+        (tx, ty)
+    }
+
+    pub fn step(&mut self) {
+        use web_sys::WebGl2RenderingContext as GL;
+        let next = 1 - self.current;
+        let gl = &self.gl;
+
+        gl.bind_framebuffer(GL::FRAMEBUFFER, Some(&self.fbs[next]));
+        gl.viewport(0, 0, self.grid_w as i32, self.grid_h as i32);
+        gl.use_program(Some(&self.step_prog));
+
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&self.state_texs[self.current]));
+        if let Some(l) = gl.get_uniform_location(&self.step_prog, "u_state") { gl.uniform1i(Some(&l), 0); }
+
+        gl.active_texture(GL::TEXTURE1);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&self.parent_texs[self.current]));
+        if let Some(l) = gl.get_uniform_location(&self.step_prog, "u_parent") { gl.uniform1i(Some(&l), 1); }
+
+        if let Some(l) = gl.get_uniform_location(&self.step_prog, "u_res") {
+            gl.uniform2f(Some(&l), self.grid_w as f32, self.grid_h as f32);
+        }
+
+        gl.bind_vertex_array(Some(&self.quad_vao));
+        gl.draw_arrays(GL::TRIANGLES, 0, 6);
+        gl.bind_vertex_array(None);
+        gl.bind_framebuffer(GL::FRAMEBUFFER, None);
+
+        self.current = next;
+    }
+
+    pub fn draw(&self, canvas_w: i32, canvas_h: i32, dark_mode: bool) {
+        use web_sys::WebGl2RenderingContext as GL;
+        let gl = &self.gl;
+
+        gl.viewport(0, 0, canvas_w, canvas_h);
+        gl.use_program(Some(&self.draw_prog));
+
+        gl.active_texture(GL::TEXTURE0);
+        gl.bind_texture(GL::TEXTURE_2D, Some(&self.state_texs[self.current]));
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_state") { gl.uniform1i(Some(&l), 0); }
+
+        let (visited, bg, wall) = if dark_mode {
+            ([0.376_f32, 0.647, 0.980], [0.067_f32, 0.094, 0.153], [0.310_f32, 0.400, 0.502])
+        } else {
+            ([0.231_f32, 0.510, 0.965], [0.973_f32, 0.980, 0.988], [0.180_f32, 0.224, 0.286])
         };
-        // Pop next cell from queue
-        if matches!(algorithm.get_untracked(), Algorithm::Bfs) {
-            // BFS: pop from front (FIFO)
-            if let Some(next_visit_coord) =
-                current_path_candidates.get_untracked().0.first().copied()
-            {
-                set_current_path_candidates.update(|path| {
-                    if !path.0.is_empty() {
-                        path.0.remove(0);
-                    }
-                });
-                set_current_cell(Some(next_visit_coord));
-            }
-        } else {
-            // DFS, A*, Greedy, Corner, Wall, RandomWalk: pop from back (LIFO)
-            loop {
-                let next_visit_coord = current_path_candidates.get_untracked().0.last().copied();
 
-                if let Some(next_visit_coord) = next_visit_coord {
-                    let is_visited = grid
-                        .get_untracked()
-                        .0
-                        .get(&next_visit_coord)
-                        .map(|c| c.visited)
-                        .unwrap_or(true);
-
-                    set_current_path_candidates.update(|path| {
-                        path.0.pop();
-                    });
-
-                    if is_visited {
-                        continue;
-                    }
-
-                    let previous_cell = current_cell.get_untracked();
-                    let current_step = step_count.get_untracked();
-                    set_current_cell(Some(next_visit_coord));
-                    set_grid.update(|grid| {
-                        let cell = grid.0.get_mut(&next_visit_coord).unwrap();
-                        cell.visited = true;
-                        cell.parent = previous_cell;
-                        cell.visit_step = Some(current_step);
-                    });
-                    break;
-                } else {
-                    break;
-                }
-            }
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_visited") {
+            gl.uniform3f(Some(&l), visited[0], visited[1], visited[2]);
         }
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_bg") {
+            gl.uniform3f(Some(&l), bg[0], bg[1], bg[2]);
+        }
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_wall") {
+            gl.uniform3f(Some(&l), wall[0], wall[1], wall[2]);
+        }
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_start") {
+            gl.uniform2f(Some(&l),
+                self.start.0 as f32 / self.grid_w as f32,
+                self.start.1 as f32 / self.grid_h as f32,
+            );
+        }
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_end") {
+            gl.uniform2f(Some(&l),
+                self.end.0 as f32 / self.grid_w as f32,
+                self.end.1 as f32 / self.grid_h as f32,
+            );
+        }
+        if let Some(l) = gl.get_uniform_location(&self.draw_prog, "u_res") {
+            gl.uniform2f(Some(&l), self.grid_w as f32, self.grid_h as f32);
+        }
+
+        gl.bind_vertex_array(Some(&self.quad_vao));
+        gl.draw_arrays(GL::TRIANGLES, 0, 6);
+        gl.bind_vertex_array(None);
+    }
+
+    /// Read one byte from the state texture at the end cell; true if visited (>=192).
+    pub fn check_found(&self) -> bool {
+        use web_sys::WebGl2RenderingContext as GL;
+        let gl = &self.gl;
+        let (ex, ey) = self.end;
+        gl.bind_framebuffer(GL::READ_FRAMEBUFFER, Some(&self.fbs[self.current]));
+        gl.read_buffer(GL::COLOR_ATTACHMENT0);
+        let buf = js_sys::Uint8Array::new_with_length(1);
+        gl.read_pixels_with_array_buffer_view(
+            ex as i32, ey as i32, 1, 1,
+            GL::RED, GL::UNSIGNED_BYTE, &buf,
+        ).ok();
+        gl.bind_framebuffer(GL::READ_FRAMEBUFFER, None);
+        buf.get_index(0) >= 192
+    }
+
+    /// Read parent texture, trace path from end→start, stamp path cells as 255.
+    pub fn reconstruct_path(&self) {
+        use web_sys::WebGl2RenderingContext as GL;
+        let gl = &self.gl;
+        let n = (self.grid_w * self.grid_h) as usize;
+
+        gl.bind_framebuffer(GL::READ_FRAMEBUFFER, Some(&self.fbs[self.current]));
+        gl.read_buffer(GL::COLOR_ATTACHMENT1); // parent is attachment 1
+        let raw = js_sys::Uint8Array::new_with_length(n as u32);
+        gl.read_pixels_with_array_buffer_view(
+            0, 0, self.grid_w as i32, self.grid_h as i32,
+            GL::RED, GL::UNSIGNED_BYTE, &raw,
+        ).ok();
+        gl.bind_framebuffer(GL::READ_FRAMEBUFFER, None);
+
+        let mut parent = vec![0u8; n];
+        raw.copy_to(&mut parent);
+
+        let path_px = [255u8];
+        let (mut cx, mut cy) = self.end;
+        let (sx, sy) = self.start;
+        let max = (self.grid_w + self.grid_h) * 4;
+
+        gl.bind_texture(GL::TEXTURE_2D, Some(&self.state_texs[self.current]));
+        for _ in 0..max {
+            gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
+                GL::TEXTURE_2D, 0, cx as i32, cy as i32, 1, 1,
+                GL::RED, GL::UNSIGNED_BYTE, Some(&path_px),
+            ).ok();
+            if cx == sx && cy == sy { break; }
+            let p = parent[(cy * self.grid_w + cx) as usize];
+            let (nx, ny) = match p {
+                33..=96   => (cx.wrapping_sub(1), cy), // from_left: parent is left
+                97..=160  => (cx + 1, cy),              // from_right
+                161..=224 => (cx, cy.wrapping_sub(1)), // from_below
+                225..=255 => (cx, cy + 1),              // from_above
+                _         => break,
+            };
+            if nx >= self.grid_w || ny >= self.grid_h { break; }
+            cx = nx; cy = ny;
+        }
+        gl.bind_texture(GL::TEXTURE_2D, None);
+    }
+
+    fn make_r8(gl: &web_sys::WebGl2RenderingContext, w: u32, h: u32) -> Result<web_sys::WebGlTexture, String> {
+        use web_sys::WebGl2RenderingContext as GL;
+        let tex = gl.create_texture().ok_or("tex")?;
+        gl.bind_texture(GL::TEXTURE_2D, Some(&tex));
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MIN_FILTER, GL::NEAREST as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_MAG_FILTER, GL::NEAREST as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_WRAP_S, GL::CLAMP_TO_EDGE as i32);
+        gl.tex_parameteri(GL::TEXTURE_2D, GL::TEXTURE_WRAP_T, GL::CLAMP_TO_EDGE as i32);
+        gl.tex_image_2d_with_i32_and_i32_and_i32_and_format_and_type_and_opt_u8_array(
+            GL::TEXTURE_2D, 0, GL::R8 as i32,
+            w as i32, h as i32, 0,
+            GL::RED, GL::UNSIGNED_BYTE, None,
+        ).map_err(|e| format!("{e:?}"))?;
+        gl.bind_texture(GL::TEXTURE_2D, None);
+        Ok(tex)
+    }
+
+    fn make_mrt_fb(
+        gl: &web_sys::WebGl2RenderingContext,
+        state_tex: &web_sys::WebGlTexture,
+        parent_tex: &web_sys::WebGlTexture,
+    ) -> Result<web_sys::WebGlFramebuffer, String> {
+        use web_sys::WebGl2RenderingContext as GL;
+        let fb = gl.create_framebuffer().ok_or("fb")?;
+        gl.bind_framebuffer(GL::FRAMEBUFFER, Some(&fb));
+        gl.framebuffer_texture_2d(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT0, GL::TEXTURE_2D, Some(state_tex), 0);
+        gl.framebuffer_texture_2d(GL::FRAMEBUFFER, GL::COLOR_ATTACHMENT1, GL::TEXTURE_2D, Some(parent_tex), 0);
+        let bufs = js_sys::Array::of2(
+            &wasm_bindgen::JsValue::from_f64(GL::COLOR_ATTACHMENT0 as f64),
+            &wasm_bindgen::JsValue::from_f64(GL::COLOR_ATTACHMENT1 as f64),
+        );
+        gl.draw_buffers(&bufs);
+        gl.bind_framebuffer(GL::FRAMEBUFFER, None);
+        Ok(fb)
+    }
+
+    fn compile_prog(gl: &web_sys::WebGl2RenderingContext, vert: &str, frag: &str) -> Result<web_sys::WebGlProgram, String> {
+        use web_sys::WebGl2RenderingContext as GL;
+        let vs = Self::compile_shader(gl, GL::VERTEX_SHADER, vert)?;
+        let fs = Self::compile_shader(gl, GL::FRAGMENT_SHADER, frag)?;
+        let prog = gl.create_program().ok_or("prog")?;
+        gl.attach_shader(&prog, &vs);
+        gl.attach_shader(&prog, &fs);
+        gl.link_program(&prog);
+        if !gl.get_program_parameter(&prog, GL::LINK_STATUS).as_bool().unwrap_or(false) {
+            return Err(gl.get_program_info_log(&prog).unwrap_or("link".into()));
+        }
+        Ok(prog)
+    }
+
+    fn compile_shader(gl: &web_sys::WebGl2RenderingContext, ty: u32, src: &str) -> Result<web_sys::WebGlShader, String> {
+        use web_sys::WebGl2RenderingContext as GL;
+        let s = gl.create_shader(ty).ok_or("shader")?;
+        gl.shader_source(&s, src);
+        gl.compile_shader(&s);
+        if !gl.get_shader_parameter(&s, GL::COMPILE_STATUS).as_bool().unwrap_or(false) {
+            return Err(gl.get_shader_info_log(&s).unwrap_or("compile".into()));
+        }
+        Ok(s)
     }
 }
 
-#[component]
-fn SearchGrid(
-    #[allow(unused_variables)] grid_size: ReadSignal<u64>,
-    #[allow(unused_variables)] grid: ReadSignal<Grid>,
-    #[allow(unused_variables)] start_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    #[allow(unused_variables)] end_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    #[allow(unused_variables)] current_cell: ReadSignal<Option<CoordinatePair>>,
-    #[allow(unused_variables)] final_path: ReadSignal<HashSet<CoordinatePair>>,
-    #[allow(unused_variables)] step_count: ReadSignal<u64>,
-) -> impl IntoView {
-    #[cfg(not(feature = "ssr"))]
-    use leptos::html::Canvas;
-    #[cfg(not(feature = "ssr"))]
+// ── RAF loop ──────────────────────────────────────────────────────────────────
+
+#[cfg(not(feature = "ssr"))]
+fn start_path_raf_loop(
+    renderer: std::rc::Rc<std::cell::RefCell<Option<PathGl>>>,
+    running: std::rc::Rc<std::cell::Cell<bool>>,
+    found: std::rc::Rc<std::cell::Cell<bool>>,
+    canvas_ref: NodeRef<leptos::html::Canvas>,
+    steps_per_frame: ReadSignal<u32>,
+    set_status: WriteSignal<String>,
+) {
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use wasm_bindgen::prelude::*;
     use wasm_bindgen::JsCast;
 
-    #[cfg(not(feature = "ssr"))]
-    let canvas_ref = NodeRef::<Canvas>::new();
+    let f: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
+    let f_outer = f.clone();
 
-    #[cfg(not(feature = "ssr"))]
-    let (resize_trigger, set_resize_trigger) = signal(0);
-
-    // Set up window resize listener
-    #[cfg(not(feature = "ssr"))]
-    {
-        use wasm_bindgen::closure::Closure;
-        use wasm_bindgen::JsCast;
-
-        Effect::new(move |_| {
-            let window = web_sys::window().unwrap();
-            let closure = Closure::wrap(Box::new(move || {
-                set_resize_trigger.update(|n| *n += 1);
-            }) as Box<dyn Fn()>);
-
-            window
-                .add_event_listener_with_callback("resize", closure.as_ref().unchecked_ref())
-                .unwrap();
-
-            closure.forget();
-        });
-    }
-
-    // Render canvas
-    #[cfg(not(feature = "ssr"))]
-    Effect::new(move |_| {
-        let _ = resize_trigger();
-
-        let Some(canvas) = canvas_ref.get() else {
-            return;
-        };
-
-        let canvas_element: &web_sys::HtmlCanvasElement = canvas.as_ref();
-        let parent = canvas_element.parent_element().unwrap();
-        let container_width = parent.client_width() as f64;
-
+    *f.borrow_mut() = Some(Closure::wrap(Box::new(move || {
         let window = web_sys::window().unwrap();
-        let window_height = window.inner_height().unwrap().as_f64().unwrap();
 
-        let grid_sz = grid_size();
+        if renderer.borrow().is_none() {
+            window.request_animation_frame(f_outer.borrow().as_ref().unwrap().as_ref().unchecked_ref()).unwrap();
+            return;
+        }
 
-        // Set minimum cell size based on grid size for visibility
-        let min_cell_px = if grid_sz <= 50 {
-            8.0
-        } else if grid_sz <= 100 {
-            5.0
-        } else {
-            3.0 // Smaller minimum for very large grids
-        };
-
-        // For layout, aim for canvas that's roughly 1/3 of container width (to fit 3 side by side)
-        // Or full container width on mobile
-        let target_width = if container_width < 768.0 {
-            container_width * 0.9 // Mobile: nearly full width
-        } else {
-            (container_width / 3.2).min(600.0) // Desktop: ~1/3 width, max 600px
-        };
-
-        let max_height = window_height * 0.5;
-        let available_size = target_width.min(max_height).max(250.0);
-
-        let cell_px = (available_size / grid_sz as f64).floor().max(min_cell_px);
-        let canvas_size = (cell_px * grid_sz as f64) as u32;
-
-        canvas.set_width(canvas_size);
-        canvas.set_height(canvas_size);
-
-        let context = canvas
-            .get_context("2d")
-            .unwrap()
-            .unwrap()
-            .unchecked_into::<web_sys::CanvasRenderingContext2d>();
-
-        // Check dark mode
-        let is_dark = web_sys::window()
-            .and_then(|w| w.document())
-            .and_then(|d| d.document_element())
-            .map(|el| el.class_list().contains("dark"))
-            .unwrap_or(false);
-
-        // Clear canvas
-        let bg_color = if is_dark { "#111827" } else { "#f9fafb" };
-        context.set_fill_style_str(bg_color);
-        context.fill_rect(0.0, 0.0, canvas_size as f64, canvas_size as f64);
-
-        let current_grid = grid();
-        let start = start_cell_coord();
-        let end = end_cell_coord();
-        let current = current_cell();
-        let path = final_path();
-        let current_step = step_count();
-
-        // Draw all cells
-        for x in 0..grid_sz {
-            for y in 0..grid_sz {
-                let coord = CoordinatePair {
-                    x_pos: x as i64,
-                    y_pos: y as i64,
-                };
-
-                let cell = current_grid.0.get(&coord);
-                let is_passable = cell.map(|c| c.is_passable).unwrap_or(false);
-                let is_visited = cell.map(|c| c.visited).unwrap_or(false);
-                let visit_step = cell.and_then(|c| c.visit_step);
-                let is_start = start.map(|c| coord == c).unwrap_or(false);
-                let is_end = end.map(|c| coord == c).unwrap_or(false);
-                let is_current = current.map(|c| coord == c).unwrap_or(false);
-                let in_final_path = path.contains(&coord);
-
-                // Calculate fade factor based on visit recency (0.0 = old, 1.0 = recent)
-                let fade_window = 50.0; // Number of steps to fade over
-                let fade_factor = if let Some(v_step) = visit_step {
-                    let steps_ago = current_step.saturating_sub(v_step) as f64;
-                    (1.0 - (steps_ago / fade_window)).max(0.3) // Minimum 30% brightness
-                } else {
-                    1.0
-                };
-
-                let color = if !is_passable {
-                    if is_dark { "#9CA3AF".to_string() } else { "#1f2937".to_string() }
-                } else if is_start {
-                    "#22c55e".to_string() // green-500 - start
-                } else if is_end {
-                    "#f59e0b".to_string() // amber-500 - end
-                } else if is_current {
-                    "#ef4444".to_string() // red-500 - current
-                } else if in_final_path {
-                    "#c084fc".to_string() // purple-400 - path
-                } else if is_visited {
-                    if is_dark {
-                        format!("rgba(96, 165, 250, {fade_factor})")
-                    } else {
-                        format!("rgba(147, 197, 253, {fade_factor})")
-                    }
-                } else {
-                    bg_color.to_string()
-                };
-
-                context.set_fill_style_str(&color);
-                context.fill_rect(x as f64 * cell_px, y as f64 * cell_px, cell_px, cell_px);
+        let canvas_params = canvas_ref.get_untracked().map(|canvas| {
+            let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
+            let w = el.client_width() as u32;
+            let h = el.client_height() as u32;
+            if w > 0 && h > 0 && (el.width() != w || el.height() != h) {
+                el.set_width(w);
+                el.set_height(h);
             }
-        }
+            let dark = web_sys::window()
+                .and_then(|w| w.document())
+                .and_then(|d| d.document_element())
+                .map(|el| el.class_list().contains("dark"))
+                .unwrap_or(false);
+            (el.width() as i32, el.height() as i32, dark)
+        });
 
-        // Draw grid lines (only for larger cells)
-        if cell_px >= 5.0 {
-            context.set_stroke_style_str(if is_dark { "#374151" } else { "#d1d5db" });
-            context.set_line_width(1.0);
-            for i in 0..=grid_sz {
-                let pos = i as f64 * cell_px;
-                context.begin_path();
-                context.move_to(pos, 0.0);
-                context.line_to(pos, canvas_size as f64);
-                context.stroke();
-                context.begin_path();
-                context.move_to(0.0, pos);
-                context.line_to(canvas_size as f64, pos);
-                context.stroke();
+        if let Some((cw, ch, dark)) = canvas_params {
+            if running.get() && !found.get() {
+                let steps = steps_per_frame.get_untracked();
+                for _ in 0..steps {
+                    renderer.borrow_mut().as_mut().unwrap().step();
+                }
+                if renderer.borrow().as_ref().unwrap().check_found() {
+                    found.set(true);
+                    renderer.borrow().as_ref().unwrap().reconstruct_path();
+                    set_status("Path found!".to_string());
+                }
             }
+            renderer.borrow().as_ref().unwrap().draw(cw, ch, dark);
         }
 
-        // Draw special markers for start and end (always visible)
-        if let Some(s) = start {
-            let center_x = s.x_pos as f64 * cell_px + cell_px / 2.0;
-            let center_y = s.y_pos as f64 * cell_px + cell_px / 2.0;
-            let marker_size = (cell_px * 0.7).clamp(6.0, 20.0);
+        window.request_animation_frame(f_outer.borrow().as_ref().unwrap().as_ref().unchecked_ref()).unwrap();
+    }) as Box<dyn FnMut()>));
 
-            context.set_fill_style_str("#22c55e"); // green
-            context.begin_path();
-            context
-                .arc(
-                    center_x,
-                    center_y,
-                    marker_size / 2.0,
-                    0.0,
-                    2.0 * std::f64::consts::PI,
-                )
-                .unwrap();
-            context.fill();
+    web_sys::window().unwrap()
+        .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref())
+        .unwrap();
 
-            // Border for visibility
-            context.set_stroke_style_str(if is_dark { "#111827" } else { "#ffffff" });
-            context.set_line_width(2.0);
-            context.stroke();
-        }
-
-        if let Some(e) = end {
-            let center_x = e.x_pos as f64 * cell_px + cell_px / 2.0;
-            let center_y = e.y_pos as f64 * cell_px + cell_px / 2.0;
-            let marker_size = (cell_px * 0.7).clamp(6.0, 20.0);
-
-            context.set_fill_style_str("#f59e0b"); // amber
-            context.begin_path();
-            context
-                .arc(
-                    center_x,
-                    center_y,
-                    marker_size / 2.0,
-                    0.0,
-                    2.0 * std::f64::consts::PI,
-                )
-                .unwrap();
-            context.fill();
-
-            // Border for visibility
-            context.set_stroke_style_str(if is_dark { "#111827" } else { "#ffffff" });
-            context.set_line_width(2.0);
-            context.stroke();
-        }
-    });
-
-    #[cfg(not(feature = "ssr"))]
-    return view! {
-        <canvas
-            node_ref=canvas_ref
-            class="border border-border"
-        ></canvas>
-    };
-
-    #[cfg(feature = "ssr")]
-    view! {
-        <canvas
-            class="border border-border"
-        ></canvas>
-    }
+    std::mem::forget(f);
 }
 
-#[component]
-#[allow(unused_variables)]
-fn AlgorithmSimulation(
-    algorithm: Algorithm,
-    grid_size: ReadSignal<u64>,
-    shared_grid: ReadSignal<Grid>,
-    #[allow(unused_variables)] set_shared_grid: WriteSignal<Grid>,
-    start_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    end_cell_coord: ReadSignal<Option<CoordinatePair>>,
-    is_running: ReadSignal<bool>,
-    completion_order: ReadSignal<Vec<Algorithm>>,
-    set_completion_order: WriteSignal<Vec<Algorithm>>,
-) -> impl IntoView {
-    // Each algorithm has its own copy of the grid and simulation state
-    let (grid, set_grid) = signal(Grid(HashMap::new()));
-    let (current_cell, set_current_cell) = signal(None::<CoordinatePair>);
-    let (current_path_candidates, set_current_path_candidates) =
-        signal(VecCoordinate(Vec::<CoordinatePair>::new()));
-    let (final_path, set_final_path) = signal(HashSet::<CoordinatePair>::new());
-    let (fps, set_fps) = signal(0.0);
-    let (step_count, set_step_count) = signal(0_u64);
-    let (completion_steps, set_completion_steps) = signal(None::<u64>);
+// ── Component ─────────────────────────────────────────────────────────────────
 
-    // Clone the shared grid when it changes
+#[component]
+pub fn PathSearch() -> impl IntoView {
+    #[cfg(not(feature = "ssr"))]
+    use std::cell::{Cell, RefCell};
+    #[cfg(not(feature = "ssr"))]
+    use std::rc::Rc;
+
+    #[cfg(not(feature = "ssr"))]
+    const GRID_SIZE: u32 = 2048;
+
+    let (obstacle_prob, set_obstacle_prob) = signal(0.25_f64);
+    let (steps_per_frame, set_steps_per_frame) = signal(8_u32);
+    let (show_settings, set_show_settings) = signal(false);
+    let (is_running, set_is_running) = signal(false);
+    #[cfg(feature = "ssr")]
+    let (status, _set_status) = signal(String::new());
+    #[cfg(not(feature = "ssr"))]
+    let (status, set_status) = signal(String::new());
+
+    let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
+    let container_ref = NodeRef::<leptos::html::Div>::new();
+
+    #[cfg(not(feature = "ssr"))]
+    let renderer: Rc<RefCell<Option<PathGl>>> = Rc::new(RefCell::new(None));
+    #[cfg(not(feature = "ssr"))]
+    let running_flag: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    #[cfg(not(feature = "ssr"))]
+    let found_flag: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    #[cfg(not(feature = "ssr"))]
+    let loop_active: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+
+    // Keep running_flag in sync.
     #[cfg(not(feature = "ssr"))]
     {
-        Effect::new(move |_| {
-            set_grid(shared_grid().clone());
-        });
+        let running_flag = running_flag.clone();
+        Effect::new(move |_| { running_flag.set(is_running()); });
     }
 
-    // Fast simulation loop using requestAnimationFrame for smooth visual updates
-    #[cfg(not(feature = "ssr"))]
-    let (frame_count, set_frame_count) = signal(0);
-
-    #[cfg(not(feature = "ssr"))]
-    let (algo_signal, _) = signal(algorithm.clone());
-
+    // Init renderer once canvas mounts.
     #[cfg(not(feature = "ssr"))]
     {
-        use std::cell::RefCell;
-        use std::rc::Rc;
-        use wasm_bindgen::prelude::*;
-        use wasm_bindgen::JsCast;
+        let renderer = renderer.clone();
+        let running_flag = running_flag.clone();
+        let found_flag = found_flag.clone();
+        let loop_active = loop_active.clone();
 
         Effect::new(move |_| {
-            if !is_running() {
-                return;
-            }
-
-            let window = web_sys::window().unwrap();
-
-            // Create the animation loop
-            let animate = Rc::new(RefCell::new(None::<Closure<dyn FnMut()>>));
-            let animate_clone = animate.clone();
-
-            let closure = Closure::wrap(Box::new(move || {
-                if !is_running.get_untracked() || completion_steps.get_untracked().is_some() {
-                    return;
-                }
-
-                // Run multiple steps per frame for better performance
-                const STEPS_PER_FRAME: u32 = 3;
-
-                for _ in 0..STEPS_PER_FRAME {
-                    // Check if already complete
-                    if completion_steps.get_untracked().is_some() {
-                        break;
-                    }
-
-                    // Increment step counter
-                    set_step_count.update(|c| *c += 1);
-
-                    // Update FPS (steps per second)
-                    set_frame_count.update(|c| *c += 1);
-                    if frame_count.get_untracked() >= 100 {
-                        set_fps(frame_count.get_untracked() as f64);
-                        set_frame_count(0);
-                    }
-
-                    // Check if simulation is complete
-                    // For other algorithms, we complete when we reach the end cell
-                    let is_complete = current_cell.get_untracked()
-                        == end_cell_coord.get_untracked()
-                        && current_cell.get_untracked().is_some();
-
-                    if is_complete {
-                        // Record completion steps
-                        set_completion_steps(Some(step_count.get_untracked()));
-
-                        let path = {
-                            // DFS/A*/Greedy/Corner/Wall: find shortest path within visited cells only
-                            let current_grid = grid.get_untracked();
-                            let visited_cells: HashSet<CoordinatePair> = current_grid
-                                .0
-                                .iter()
-                                .filter(|(_, cell)| cell.visited)
-                                .map(|(coord, _)| *coord)
-                                .collect();
-
-                            find_shortest_path_in_visited(
-                                start_cell_coord.get_untracked().unwrap(),
-                                end_cell_coord.get_untracked().unwrap(),
-                                &current_grid.0,
-                                &visited_cells,
-                            )
-                        };
-
-                        set_final_path(path);
-
-                        // Record completion order
-                        let algo = algo_signal.get_untracked();
-                        set_completion_order.update(|order| {
-                            if !order.contains(&algo) {
-                                order.push(algo);
-                            }
-                        });
-
-                        break;
-                    }
-
-                    let should_continue = {
-                        // For other algorithms: stop when we reach the end
-                        current_cell.get_untracked() != end_cell_coord.get_untracked()
-                            && completion_steps.get_untracked().is_none()
-                    };
-
-                    if should_continue {
-                        calculate_next(
-                            grid_size,
-                            grid,
-                            set_grid,
-                            start_cell_coord,
-                            end_cell_coord,
-                            current_path_candidates,
-                            set_current_path_candidates,
-                            current_cell,
-                            set_current_cell,
-                            algo_signal,
-                            step_count,
+            let Some(canvas) = canvas_ref.get() else { return; };
+            if renderer.borrow().is_some() { return; }
+            let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
+            match PathGl::new(el, GRID_SIZE, GRID_SIZE) {
+                Ok(mut gl) => {
+                    gl.reset(obstacle_prob.get_untracked() as f32);
+                    *renderer.borrow_mut() = Some(gl);
+                    if !loop_active.get() {
+                        loop_active.set(true);
+                        start_path_raf_loop(
+                            renderer.clone(),
+                            running_flag.clone(),
+                            found_flag.clone(),
+                            canvas_ref,
+                            steps_per_frame,
+                            set_status,
                         );
                     }
                 }
-
-                // Schedule next frame
-                if is_running.get_untracked() && completion_steps.get_untracked().is_none() {
-                    let window = web_sys::window().unwrap();
-                    if let Some(ref closure) = *animate_clone.borrow() {
-                        window
-                            .request_animation_frame(closure.as_ref().unchecked_ref())
-                            .unwrap();
-                    }
-                }
-            }) as Box<dyn FnMut()>);
-
-            // Store the closure and start the loop
-            *animate.borrow_mut() = Some(closure);
-
-            if let Some(ref closure) = *animate.borrow() {
-                window
-                    .request_animation_frame(closure.as_ref().unchecked_ref())
-                    .unwrap();
-            };
-        });
-    }
-
-    // Reset state when shared_grid changes
-    #[cfg(not(feature = "ssr"))]
-    {
-        Effect::new(move |_| {
-            let _ = shared_grid();
-            // Always reset when grid changes
-            set_current_cell(None);
-            set_current_path_candidates(VecCoordinate(Vec::new()));
-            set_final_path(HashSet::new());
-            set_frame_count(0);
-            set_fps(0.0);
-            set_step_count(0);
-            set_completion_steps(None);
-        });
-    }
-
-    let algo = algorithm.clone();
-
-    view! {
-        <div class="flex flex-col gap-2 items-center">
-            <div class="flex flex-col items-center gap-1">
-                <div class="flex items-center gap-2">
-                    <h3 class="text-sm font-medium text-charcoal">{algorithm.to_string()}</h3>
-                    {move || {
-                        let order = completion_order();
-                        order.iter().position(|a| a == &algo).map(|pos| {
-                            let rank_text = match pos {
-                                0 => "🥇 1st".to_string(),
-                                1 => "🥈 2nd".to_string(),
-                                2 => "🥉 3rd".to_string(),
-                                3 => "4th".to_string(),
-                                4 => "5th".to_string(),
-                                5 => "6th".to_string(),
-                                6 => "7th".to_string(),
-                                _ => format!("{}th", pos + 1),
-                            };
-                            view! {
-                                <span class="text-xs font-bold text-accent">{rank_text}</span>
-                            }
-                        })
-                    }}
-                </div>
-                {move || {
-                    completion_steps().map(|steps| {
-                        view! {
-                            <span class="text-xs text-charcoal-light font-mono">
-                                {format!("{steps} steps")}
-                            </span>
-                        }
-                    })
-                }}
-            </div>
-            <SearchGrid
-                grid_size=grid_size
-                grid=grid
-                start_cell_coord=start_cell_coord
-                end_cell_coord=end_cell_coord
-                current_cell=current_cell
-                final_path=final_path
-                step_count=step_count
-            />
-            <div class="text-xs text-charcoal-light font-mono min-h-[1.5rem]">
-                {move || if is_running() && fps() > 0.0 {
-                    format!("{:.0} steps/s", fps())
-                } else {
-                    String::from(" ")
-                }}
-            </div>
-        </div>
-    }
-}
-
-#[component]
-#[allow(unused_variables)]
-pub fn PathSearch() -> impl IntoView {
-    let (grid_size, set_grid_size) = signal(75_u64);
-    let (obstacle_probability, set_obstacle_probability) = signal(0.2);
-    let (show_settings, set_show_settings) = signal(false);
-
-    // Initialize empty grid - will be randomized on mount
-    let initial_grid = Grid(HashMap::new());
-    let (grid, set_grid) = signal(initial_grid);
-
-    let (start_cell_coord, set_start_cell_coord) = signal(None::<CoordinatePair>);
-    let (end_cell_coord, set_end_cell_coord) = signal(None::<CoordinatePair>);
-    let (is_running, set_is_running) = signal(false); // Will auto-start when visible
-    let (blind_completion_order, set_blind_completion_order) = signal(Vec::<Algorithm>::new());
-    let (informed_completion_order, set_informed_completion_order) =
-        signal(Vec::<Algorithm>::new());
-
-    let container_ref = NodeRef::<leptos::html::Div>::new();
-
-    // Randomize grid on initial mount and when grid size changes
-    #[cfg(not(feature = "ssr"))]
-    {
-        use leptos::prelude::Effect;
-        Effect::new(move |prev: Option<()>| {
-            let _ = grid_size(); // Track grid_size changes
-            randomize_cells(
-                obstacle_probability(),
-                grid_size(),
-                set_grid,
-                set_start_cell_coord,
-                set_end_cell_coord,
-            );
-            // Only reset state on subsequent changes (not on initial mount)
-            if prev.is_some() {
-                set_is_running(false);
+                Err(e) => web_sys::console::error_1(&format!("PathGl: {e}").into()),
             }
-            set_blind_completion_order(Vec::new());
-            set_informed_completion_order(Vec::new());
         });
     }
 
-    // Auto-start when element comes into view
+    // IntersectionObserver: auto start/stop, reset on first view.
     #[cfg(not(feature = "ssr"))]
     {
-        use std::cell::RefCell;
-        use std::rc::Rc;
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
 
-        let has_started = Rc::new(RefCell::new(false));
+        let renderer = renderer.clone();
+        let found_flag = found_flag.clone();
+        let has_started = Rc::new(Cell::new(false));
 
-        Effect::new(move |_| {
-            let Some(container) = container_ref.get() else {
-                return;
-            };
-
-            let has_started = has_started.clone();
-
-            // Create IntersectionObserver to detect when element is visible
-            let callback = Closure::wrap(Box::new(
-                move |entries: js_sys::Array, _observer: web_sys::IntersectionObserver| {
-                    for entry in entries.iter() {
-                        let entry: web_sys::IntersectionObserverEntry = entry.unchecked_into();
-
-                        if entry.is_intersecting() {
-                            if !*has_started.borrow() {
-                                *has_started.borrow_mut() = true;
+        let callback = Rc::new(Closure::wrap(Box::new(
+            move |entries: js_sys::Array, _: web_sys::IntersectionObserver| {
+                for entry in entries.iter() {
+                    let Ok(entry) = entry.dyn_into::<web_sys::IntersectionObserverEntry>() else { continue; };
+                    if entry.is_intersecting() {
+                        if !has_started.get() {
+                            has_started.set(true);
+                            if let Some(ref mut gl) = *renderer.borrow_mut() {
+                                found_flag.set(false);
+                                set_status(String::new());
+                                gl.reset(obstacle_prob.get_untracked() as f32);
                             }
-                            // Start simulation when visible
-                            set_is_running(true);
-                        } else {
-                            // Pause simulation when not visible
-                            set_is_running(false);
                         }
+                        set_is_running(true);
+                    } else {
+                        set_is_running(false);
                     }
-                },
-            )
-                as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
+                }
+            },
+        ) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>));
 
-            let observer =
-                web_sys::IntersectionObserver::new(callback.as_ref().unchecked_ref()).unwrap();
-            observer.observe(&container);
-
-            callback.forget();
+        let cb_ref = callback.clone();
+        Effect::new(move |_| {
+            let Some(container) = container_ref.get() else { return; };
+            if let Ok(obs) = web_sys::IntersectionObserver::new(cb_ref.as_ref().as_ref().unchecked_ref()) {
+                obs.observe(&container);
+            }
         });
+        std::mem::forget(callback);
     }
 
-    let toggle_simulation = move |_| {
-        set_is_running.update(|r| *r = !*r);
-    };
-
     #[cfg(not(feature = "ssr"))]
-    let randomize = move |_| {
-        set_is_running(false);
-        randomize_cells(
-            obstacle_probability(),
-            grid_size(),
-            set_grid,
-            set_start_cell_coord,
-            set_end_cell_coord,
-        );
-        set_blind_completion_order(Vec::new());
-        set_informed_completion_order(Vec::new());
+    let randomize = {
+        let renderer = renderer.clone();
+        let found_flag = found_flag.clone();
+        move |_| {
+            set_is_running(false);
+            found_flag.set(false);
+            set_status(String::new());
+            if let Some(ref mut gl) = *renderer.borrow_mut() {
+                gl.reset(obstacle_prob.get_untracked() as f32);
+            }
+            set_is_running(true);
+        }
     };
-
     #[cfg(feature = "ssr")]
     let randomize = move |_| {};
 
     view! {
-        <div
-            node_ref=container_ref
-            class="w-full flex flex-col gap-8 items-center"
-        >
-            <div class="flex gap-3 items-center">
+        <div node_ref=container_ref class="w-full flex flex-col gap-4 items-center relative">
+            <div class="flex gap-3 items-center flex-wrap justify-center">
                 <button
                     class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
-                    style:border-color="#3B82F6"
-                    style:color="#3B82F6"
-                    on:click=toggle_simulation
-                    aria-label=move || if is_running() { "Pause simulation" } else { "Play simulation" }
+                    style:border-color="#3B82F6" style:color="#3B82F6"
+                    on:click=move |_| set_is_running.update(|r| *r = !*r)
+                    aria-label=move || if is_running() { "Pause" } else { "Play" }
                 >
                     {move || if is_running() { "▌▌" } else { "▶" }}
                 </button>
                 <button
                     class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
-                    style:border-color="#3B82F6"
-                    style:color="#3B82F6"
-                    on:click=randomize
-                    aria-label="Randomize grid"
-                >
-                    "↻"
-                </button>
+                    style:border-color="#3B82F6" style:color="#3B82F6"
+                    on:click=randomize aria-label="Randomize"
+                >"↻"</button>
                 <button
                     class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
                     on:click=move |_| set_show_settings.update(|v| *v = !*v)
-                    aria-label="Open settings"
+                    aria-label="Settings"
                 >
                     <Icon name="cog" class="w-4 h-4" />
                 </button>
+                <span class="text-sm text-charcoal-light">"2048×2048 · GPU BFS"</span>
+                {move || {
+                    let s = status();
+                    (!s.is_empty()).then(|| view! {
+                        <span class="text-sm text-accent font-mono">{s}</span>
+                    })
+                }}
             </div>
 
             <Show when=move || show_settings()>
-                <div class="absolute top-32 right-8 z-20 bg-surface border border-border rounded-lg shadow-minimal-lg p-6 min-w-[320px]">
+                <div class="absolute top-12 right-0 z-20 bg-surface border border-border rounded-lg shadow-minimal-lg p-6 min-w-[300px]">
                     <div class="flex flex-col gap-4">
                         <div class="flex items-center justify-between mb-2">
                             <h3 class="text-lg font-medium text-charcoal">"Settings"</h3>
                             <button
                                 class="text-charcoal-lighter hover:text-charcoal transition-colors"
                                 on:click=move |_| set_show_settings.set(false)
-                                aria-label="Close settings"
+                                aria-label="Close"
+                            >"✕"</button>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label class="text-sm font-medium text-charcoal">
+                                "Obstacle Density"
+                            </label>
+                            <input
+                                type="range" min="0.05" max="0.6" step="0.05"
+                                class="w-full accent-blue-500"
+                                on:input=move |ev| {
+                                    if let Ok(v) = event_target_value(&ev).parse::<f64>() {
+                                        set_obstacle_prob(v);
+                                    }
+                                }
+                                prop:value=obstacle_prob
+                            />
+                            <span class="text-xs text-charcoal-light text-right">
+                                {move || format!("{:.0}%", obstacle_prob() * 100.0)}
+                            </span>
+                        </div>
+
+                        <div class="flex flex-col gap-2">
+                            <label class="text-sm font-medium text-charcoal">"Speed"</label>
+                            <select
+                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent"
+                                on:change=move |ev| {
+                                    if let Ok(v) = event_target_value(&ev).parse::<u32>() {
+                                        set_steps_per_frame(v);
+                                    }
+                                }
                             >
-                                "✕"
-                            </button>
-                        </div>
-
-                        <div class="flex flex-col gap-2">
-                            <label for="grid_size" class="text-sm font-medium text-charcoal">
-                                "Grid Size"
-                            </label>
-                            <input
-                                type="number"
-                                id="grid_size"
-                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                                on:input=move |ev| {
-                                    if let Ok(val) = event_target_value(&ev).parse::<u64>() {
-                                        set_grid_size(val);
+                                {[(2u32,"Slow (2/frame)"),(4,"Normal (4/frame)"),(8,"Fast (8/frame)"),(16,"Very Fast (16/frame)")].into_iter().map(|(n, label)| {
+                                    view! {
+                                        <option value=n.to_string() selected=move || steps_per_frame() == n>
+                                            {label}
+                                        </option>
                                     }
-                                }
-                                prop:value=grid_size
-                            />
-                        </div>
-
-                        <div class="flex flex-col gap-2">
-                            <label for="obstacle_probability" class="text-sm font-medium text-charcoal">
-                                "Obstacle Probability"
-                            </label>
-                            <input
-                                type="number"
-                                id="obstacle_probability"
-                                step="0.1"
-                                min="0"
-                                max="1"
-                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent transition-all"
-                                on:input=move |ev| {
-                                    if let Ok(val) = event_target_value(&ev).parse::<f64>() {
-                                        set_obstacle_probability(val);
-                                    }
-                                }
-                                prop:value=obstacle_probability
-                            />
+                                }).collect_view()}
+                            </select>
                         </div>
                     </div>
                 </div>
             </Show>
 
-            <div class="text-sm text-charcoal-light max-w-4xl mx-auto mb-8">
-                "Pathfinding algorithms racing to find the shortest route from start (green) to end (yellow)."
+            <div class="text-sm text-charcoal-light max-w-2xl text-center">
+                "GPU BFS wavefront expanding from start (green) to end (amber) across a 2048×2048 grid."
             </div>
 
-            // Blind Search Algorithms
-            <div class="w-full flex flex-col gap-6 mb-12">
-                <div class="flex flex-col gap-2 items-center">
-                    <h2 class="text-2xl font-bold text-charcoal">"Blind Search"</h2>
-                    <p class="text-sm text-charcoal-light max-w-2xl text-center">
-                        "Explores without knowing the destination location"
-                    </p>
-                </div>
-                <div class="w-full flex flex-wrap gap-8 justify-center items-start">
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::Bfs
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=blind_completion_order
-                        set_completion_order=set_blind_completion_order
-                    />
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::Dfs
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=blind_completion_order
-                        set_completion_order=set_blind_completion_order
-                    />
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::Corner
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=blind_completion_order
-                        set_completion_order=set_blind_completion_order
-                    />
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::Wall
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=blind_completion_order
-                        set_completion_order=set_blind_completion_order
-                    />
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::RandomWalk
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=blind_completion_order
-                        set_completion_order=set_blind_completion_order
-                    />
-                </div>
-            </div>
-
-            // Informed Search Algorithms
-            <div class="w-full flex flex-col gap-6">
-                <div class="flex flex-col gap-2 items-center">
-                    <h2 class="text-2xl font-bold text-charcoal">"Informed Search"</h2>
-                    <p class="text-sm text-charcoal-light max-w-2xl text-center">
-                        "Uses heuristics or knowledge of the destination to guide exploration more efficiently"
-                    </p>
-                </div>
-                <div class="w-full flex flex-wrap gap-8 justify-center items-start">
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::AStar
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=informed_completion_order
-                        set_completion_order=set_informed_completion_order
-                    />
-                    <AlgorithmSimulation
-                        algorithm=Algorithm::Greedy
-                        grid_size=grid_size
-                        shared_grid=grid
-                        set_shared_grid=set_grid
-                        start_cell_coord=start_cell_coord
-                        end_cell_coord=end_cell_coord
-                        is_running=is_running
-                        completion_order=informed_completion_order
-                        set_completion_order=set_informed_completion_order
-                    />
-                </div>
-            </div>
+            <canvas
+                node_ref=canvas_ref
+                class="w-full aspect-square border border-border"
+                style="max-height: 60vh; object-fit: contain;"
+            />
         </div>
     }
 }
