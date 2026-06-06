@@ -1,12 +1,20 @@
 use axum::{extract::Request, middleware::Next, response::Response};
 use axum::http::header::{HeaderValue, CACHE_CONTROL};
 
+fn has_hash_segment(path: &str) -> bool {
+    path.split('/').any(|seg| seg.len() >= 8 && seg.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
 pub async fn cache_control(req: Request, next: Next) -> Response {
     let path = req.uri().path().to_string();
     let mut response = next.run(req).await;
 
-    let cache_header = if path.ends_with(".wasm") || path.ends_with(".js") {
-        "public, no-cache"
+    let cache_header = if path.ends_with(".wasm") {
+        "public, max-age=3600"
+    } else if path.ends_with(".js") && has_hash_segment(&path) {
+        "public, max-age=31536000, immutable"
+    } else if path.ends_with(".js") {
+        "public, max-age=3600"
     } else if path.ends_with(".woff2")
         || path.ends_with(".woff")
         || path.ends_with(".ttf")
