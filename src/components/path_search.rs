@@ -309,9 +309,9 @@ impl PathGl {
         gl.bind_framebuffer(GL::READ_FRAMEBUFFER, Some(&self.fbs[self.current]));
         gl.read_buffer(GL::COLOR_ATTACHMENT0);
         let buf = js_sys::Uint8Array::new_with_length(1);
-        gl.read_pixels_with_array_buffer_view(
+        gl.read_pixels_with_opt_array_buffer_view(
             ex as i32, ey as i32, 1, 1,
-            GL::RED, GL::UNSIGNED_BYTE, &buf,
+            GL::RED, GL::UNSIGNED_BYTE, Some(&buf),
         ).ok();
         gl.bind_framebuffer(GL::READ_FRAMEBUFFER, None);
         buf.get_index(0) >= 192
@@ -326,9 +326,9 @@ impl PathGl {
         gl.bind_framebuffer(GL::READ_FRAMEBUFFER, Some(&self.fbs[self.current]));
         gl.read_buffer(GL::COLOR_ATTACHMENT1); // parent is attachment 1
         let raw = js_sys::Uint8Array::new_with_length(n as u32);
-        gl.read_pixels_with_array_buffer_view(
+        gl.read_pixels_with_opt_array_buffer_view(
             0, 0, self.grid_w as i32, self.grid_h as i32,
-            GL::RED, GL::UNSIGNED_BYTE, &raw,
+            GL::RED, GL::UNSIGNED_BYTE, Some(&raw),
         ).ok();
         gl.bind_framebuffer(GL::READ_FRAMEBUFFER, None);
 
