@@ -4,7 +4,7 @@
 
 set -e
 
-REGISTRY="harbor.home.local/library"
+REGISTRY="service-harbor-tailscale-ingress-1.tail6a7a6d.ts.net/library"
 IMAGE_NAME="lighthouse-base"
 TAG="latest"
 

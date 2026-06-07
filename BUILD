@@ -388,14 +388,14 @@ oci_image(
 oci_push(
     name = "jaydanhoward_image_amd64_push",
     image = ":jaydanhoward_image_amd64",
-    repository = "harbor.home.local/library/jaydanhoward",
+    repository = "service-harbor-tailscale-ingress-1.tail6a7a6d.ts.net/library/jaydanhoward",
     remote_tags = ["latest-amd64"]
 )
 
 oci_push(
     name = "jaydanhoward_image_arm64_push",
     image = ":jaydanhoward_image_arm64",
-    repository = "harbor.home.local/library/jaydanhoward",
+    repository = "service-harbor-tailscale-ingress-1.tail6a7a6d.ts.net/library/jaydanhoward",
     remote_tags = ["latest-arm64"]
 )
 
@@ -411,7 +411,7 @@ oci_image_index(
 oci_push(
     name = "jaydanhoward_image_index_push",
     image = ":jaydanhoward_image_index",
-    repository = "harbor.home.local/library/jaydanhoward",
+    repository = "service-harbor-tailscale-ingress-1.tail6a7a6d.ts.net/library/jaydanhoward",
     remote_tags = ["latest"]
 )
 
@@ -436,7 +436,7 @@ oci_image(
 oci_push(
     name = "security_audit_image_push",
     image = ":security_audit_image",
-    repository = "harbor.home.local/library/security-audit",
+    repository = "service-harbor-tailscale-ingress-1.tail6a7a6d.ts.net/library/security-audit",
     remote_tags = ["latest"],
 )
 
