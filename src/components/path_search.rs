@@ -423,7 +423,18 @@ fn AlgorithmSimulation(
                 let f: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
                 let f_outer = f.clone();
 
+                let run_raf = run.clone();
+                let running_raf = running.clone();
+                let frame_count_raf = frame_count.clone();
+                let algo_raf = algo.clone();
+                let renderer_raf = renderer.clone();
+
                 *f.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+                    let run = &run_raf;
+                    let running = &running_raf;
+                    let frame_count = &frame_count_raf;
+                    let algo = &algo_raf;
+                    let renderer = &renderer_raf;
                     let window = web_sys::window().unwrap();
 
                     let canvas_params = canvas_ref.get_untracked().map(|c| {
