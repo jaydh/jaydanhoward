@@ -308,9 +308,11 @@ impl AlgoRun {
                 for &n in &viable { self.queue.push(n); }
                 // Re-sort whole remaining queue so globally best is always at back
                 let h = self.head;
+                let grid_w = self.w;
                 self.queue[h..].sort_by_key(|&n| {
-                    let heur = self.manhattan(n, ei2);
-                    u32::MAX - heur
+                    let (ax, ay) = (n % grid_w, n / grid_w);
+                    let (bx, by) = (ei2 % grid_w, ei2 / grid_w);
+                    u32::MAX - (ax.abs_diff(bx) + ay.abs_diff(by))
                 });
             }
             Algorithm::Corner => {
@@ -383,7 +385,7 @@ fn AlgorithmSimulation(
             Effect::new(move |_| {
                 let _ = grid_version();
                 if let Some((ref base, w, h, start, end)) = *gd.borrow() {
-                    *run.borrow_mut() = Some(AlgoRun::new(base, *w, *h, *start, *end));
+                    *run.borrow_mut() = Some(AlgoRun::new(base, w, h, start, end));
                 }
                 set_completion_steps(None);
                 set_fps(0.0);
