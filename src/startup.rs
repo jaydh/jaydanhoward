@@ -369,6 +369,31 @@ pub async fn run() -> Result<(), std::io::Error> {
 
         const SCREENING_INTERVAL_SECS: u64 = 60 * 60;
 
+        // No-DB path: run in-memory screenings once so the cache is populated in dev/CI.
+        if pool_arc.is_none() {
+            for group in GROUPS {
+                let cache = conjunction_cache.clone();
+                let tle_cache = tle_cache.clone();
+                let client = http_client.clone();
+                tokio::spawn(async move {
+                    if let Some(tles) = fetch_tles(&client, group).await {
+                        tle_cache
+                            .write()
+                            .await
+                            .insert(group.to_string(), (std::time::Instant::now(), tles.clone()));
+                        crate::components::conjunction::screen_and_store(
+                            None,
+                            Some(cache),
+                            group,
+                            &tles,
+                            None,
+                        )
+                        .await;
+                    }
+                });
+            }
+        }
+
         for group in GROUPS {
             let pool_opt  = pool_arc.clone();
             let tle_cache = tle_cache.clone();
