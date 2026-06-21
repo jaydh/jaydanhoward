@@ -407,7 +407,7 @@ fn AlgorithmSimulation(
 
                 // Determine grid dimensions from current grid data
                 let dims = gd.borrow().as_ref().map(|(_, w, h, s, e)| (*w, *h, *s, *e));
-                let (gw, gh) = dims.map(|(w, h, _, _)| (w, h)).unwrap_or((GRID_SIZE, GRID_SIZE));
+                let (gw, gh) = dims.map(|(w, h, _, _)| (w, h)).unwrap_or((2048, 2048));
 
                 let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
                 match PathRenderer::new(el, gw, gh) {

@@ -1541,6 +1541,32 @@ pub fn ClusterStats() -> impl IntoView {
         };
     }
 
+    let container_ref = NodeRef::<leptos::html::Div>::new();
+    #[cfg(not(feature = "ssr"))]
+    let (is_ready, set_is_ready) = signal(false);
+
+    // Defer all data loading until the section scrolls into view
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        let Some(el) = container_ref.get() else { return; };
+        let cb = Closure::wrap(Box::new(
+            move |entries: js_sys::Array, observer: web_sys::IntersectionObserver| {
+                let Ok(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>()
+                else { return; };
+                if entry.is_intersecting() {
+                    set_is_ready.set(true);
+                    observer.disconnect();
+                }
+            },
+        ) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
+        if let Ok(obs) = web_sys::IntersectionObserver::new(cb.as_ref().unchecked_ref()) {
+            obs.observe(&el);
+        }
+        cb.forget();
+    });
+
     // Load recent insights and audit log on mount (deferred until visible on client)
     Effect::new(move |_| {
         #[cfg(not(feature = "ssr"))]
@@ -1730,32 +1756,6 @@ pub fn ClusterStats() -> impl IntoView {
                 set_gitops.set(resources);
             }
         });
-    });
-
-    let container_ref = NodeRef::<leptos::html::Div>::new();
-    #[cfg(not(feature = "ssr"))]
-    let (is_ready, set_is_ready) = signal(false);
-
-    // Defer all data loading until the section scrolls into view
-    #[cfg(not(feature = "ssr"))]
-    Effect::new(move |_| {
-        use wasm_bindgen::prelude::*;
-        use wasm_bindgen::JsCast;
-        let Some(el) = container_ref.get() else { return; };
-        let cb = Closure::wrap(Box::new(
-            move |entries: js_sys::Array, observer: web_sys::IntersectionObserver| {
-                let Ok(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>()
-                else { return; };
-                if entry.is_intersecting() {
-                    set_is_ready.set(true);
-                    observer.disconnect();
-                }
-            },
-        ) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
-        if let Ok(obs) = web_sys::IntersectionObserver::new(cb.as_ref().unchecked_ref()) {
-            obs.observe(&el);
-        }
-        cb.forget();
     });
 
     let (active_tab, set_active_tab) = signal("overview");
