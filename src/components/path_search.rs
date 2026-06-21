@@ -545,7 +545,9 @@ pub fn PathSearch() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     use std::rc::Rc;
 
+    #[cfg(not(feature = "ssr"))]
     const GRID_SIZE: u32 = 2048;
+    #[cfg(not(feature = "ssr"))]
     const OBSTACLE_PROB: f64 = 0.2;
     let (is_running, set_is_running) = signal(false);
     #[cfg(feature = "ssr")]

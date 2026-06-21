@@ -1541,8 +1541,10 @@ pub fn ClusterStats() -> impl IntoView {
         };
     }
 
-    // Load recent insights and audit log on mount
+    // Load recent insights and audit log on mount (deferred until visible on client)
     Effect::new(move |_| {
+        #[cfg(not(feature = "ssr"))]
+        if !is_ready() { return; }
         leptos::task::spawn_local(async move {
             if let Ok(insights) = get_network_insights().await {
                 set_network_insights.set(insights);
@@ -1568,10 +1570,11 @@ pub fn ClusterStats() -> impl IntoView {
         });
     });
 
-    // Refresh top pods + breakdown every 15 s
+    // Refresh top pods + breakdown every 15 s (deferred until visible)
     #[cfg(not(feature = "ssr"))]
-    {
+    Effect::new(move |_| {
         use wasm_bindgen::prelude::*;
+        if !is_ready() { return; }
         let cb = Closure::<dyn Fn()>::new(move || {
             leptos::task::spawn_local(async move {
                 if let Ok(pods) = get_top_network_pods().await {
@@ -1592,10 +1595,12 @@ pub fn ClusterStats() -> impl IntoView {
                 15_000,
             );
         cb.forget();
-    }
+    });
 
-    // Fetch historical data on mount
+    // Fetch historical data on mount (deferred until visible on client)
     Effect::new(move |_| {
+        #[cfg(not(feature = "ssr"))]
+        if !is_ready() { return; }
         leptos::task::spawn_local(async move {
             match get_historical_metrics().await {
                 Ok(historical) => {
@@ -1614,9 +1619,10 @@ pub fn ClusterStats() -> impl IntoView {
         });
     });
 
-    // Set up SSE connection on client side only
+    // Set up SSE connection on client side only, deferred until visible
     #[cfg(not(feature = "ssr"))]
     Effect::new(move |_| {
+        if !is_ready() { return; }
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
         use web_sys::{EventSource, MessageEvent};
@@ -1726,6 +1732,32 @@ pub fn ClusterStats() -> impl IntoView {
         });
     });
 
+    let container_ref = NodeRef::<leptos::html::Div>::new();
+    #[cfg(not(feature = "ssr"))]
+    let (is_ready, set_is_ready) = signal(false);
+
+    // Defer all data loading until the section scrolls into view
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+        let Some(el) = container_ref.get() else { return; };
+        let cb = Closure::wrap(Box::new(
+            move |entries: js_sys::Array, observer: web_sys::IntersectionObserver| {
+                let Ok(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>()
+                else { return; };
+                if entry.is_intersecting() {
+                    set_is_ready.set(true);
+                    observer.disconnect();
+                }
+            },
+        ) as Box<dyn FnMut(js_sys::Array, web_sys::IntersectionObserver)>);
+        if let Ok(obs) = web_sys::IntersectionObserver::new(cb.as_ref().unchecked_ref()) {
+            obs.observe(&el);
+        }
+        cb.forget();
+    });
+
     let (active_tab, set_active_tab) = signal("overview");
 
     let tab_class = move |name: &'static str| {
@@ -1737,7 +1769,7 @@ pub fn ClusterStats() -> impl IntoView {
     };
 
     view! {
-        <div class="w-full bg-gray py-6 px-4 rounded-xl mb-8">
+        <div node_ref=container_ref class="w-full bg-gray py-6 px-4 rounded-xl mb-8 min-h-[520px]">
 
             // ── Header ────────────────────────────────────────────────────────
             <div class="flex items-center justify-between mb-4">
