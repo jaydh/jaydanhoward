@@ -7,6 +7,7 @@ use crate::components::life::Life;
 use crate::components::nav::Nav;
 use crate::components::path_search::PathSearch;
 use crate::components::photography::Photography;
+use crate::components::request_trace::RequestTrace;
 use crate::components::satellite_tracker::SatelliteTracker;
 use crate::components::visitors::Visitors;
 use crate::components::security_audit::SecurityAudit;
@@ -55,6 +56,15 @@ fn HomePage() -> impl IntoView {
                 <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
                     <h1 class="text-3xl font-bold text-charcoal">"About"</h1>
                     <About />
+                </div>
+            </section>
+            <section id="trace" class="flex flex-col py-20 border-t border-border">
+                <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
+                    <h1 class="text-3xl font-bold text-charcoal">"How You Got Here"</h1>
+                    <p class="text-sm text-charcoal-light max-w-xl text-center">
+                        "Every request to this site travels through several layers before reaching the Rust process serving this page. Here's your path."
+                    </p>
+                    <RequestTrace />
                 </div>
             </section>
             <section id="cluster" class="flex flex-col py-20 border-t border-border">

@@ -1,5 +1,4 @@
 #![allow(clippy::all)]
-use crate::components::icons::Icon;
 use leptos::prelude::*;
 use std::fmt;
 
@@ -408,7 +407,7 @@ fn AlgorithmSimulation(
 
                 // Determine grid dimensions from current grid data
                 let dims = gd.borrow().as_ref().map(|(_, w, h, s, e)| (*w, *h, *s, *e));
-                let (gw, gh) = dims.map(|(w, h, _, _)| (w, h)).unwrap_or((256, 256));
+                let (gw, gh) = dims.map(|(w, h, _, _)| (w, h)).unwrap_or((GRID_SIZE, GRID_SIZE));
 
                 let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
                 match PathRenderer::new(el, gw, gh) {
@@ -546,9 +545,8 @@ pub fn PathSearch() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     use std::rc::Rc;
 
-    let (grid_size, set_grid_size) = signal(256_u32);
-    let (obstacle_prob, set_obstacle_prob) = signal(0.2_f64);
-    let (show_settings, set_show_settings) = signal(false);
+    const GRID_SIZE: u32 = 2048;
+    const OBSTACLE_PROB: f64 = 0.2;
     let (is_running, set_is_running) = signal(false);
     #[cfg(feature = "ssr")]
     let (grid_version, _set_grid_version) = signal(0_u32);
@@ -597,15 +595,12 @@ pub fn PathSearch() -> impl IntoView {
 
     let container_ref = NodeRef::<leptos::html::Div>::new();
 
-    // Randomize on mount and on grid_size change
+    // Randomize on mount
     #[cfg(not(feature = "ssr"))]
     {
         let do_rand = do_randomize.clone();
-        Effect::new(move |prev: Option<()>| {
-            let sz = grid_size();
-            let prob = obstacle_prob.get_untracked();
-            do_rand(sz, prob);
-            if prev.is_some() { set_is_running(false); }
+        Effect::new(move |_| {
+            do_rand(GRID_SIZE, OBSTACLE_PROB);
         });
     }
 
@@ -645,7 +640,7 @@ pub fn PathSearch() -> impl IntoView {
         let do_rand = do_randomize.clone();
         move |_| {
             set_is_running(false);
-            do_rand(grid_size.get_untracked(), obstacle_prob.get_untracked());
+            do_rand(GRID_SIZE, OBSTACLE_PROB);
             set_is_running(true);
         }
     };
@@ -678,59 +673,27 @@ pub fn PathSearch() -> impl IntoView {
                     on:click=move |_| set_is_running.update(|r| *r = !*r)
                     aria-label=move || if is_running() { "Pause" } else { "Play" }
                 >
-                    {move || if is_running() { "▌▌" } else { "▶" }}
+                    {move || if is_running() {
+                        view! {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="5" y="4" width="4" height="16" rx="1"/>
+                                <rect x="15" y="4" width="4" height="16" rx="1"/>
+                            </svg>
+                        }.into_any()
+                    } else {
+                        view! {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5,3 19,12 5,21"/>
+                            </svg>
+                        }.into_any()
+                    }}
                 </button>
                 <button
                     class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
                     style:border-color="#3B82F6" style:color="#3B82F6"
                     on:click=randomize aria-label="Randomize"
                 >"↻"</button>
-                <button
-                    class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
-                    on:click=move |_| set_show_settings.update(|v| *v = !*v)
-                    aria-label="Settings"
-                >
-                    <Icon name="cog" class="w-4 h-4" />
-                </button>
             </div>
-
-            <Show when=move || show_settings()>
-                <div class="absolute top-32 right-8 z-20 bg-surface border border-border rounded-lg shadow-minimal-lg p-6 min-w-[320px]">
-                    <div class="flex flex-col gap-4">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-lg font-medium text-charcoal">"Settings"</h3>
-                            <button class="text-charcoal-lighter hover:text-charcoal transition-colors"
-                                on:click=move |_| set_show_settings.set(false) aria-label="Close">"✕"</button>
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-medium text-charcoal">"Grid Size"</label>
-                            <select
-                                class="px-3 py-2 rounded border border-border bg-surface text-charcoal focus:outline-none focus:ring-2 focus:ring-accent"
-                                on:change=move |ev| {
-                                    if let Ok(v) = event_target_value(&ev).parse::<u32>() { set_grid_size(v); }
-                                }
-                            >
-                                {[(128u32,"128×128"),(256,"256×256"),(512,"512×512")].into_iter().map(|(n, label)| view! {
-                                    <option value=n.to_string() selected=move || grid_size() == n>{label}</option>
-                                }).collect_view()}
-                            </select>
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-medium text-charcoal">"Obstacle Density"</label>
-                            <input type="range" min="0.05" max="0.55" step="0.05"
-                                class="w-full accent-blue-500"
-                                on:input=move |ev| {
-                                    if let Ok(v) = event_target_value(&ev).parse::<f64>() { set_obstacle_prob(v); }
-                                }
-                                prop:value=obstacle_prob
-                            />
-                            <span class="text-xs text-charcoal-light text-right">
-                                {move || format!("{:.0}%", obstacle_prob() * 100.0)}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-            </Show>
 
             <div class="text-sm text-charcoal-light max-w-4xl mx-auto">
                 "Pathfinding algorithms racing from start (green) to end (amber). Rendered via WebGL2."

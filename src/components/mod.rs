@@ -18,6 +18,7 @@ pub mod satellite_tracker;
 mod satellite_renderer;
 #[cfg(not(feature = "ssr"))]
 mod satellite_calculations;
+mod request_trace;
 mod sd_sync_reports;
 pub mod security_audit;
 mod skills;
@@ -52,4 +53,5 @@ pub fn register_server_fns() {
     register_explicit::<sd_sync_reports::FetchSdSyncReport>();
     register_explicit::<security_audit::GetSecurityAudit>();
     register_explicit::<cluster_stats::GetBackupLogs>();
+    register_explicit::<request_trace::GetRequestTrace>();
 }
