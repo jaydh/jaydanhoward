@@ -1247,6 +1247,12 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
     #[cfg(not(feature = "ssr"))]
     let (selected, set_selected) = signal(Option::<ConjunctionEvent>::None);
 
+    // Hovered pair for the info bar.
+    #[cfg(feature = "ssr")]
+    let (hovered_event, set_hovered_event) = signal(Option::<ConjunctionEvent>::None);
+    #[cfg(not(feature = "ssr"))]
+    let (hovered_event, set_hovered_event) = signal(Option::<ConjunctionEvent>::None);
+
     // Detail fetch state — only used client-side.
     #[cfg(feature = "ssr")]
     let (detail, _set_detail) = signal(Option::<ConjunctionDetail>::None);
@@ -1375,7 +1381,48 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
     view! {
         <div class="mt-3 flex flex-col gap-2">
 
-            // ── Search + count ──────────────────────────────
+            // ── Focused-pair view (when a row is selected) ──────────
+            <Show when=move || selected.get().is_some()>
+                {move || selected.get().map(|ev| {
+                    let tca_label = {
+                        #[cfg(not(feature = "ssr"))]
+                        {
+                            let now_ms = js_sys::Date::now();
+                            let delta_s = ((ev.tca_unix_ms - now_ms) / 1000.0).max(0.0) as u64;
+                            let h = delta_s / 3600;
+                            let m = (delta_s % 3600) / 60;
+                            format!("TCA in {h}h {m:02}m")
+                        }
+                        #[cfg(feature = "ssr")]
+                        { String::new() }
+                    };
+                    view! {
+                        <div class="flex items-center gap-3 px-1 py-1">
+                            <button
+                                class="text-xs text-muted hover:text-foreground transition-colors flex items-center gap-1"
+                                on:click=move |_| {
+                                    #[cfg(not(feature = "ssr"))]
+                                    set_selected.set(None);
+                                }
+                            >
+                                "← all pairs"
+                            </button>
+                            <span class="text-charcoal-lighter text-xs">"|"</span>
+                            <span class="font-mono text-xs font-semibold text-charcoal">
+                                {ev.sat_a.clone()} " ↔ " {ev.sat_b.clone()}
+                            </span>
+                            <span class="ml-auto font-mono text-xs text-muted">
+                                {format!("{:.3} km  •  {:.2} km/s  •  {}", ev.miss_distance_km, ev.rel_velocity_km_s, tca_label)}
+                            </span>
+                        </div>
+                    }
+                })}
+            </Show>
+
+            // ── Table view (when nothing selected) ──────────────────
+            <Show when=move || selected.get().is_none()>
+
+            // Search + count
             <div class="flex items-center gap-3">
                 <input
                     type="text"
@@ -1394,6 +1441,37 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                         else { format!("{n} / {total}") }
                     }}
                 </span>
+            </div>
+
+            // Hover info bar
+            <div class="h-7 flex items-center px-3 border border-border rounded-md bg-surface text-xs">
+                {move || match hovered_event.get() {
+                    None => view! {
+                        <span class="text-muted">"Hover a row for a quick summary — click to focus"</span>
+                    }.into_any(),
+                    Some(ev) => {
+                        let tca_label = {
+                            #[cfg(not(feature = "ssr"))]
+                            {
+                                let now_ms = js_sys::Date::now();
+                                let delta_s = ((ev.tca_unix_ms - now_ms) / 1000.0).max(0.0) as u64;
+                                let h = delta_s / 3600;
+                                let m = (delta_s % 3600) / 60;
+                                format!("TCA in {h}h {m:02}m")
+                            }
+                            #[cfg(feature = "ssr")]
+                            { String::new() }
+                        };
+                        view! {
+                            <span class="flex gap-4 items-center w-full font-mono">
+                                <span class="text-charcoal font-semibold">{ev.sat_a.clone()} " ↔ " {ev.sat_b.clone()}</span>
+                                <span class="text-muted">"miss " <span class="text-charcoal">{format!("{:.3}", ev.miss_distance_km)}</span> " km"</span>
+                                <span class="text-muted">"vel " <span class="text-charcoal">{format!("{:.2}", ev.rel_velocity_km_s)}</span> " km/s"</span>
+                                <span class="text-muted ml-auto">{tca_label}</span>
+                            </span>
+                        }.into_any()
+                    }
+                }}
             </div>
 
             // ── Scrollable virtualized table ─────────────────
@@ -1456,7 +1534,12 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                                 format!("{}-{}-{}", e.sat_a, e.sat_b, e.tca_unix_ms as u64)
                             }
                             children=move |e| view! {
-                                <ConjunctionRow event=e selected=selected set_selected=set_selected />
+                                <ConjunctionRow
+                                    event=e
+                                    selected=selected
+                                    set_selected=set_selected
+                                    set_hovered=set_hovered_event
+                                />
                             }
                         />
 
@@ -1471,7 +1554,9 @@ fn ConjunctionTable(events: ReadSignal<Vec<ConjunctionEvent>>) -> impl IntoView 
                 </table>
             </div>
 
-            // ── Detail panel ─────────────────────────────────
+            </Show> // end table-only Show
+
+            // ── Detail panel (shown when a pair is selected) ──
             <Show when=move || selected.get().is_some()>
                 <ConjunctionDetailPanel
                     selected=selected
@@ -1492,6 +1577,7 @@ fn ConjunctionRow(
     event: ConjunctionEvent,
     selected: ReadSignal<Option<ConjunctionEvent>>,
     set_selected: WriteSignal<Option<ConjunctionEvent>>,
+    set_hovered: WriteSignal<Option<ConjunctionEvent>>,
 ) -> impl IntoView {
     let tca_rel = {
         #[cfg(not(feature = "ssr"))]
@@ -1510,6 +1596,7 @@ fn ConjunctionRow(
     };
 
     let ev = event.clone();
+    let ev_hover = event.clone();
     let is_selected = {
         let ev_key = (event.sat_a.clone(), event.sat_b.clone(), event.tca_unix_ms as u64);
         move || {
@@ -1527,6 +1614,8 @@ fn ConjunctionRow(
                 else { format!("{base} hover:bg-surface-alt/60") }
             }
             style="height:32px"
+            on:mouseenter=move |_| set_hovered.set(Some(ev_hover.clone()))
+            on:mouseleave=move |_| set_hovered.set(None)
             on:click=move |_| {
                 let key = (ev.sat_a.clone(), ev.sat_b.clone(), ev.tca_unix_ms as u64);
                 set_selected.update(|s| {
