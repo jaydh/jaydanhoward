@@ -45,6 +45,7 @@ void main() {
 }"#;
 
 // Maps state byte (0-4) to color; overlays start/end markers.
+// u_zoom > 1.0 zooms in centered on u_zoom_center (normalised grid coords).
 #[cfg(not(feature = "ssr"))]
 const DRAW_FRAG: &str = r#"#version 300 es
 precision mediump float;
@@ -57,17 +58,24 @@ uniform vec3 u_wall;
 uniform vec2 u_start;
 uniform vec2 u_end;
 uniform vec2 u_res;
+uniform float u_zoom;
+uniform vec2 u_zoom_center;
 void main() {
-    float s = floor(texture(u_state, v_uv).r * 255.0 + 0.5);
+    vec2 uv = (v_uv - u_zoom_center) / u_zoom + u_zoom_center;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        o = vec4(u_bg, 1.0);
+        return;
+    }
+    float s = floor(texture(u_state, uv).r * 255.0 + 0.5);
     vec3 col;
     if      (s < 0.5) { col = u_wall; }
     else if (s < 1.5) { col = u_bg; }
     else if (s < 2.5) { col = vec3(0.937, 0.267, 0.267); }
     else if (s < 3.5) { col = u_visited; }
     else              { col = vec3(0.753, 0.518, 0.988); }
-    vec2 ps = (v_uv - u_start) * u_res;
+    vec2 ps = (uv - u_start) * u_res;
     if (dot(ps, ps) < 9.0) { col = vec3(0.133, 0.773, 0.369); }
-    vec2 pe = (v_uv - u_end) * u_res;
+    vec2 pe = (uv - u_end) * u_res;
     if (dot(pe, pe) < 9.0) { col = vec3(0.961, 0.620, 0.043); }
     o = vec4(col, 1.0);
 }
@@ -129,7 +137,7 @@ impl PathRenderer {
         self.gl.bind_texture(GL::TEXTURE_2D, None);
     }
 
-    pub fn draw(&self, cw: i32, ch: i32, dark: bool, start: (u32, u32), end: (u32, u32)) {
+    pub fn draw(&self, cw: i32, ch: i32, dark: bool, start: (u32, u32), end: (u32, u32), zoom: f32) {
         use web_sys::WebGl2RenderingContext as GL;
         let gl = &self.gl;
         gl.viewport(0, 0, cw, ch);
@@ -145,14 +153,24 @@ impl PathRenderer {
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_visited") { gl.uniform3f(Some(&l), vis[0], vis[1], vis[2]); }
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_bg")      { gl.uniform3f(Some(&l), bg[0], bg[1], bg[2]); }
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_wall")    { gl.uniform3f(Some(&l), wall[0], wall[1], wall[2]); }
+        let su = start.0 as f32 / self.grid_w as f32;
+        let sv = start.1 as f32 / self.grid_h as f32;
+        let eu = end.0 as f32 / self.grid_w as f32;
+        let ev = end.1 as f32 / self.grid_h as f32;
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_start") {
-            gl.uniform2f(Some(&l), start.0 as f32 / self.grid_w as f32, start.1 as f32 / self.grid_h as f32);
+            gl.uniform2f(Some(&l), su, sv);
         }
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_end") {
-            gl.uniform2f(Some(&l), end.0 as f32 / self.grid_w as f32, end.1 as f32 / self.grid_h as f32);
+            gl.uniform2f(Some(&l), eu, ev);
         }
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_res") {
             gl.uniform2f(Some(&l), self.grid_w as f32, self.grid_h as f32);
+        }
+        if let Some(l) = gl.get_uniform_location(&self.prog, "u_zoom") {
+            gl.uniform1f(Some(&l), zoom.max(0.01));
+        }
+        if let Some(l) = gl.get_uniform_location(&self.prog, "u_zoom_center") {
+            gl.uniform2f(Some(&l), (su + eu) * 0.5, (sv + ev) * 0.5);
         }
         gl.bind_vertex_array(Some(&self.vao));
         gl.draw_arrays(GL::TRIANGLES, 0, 6);
@@ -355,6 +373,7 @@ fn AlgorithmSimulation(
     is_running: ReadSignal<bool>,
     completion_order: ReadSignal<Vec<Algorithm>>,
     set_completion_order: WriteSignal<Vec<Algorithm>>,
+    zoom: ReadSignal<f32>,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
 
@@ -482,7 +501,7 @@ fn AlgorithmSimulation(
                         // Upload + draw
                         if let (Some(ref rend), Some(ref run_ref)) = (&*renderer.borrow(), &*run.borrow()) {
                             rend.upload(&run_ref.state);
-                            rend.draw(cw, ch, dark, run_ref.start, run_ref.end);
+                            rend.draw(cw, ch, dark, run_ref.start, run_ref.end, zoom.get_untracked());
                         }
                     }
 
@@ -503,7 +522,7 @@ fn AlgorithmSimulation(
     let algo_clone = algorithm.clone();
 
     view! {
-        <div class="flex flex-col gap-2 items-center">
+        <div class="flex flex-col gap-2 items-center" style="width: 55vh; max-width: 100%;">
             <div class="flex flex-col items-center gap-1">
                 <div class="flex items-center gap-2">
                     <h3 class="text-sm font-medium text-charcoal">{algo_name}</h3>
@@ -525,7 +544,7 @@ fn AlgorithmSimulation(
             <canvas
                 node_ref=canvas_ref
                 class="border border-border aspect-square w-full"
-                style="max-width: 420px; max-height: 420px;"
+                style="max-height: 55vh;"
             />
             <div class="text-xs text-charcoal-light font-mono min-h-[1.5rem]">
                 {move || if is_running() && fps() > 0.0 && completion_steps().is_none() {
@@ -550,6 +569,7 @@ pub fn PathSearch() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     const OBSTACLE_PROB: f64 = 0.2;
     let (is_running, set_is_running) = signal(false);
+    let (zoom, set_zoom) = signal(1.0_f32);
     #[cfg(feature = "ssr")]
     let (grid_version, _set_grid_version) = signal(0_u32);
     #[cfg(not(feature = "ssr"))]
@@ -668,7 +688,7 @@ pub fn PathSearch() -> impl IntoView {
 
     view! {
         <div node_ref=container_ref class="w-full flex flex-col gap-8 items-center">
-            <div class="flex gap-3 items-center">
+            <div class="flex gap-3 items-center flex-wrap justify-center">
                 <button
                     class="px-4 py-1.5 text-sm rounded border transition-all duration-200 hover:bg-accent hover:bg-opacity-10"
                     style:border-color="#3B82F6" style:color="#3B82F6"
@@ -695,6 +715,22 @@ pub fn PathSearch() -> impl IntoView {
                     style:border-color="#3B82F6" style:color="#3B82F6"
                     on:click=randomize aria-label="Randomize"
                 >"↻"</button>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-charcoal-light font-mono">"zoom"</label>
+                    <input
+                        type="range" min="1" max="8" step="0.5"
+                        prop:value=move || zoom().to_string()
+                        on:input=move |e| {
+                            if let Ok(v) = event_target_value(&e).parse::<f32>() {
+                                set_zoom(v);
+                            }
+                        }
+                        class="w-24 accent-accent"
+                    />
+                    <span class="text-xs text-charcoal-light font-mono w-8">
+                        {move || format!("{:.1}x", zoom())}
+                    </span>
+                </div>
             </div>
 
             <div class="text-sm text-charcoal-light max-w-4xl mx-auto">
@@ -711,19 +747,19 @@ pub fn PathSearch() -> impl IntoView {
                 </div>
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
                     <AlgorithmSimulation algorithm=Algorithm::Bfs grid_version=grid_version
-                        grid_data=gd1 is_running=is_running
+                        grid_data=gd1 is_running=is_running zoom=zoom
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Dfs grid_version=grid_version
-                        grid_data=gd2 is_running=is_running
+                        grid_data=gd2 is_running=is_running zoom=zoom
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Corner grid_version=grid_version
-                        grid_data=gd3 is_running=is_running
+                        grid_data=gd3 is_running=is_running zoom=zoom
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Wall grid_version=grid_version
-                        grid_data=gd4 is_running=is_running
+                        grid_data=gd4 is_running=is_running zoom=zoom
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::RandomWalk grid_version=grid_version
-                        grid_data=gd5 is_running=is_running
+                        grid_data=gd5 is_running=is_running zoom=zoom
                         completion_order=blind_order set_completion_order=set_blind_order />
                 </div>
             </div>
@@ -738,10 +774,10 @@ pub fn PathSearch() -> impl IntoView {
                 </div>
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
                     <AlgorithmSimulation algorithm=Algorithm::AStar grid_version=grid_version
-                        grid_data=gd6 is_running=is_running
+                        grid_data=gd6 is_running=is_running zoom=zoom
                         completion_order=informed_order set_completion_order=set_informed_order />
                     <AlgorithmSimulation algorithm=Algorithm::Greedy grid_version=grid_version
-                        grid_data=gd7 is_running=is_running
+                        grid_data=gd7 is_running=is_running zoom=zoom
                         completion_order=informed_order set_completion_order=set_informed_order />
                 </div>
             </div>

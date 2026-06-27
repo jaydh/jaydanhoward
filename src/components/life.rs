@@ -41,7 +41,7 @@ void main() {
     o = vec4(next, 0.0, 0.0, 1.0);
 }"#;
 
-// Display: maps alive/dead to colors.
+// Display: maps alive/dead to colors. u_zoom > 1 zooms in centered on u_zoom_center.
 #[cfg(not(feature = "ssr"))]
 const DRAW_FRAG: &str = r#"#version 300 es
 precision mediump float;
@@ -50,8 +50,15 @@ out vec4 o;
 uniform sampler2D u_state;
 uniform vec3 u_alive;
 uniform vec3 u_dead;
+uniform float u_zoom;
+uniform vec2 u_zoom_center;
 void main() {
-    float c = texture(u_state, v_uv).r;
+    vec2 uv = (v_uv - u_zoom_center) / u_zoom + u_zoom_center;
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
+        o = vec4(u_dead, 1.0);
+        return;
+    }
+    float c = texture(u_state, uv).r;
     o = vec4(mix(u_dead, u_alive, c), 1.0);
 }"#;
 
@@ -170,7 +177,7 @@ impl LifeGl {
         self.current = next;
     }
 
-    pub fn draw(&self, canvas_w: i32, canvas_h: i32, dark_mode: bool) {
+    pub fn draw(&self, canvas_w: i32, canvas_h: i32, dark_mode: bool, zoom: f32, zoom_cx: f32, zoom_cy: f32) {
         use web_sys::WebGl2RenderingContext as GL;
         let gl = &self.gl;
         gl.viewport(0, 0, canvas_w, canvas_h);
@@ -191,6 +198,12 @@ impl LifeGl {
         }
         if let Some(loc) = gl.get_uniform_location(&self.draw_prog, "u_dead") {
             gl.uniform3f(Some(&loc), dead[0], dead[1], dead[2]);
+        }
+        if let Some(loc) = gl.get_uniform_location(&self.draw_prog, "u_zoom") {
+            gl.uniform1f(Some(&loc), zoom.max(0.01));
+        }
+        if let Some(loc) = gl.get_uniform_location(&self.draw_prog, "u_zoom_center") {
+            gl.uniform2f(Some(&loc), zoom_cx, zoom_cy);
         }
         gl.bind_vertex_array(Some(&self.quad_vao));
         gl.draw_arrays(GL::TRIANGLES, 0, 6);
@@ -327,6 +340,11 @@ pub fn LifeGame(
     let (interval_ms, set_interval_ms) =
         signal(initial_interval_ms.unwrap_or(16));
     let (show_settings, set_show_settings) = signal(false);
+    let (zoom, set_zoom) = signal(1.0_f32);
+    #[cfg(feature = "ssr")]
+    let (_zoom_center, _set_zoom_center) = signal((0.5_f32, 0.5_f32));
+    #[cfg(not(feature = "ssr"))]
+    let (zoom_center, set_zoom_center) = signal((0.5_f32, 0.5_f32));
 
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
     let container_ref = NodeRef::<leptos::html::Div>::new();
@@ -375,6 +393,8 @@ pub fn LifeGame(
                                 renderer.clone(),
                                 running_flag.clone(),
                                 interval_ms,
+                                zoom,
+                                zoom_center,
                             );
                         }
                     }
@@ -523,6 +543,22 @@ pub fn LifeGame(
                     </button>
                 </div>
                 <span class="text-sm text-charcoal-light">"2048×2048"</span>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-charcoal-light font-mono">"zoom"</label>
+                    <input
+                        type="range" min="1" max="8" step="0.5"
+                        prop:value=move || zoom().to_string()
+                        on:input=move |e| {
+                            if let Ok(v) = event_target_value(&e).parse::<f32>() {
+                                set_zoom(v);
+                            }
+                        }
+                        class="w-24 accent-blue-500"
+                    />
+                    <span class="text-xs text-charcoal-light font-mono w-8">
+                        {move || format!("{:.1}x", zoom())}
+                    </span>
+                </div>
             </div>
 
             <Show when=move || show_settings()>
@@ -593,6 +629,29 @@ pub fn LifeGame(
                 node_ref=canvas_ref
                 class="w-full aspect-square border border-border cursor-crosshair touch-none"
                 style="max-height: 60vh; object-fit: contain;"
+                on:click=move |e| {
+                    #[cfg(feature = "ssr")]
+                    let _ = &e;
+                    #[cfg(not(feature = "ssr"))]
+                    {
+                        use wasm_bindgen::JsCast as _;
+                        // Shift-click re-centers the zoom on the clicked point
+                        if e.shift_key() {
+                            if let Some(canvas) = e.target()
+                                .and_then(|t| t.dyn_into::<web_sys::HtmlCanvasElement>().ok())
+                            {
+                                let rect = canvas.get_bounding_client_rect();
+                                let cx = (e.client_x() as f64 - rect.left()) / rect.width();
+                                let cy = (e.client_y() as f64 - rect.top()) / rect.height();
+                                let (old_cx, old_cy) = zoom_center.get_untracked();
+                                let z = zoom.get_untracked();
+                                let wx = (cx as f32 - old_cx) / z + old_cx;
+                                let wy = (cy as f32 - old_cy) / z + old_cy;
+                                set_zoom_center((wx, wy));
+                            }
+                        }
+                    }
+                }
             ></canvas>
         </div>
     }
@@ -605,6 +664,8 @@ fn start_raf_loop(
     renderer: std::rc::Rc<std::cell::RefCell<Option<LifeGl>>>,
     running: std::rc::Rc<std::cell::Cell<bool>>,
     interval_ms: ReadSignal<u64>,
+    zoom: ReadSignal<f32>,
+    zoom_center: ReadSignal<(f32, f32)>,
 ) {
     use std::cell::{Cell, RefCell};
     use std::rc::Rc;
@@ -657,7 +718,9 @@ fn start_raf_loop(
                     renderer.borrow_mut().as_mut().unwrap().step();
                 }
             }
-            renderer.borrow().as_ref().unwrap().draw(cw, ch, dark);
+            let z = zoom.get_untracked();
+            let (cx, cy) = zoom_center.get_untracked();
+            renderer.borrow().as_ref().unwrap().draw(cw, ch, dark, z, cx, cy);
         }
 
         window
