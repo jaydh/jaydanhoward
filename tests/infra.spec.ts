@@ -20,12 +20,13 @@ test('cache: HTML root gets max-age=0 must-revalidate', async ({ request }) => {
   expect(cc).toContain('must-revalidate');
 });
 
-test('cache: WASM asset gets 1-hour TTL', async ({ page }) => {
+test('cache: versioned WASM asset gets immutable TTL', async ({ page }) => {
   let wasmCacheControl: string | null = null;
   let wasmUrl: string | null = null;
 
   page.on('response', res => {
-    if (!wasmUrl && res.url().endsWith('.wasm')) {
+    // Use pathname so ?v=hash suffix doesn't break the endsWith check
+    if (!wasmUrl && new URL(res.url()).pathname.endsWith('.wasm')) {
       wasmUrl = res.url();
       wasmCacheControl = res.headers()['cache-control'] ?? null;
     }
@@ -36,7 +37,7 @@ test('cache: WASM asset gets 1-hour TTL', async ({ page }) => {
 
   console.log(`WASM: ${wasmUrl}  →  ${wasmCacheControl}`);
   expect(wasmUrl, '.wasm file should be requested on page load').toBeTruthy();
-  expect(wasmCacheControl).toContain('max-age=3600');
+  expect(wasmCacheControl).toContain('immutable');
 });
 
 test('cache: hashed JS gets immutable 1-year TTL', async ({ page }) => {
