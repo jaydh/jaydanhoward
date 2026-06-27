@@ -7,10 +7,19 @@ fn has_hash_segment(path: &str) -> bool {
 
 pub async fn cache_control(req: Request, next: Next) -> Response {
     let path = req.uri().path().to_string();
+    let query = req.uri().query().unwrap_or("").to_string();
     let mut response = next.run(req).await;
 
-    let cache_header = if path.ends_with(".wasm") {
-        "public, max-age=3600"
+    let cache_header = if path.starts_with("/jaydanhoward_wasm/") && query.contains("v=") {
+        // Versioned WASM assets: the ?v={hash} suffix changes whenever the binary changes,
+        // so the pair is always atomically fresh and safe to cache indefinitely.
+        "public, max-age=31536000, immutable"
+    } else if path.starts_with("/jaydanhoward_wasm/") {
+        // Unversioned WASM paths: force revalidation so Cloudflare never serves a stale
+        // binary/JS pair after a deploy. ServeDir ETags make this a cheap 304.
+        "no-cache"
+    } else if path.ends_with(".wasm") {
+        "no-cache"
     } else if path.ends_with(".js") && has_hash_segment(&path) {
         "public, max-age=31536000, immutable"
     } else if path.ends_with(".js") {

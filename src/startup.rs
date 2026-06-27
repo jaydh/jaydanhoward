@@ -1,3 +1,36 @@
+/// Replacement for `HydrationScripts` that appends `?v={hash}` to both the JS and WASM URLs.
+/// This lets Cloudflare (and browsers) cache the pair with `immutable` headers while
+/// guaranteeing that a new deploy produces new URLs, preventing stale-pair LinkErrors.
+#[cfg(feature = "ssr")]
+#[leptos::component]
+fn WasmScripts(options: leptos::prelude::LeptosOptions, version: std::sync::Arc<String>) -> impl leptos::IntoView {
+    use leptos::prelude::*;
+
+    let pkg = options.site_pkg_dir.to_string();
+    let name = options.output_name.to_string();
+    let v = (*version).clone();
+
+    let js_url   = format!("/{pkg}/{name}.js?v={v}");
+    let wasm_url = format!("/{pkg}/{name}_bg.wasm?v={v}");
+
+    // Inline the hydration bootstrap directly so we can control both URLs.
+    let script = format!(
+        "(function(){{import(\"{js_url}\").then(function(m){{m.default({{module_or_path:\"{wasm_url}\"}}).then(function(){{m.hydrate();}});}});}})();"
+    );
+
+    view! {
+        <link rel="modulepreload" href=js_url crossorigin="" />
+        <link
+            rel="preload"
+            href=wasm_url
+            r#as="fetch"
+            r#type="application/wasm"
+            crossorigin=""
+        />
+        <script type="module">{script}</script>
+    }
+}
+
 #[cfg(feature = "ssr")]
 pub async fn run() -> Result<(), std::io::Error> {
     use crate::components::conjunction::ConjunctionCache;
@@ -538,6 +571,19 @@ pub async fn run() -> Result<(), std::io::Error> {
         }
     }
 
+    // Compute a content hash of the WASM binary so the HTML shell can embed ?v={hash}
+    // in the JS/WASM URLs, enabling immutable caching for those assets.
+    let wasm_version: Arc<String> = {
+        use std::hash::{Hash, Hasher};
+        use std::collections::hash_map::DefaultHasher;
+        let wasm_path = wasm_dir.join("jaydanhoward_wasm_bg.wasm");
+        let bytes = std::fs::read(&wasm_path).unwrap_or_default();
+        let mut h = DefaultHasher::new();
+        bytes.hash(&mut h);
+        Arc::new(format!("{:016x}", h.finish()))
+    };
+    log::info!("WASM content version: {wasm_version}");
+
     let leptos_options = conf.leptos_options.clone();
     let routes = generate_route_list(App);
 
@@ -572,7 +618,9 @@ pub async fn run() -> Result<(), std::io::Error> {
             routes,
             {
                 let leptos_options = leptos_options.clone();
+                let wasm_version = wasm_version.clone();
                 move || {
+                    let ver = wasm_version.clone();
                     view! {
                         <!DOCTYPE html>
                         <html lang="en">
@@ -582,9 +630,8 @@ pub async fn run() -> Result<(), std::io::Error> {
                                     name="viewport"
                                     content="width=device-width, initial-scale=1"
                                 />
-                                <HydrationScripts options=leptos_options.clone() />
+                                <WasmScripts options=leptos_options.clone() version=ver />
                                 <MetaTags />
-                                <link rel="preload" as_="fetch" crossorigin="anonymous" href="/jaydanhoward_wasm/jaydanhoward_wasm_bg.wasm" />
                             </head>
                             <body>
                                 <App />
