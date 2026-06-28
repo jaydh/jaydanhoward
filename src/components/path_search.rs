@@ -137,7 +137,7 @@ impl PathRenderer {
         self.gl.bind_texture(GL::TEXTURE_2D, None);
     }
 
-    pub fn draw(&self, cw: i32, ch: i32, dark: bool, start: (u32, u32), end: (u32, u32), zoom: f32) {
+    pub fn draw(&self, cw: i32, ch: i32, dark: bool, start: (u32, u32), end: (u32, u32), zoom: f32, zoom_cx: f32, zoom_cy: f32) {
         use web_sys::WebGl2RenderingContext as GL;
         let gl = &self.gl;
         gl.viewport(0, 0, cw, ch);
@@ -170,7 +170,7 @@ impl PathRenderer {
             gl.uniform1f(Some(&l), zoom.max(0.01));
         }
         if let Some(l) = gl.get_uniform_location(&self.prog, "u_zoom_center") {
-            gl.uniform2f(Some(&l), (su + eu) * 0.5, (sv + ev) * 0.5);
+            gl.uniform2f(Some(&l), zoom_cx, zoom_cy);
         }
         gl.bind_vertex_array(Some(&self.vao));
         gl.draw_arrays(GL::TRIANGLES, 0, 6);
@@ -259,7 +259,7 @@ impl AlgoRun {
         corners.iter().map(|&c| self.manhattan(i, c)).min().unwrap_or(0)
     }
 
-    pub fn step(&mut self, algo: &Algorithm) {
+    fn step(&mut self, algo: &Algorithm) {
         if self.done { return; }
         self.steps += 1;
 
@@ -374,6 +374,9 @@ fn AlgorithmSimulation(
     completion_order: ReadSignal<Vec<Algorithm>>,
     set_completion_order: WriteSignal<Vec<Algorithm>>,
     zoom: ReadSignal<f32>,
+    set_zoom: WriteSignal<f32>,
+    zoom_center: ReadSignal<(f32, f32)>,
+    set_zoom_center: WriteSignal<(f32, f32)>,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
 
@@ -501,7 +504,8 @@ fn AlgorithmSimulation(
                         // Upload + draw
                         if let (Some(ref rend), Some(ref run_ref)) = (&*renderer.borrow(), &*run.borrow()) {
                             rend.upload(&run_ref.state);
-                            rend.draw(cw, ch, dark, run_ref.start, run_ref.end, zoom.get_untracked());
+                            let (zcx, zcy) = zoom_center.get_untracked();
+                            rend.draw(cw, ch, dark, run_ref.start, run_ref.end, zoom.get_untracked(), zcx, zcy);
                         }
                     }
 
@@ -514,6 +518,103 @@ fn AlgorithmSimulation(
                     .request_animation_frame(f.borrow().as_ref().unwrap().as_ref().unchecked_ref())
                     .unwrap();
                 std::mem::forget(f);
+            });
+        }
+
+        // ── Drag-to-pan + scroll-to-zoom ─────────────────────────────────────
+        {
+            let nav_attached: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+
+            Effect::new(move |_| {
+                let Some(canvas) = canvas_ref.get() else { return; };
+                if nav_attached.get() { return; }
+                nav_attached.set(true);
+
+                let el: web_sys::HtmlCanvasElement = {
+                    let r: &web_sys::HtmlCanvasElement = canvas.as_ref();
+                    r.clone()
+                };
+
+                let dragging: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+                let drag_last: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
+                let drag_w: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
+                let drag_h: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
+
+                // pointerdown – start drag
+                {
+                    let el2 = el.clone();
+                    let dragging = dragging.clone();
+                    let drag_last = drag_last.clone();
+                    let drag_w = drag_w.clone();
+                    let drag_h = drag_h.clone();
+                    let cb = Closure::<dyn FnMut(_)>::new(move |e: web_sys::PointerEvent| {
+                        let rect = el2.get_bounding_client_rect();
+                        drag_w.set(rect.width() as f32);
+                        drag_h.set(rect.height() as f32);
+                        dragging.set(true);
+                        drag_last.set((e.client_x() as f32, e.client_y() as f32));
+                        let _ = el2.set_pointer_capture(e.pointer_id());
+                        e.prevent_default();
+                    });
+                    el.add_event_listener_with_callback("pointerdown", cb.as_ref().unchecked_ref()).ok();
+                    cb.forget();
+                }
+
+                // pointermove – pan
+                {
+                    let dragging = dragging.clone();
+                    let drag_last = drag_last.clone();
+                    let drag_w = drag_w.clone();
+                    let drag_h = drag_h.clone();
+                    let cb = Closure::<dyn FnMut(_)>::new(move |e: web_sys::PointerEvent| {
+                        if !dragging.get() { return; }
+                        let (lx, ly) = drag_last.get();
+                        let cx = e.client_x() as f32;
+                        let cy = e.client_y() as f32;
+                        let dx = (cx - lx) / drag_w.get();
+                        let dy = (cy - ly) / drag_h.get();
+                        drag_last.set((cx, cy));
+                        let z = zoom.get_untracked();
+                        set_zoom_center.update(|(ocx, ocy)| {
+                            *ocx -= dx / z;
+                            *ocy -= dy / z;
+                        });
+                    });
+                    el.add_event_listener_with_callback("pointermove", cb.as_ref().unchecked_ref()).ok();
+                    cb.forget();
+                }
+
+                // pointerup – end drag
+                {
+                    let cb = Closure::<dyn FnMut(_)>::new(move |_: web_sys::PointerEvent| {
+                        dragging.set(false);
+                    });
+                    el.add_event_listener_with_callback("pointerup", cb.as_ref().unchecked_ref()).ok();
+                    cb.forget();
+                }
+
+                // wheel – zoom toward cursor
+                {
+                    let el2 = el.clone();
+                    let cb = Closure::<dyn FnMut(_)>::new(move |e: web_sys::WheelEvent| {
+                        e.prevent_default();
+                        let rect = el2.get_bounding_client_rect();
+                        let sx = (e.client_x() as f32 - rect.left() as f32) / rect.width() as f32;
+                        let sy = (e.client_y() as f32 - rect.top() as f32) / rect.height() as f32;
+                        let old_z = zoom.get_untracked();
+                        let factor = if e.delta_y() > 0.0 { 1.0 / 1.15 } else { 1.15 };
+                        let new_z = (old_z * factor).clamp(1.0, 16.0);
+                        let (cx, cy) = zoom_center.get_untracked();
+                        let wx = (sx - cx) / old_z + cx;
+                        let wy = (sy - cy) / old_z + cy;
+                        let new_cx = if (new_z - 1.0).abs() > 1e-4 { (new_z * wx - sx) / (new_z - 1.0) } else { 0.5 };
+                        let new_cy = if (new_z - 1.0).abs() > 1e-4 { (new_z * wy - sy) / (new_z - 1.0) } else { 0.5 };
+                        set_zoom(new_z);
+                        set_zoom_center((new_cx, new_cy));
+                    });
+                    el.add_event_listener_with_callback("wheel", cb.as_ref().unchecked_ref()).ok();
+                    cb.forget();
+                }
             });
         }
     }
@@ -543,7 +644,7 @@ fn AlgorithmSimulation(
             </div>
             <canvas
                 node_ref=canvas_ref
-                class="border border-border aspect-square w-full"
+                class="border border-border aspect-square w-full cursor-grab touch-none"
                 style="max-height: 55vh;"
             />
             <div class="text-xs text-charcoal-light font-mono min-h-[1.5rem]">
@@ -570,6 +671,7 @@ pub fn PathSearch() -> impl IntoView {
     const OBSTACLE_PROB: f64 = 0.2;
     let (is_running, set_is_running) = signal(false);
     let (zoom, set_zoom) = signal(1.0_f32);
+    let (zoom_center, set_zoom_center) = signal((0.5_f32, 0.5_f32));
     #[cfg(feature = "ssr")]
     let (grid_version, _set_grid_version) = signal(0_u32);
     #[cfg(not(feature = "ssr"))]
@@ -612,6 +714,10 @@ pub fn PathSearch() -> impl IntoView {
             set_grid_version.update(|v| *v += 1);
             set_blind_order(Vec::new());
             set_informed_order(Vec::new());
+            set_zoom(1.0);
+            let cx = (start.0 as f32 / sz as f32 + end.0 as f32 / sz as f32) * 0.5;
+            let cy = (start.1 as f32 / sz as f32 + end.1 as f32 / sz as f32) * 0.5;
+            set_zoom_center((cx, cy));
         }
     };
 
@@ -718,7 +824,7 @@ pub fn PathSearch() -> impl IntoView {
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-charcoal-light font-mono">"zoom"</label>
                     <input
-                        type="range" min="1" max="8" step="0.5"
+                        type="range" min="1" max="16" step="0.5"
                         prop:value=move || zoom().to_string()
                         on:input=move |e| {
                             if let Ok(v) = event_target_value(&e).parse::<f32>() {
@@ -747,19 +853,24 @@ pub fn PathSearch() -> impl IntoView {
                 </div>
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
                     <AlgorithmSimulation algorithm=Algorithm::Bfs grid_version=grid_version
-                        grid_data=gd1 is_running=is_running zoom=zoom
+                        grid_data=gd1 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Dfs grid_version=grid_version
-                        grid_data=gd2 is_running=is_running zoom=zoom
+                        grid_data=gd2 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Corner grid_version=grid_version
-                        grid_data=gd3 is_running=is_running zoom=zoom
+                        grid_data=gd3 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Wall grid_version=grid_version
-                        grid_data=gd4 is_running=is_running zoom=zoom
+                        grid_data=gd4 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::RandomWalk grid_version=grid_version
-                        grid_data=gd5 is_running=is_running zoom=zoom
+                        grid_data=gd5 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=blind_order set_completion_order=set_blind_order />
                 </div>
             </div>
@@ -774,10 +885,12 @@ pub fn PathSearch() -> impl IntoView {
                 </div>
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
                     <AlgorithmSimulation algorithm=Algorithm::AStar grid_version=grid_version
-                        grid_data=gd6 is_running=is_running zoom=zoom
+                        grid_data=gd6 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=informed_order set_completion_order=set_informed_order />
                     <AlgorithmSimulation algorithm=Algorithm::Greedy grid_version=grid_version
-                        grid_data=gd7 is_running=is_running zoom=zoom
+                        grid_data=gd7 is_running=is_running zoom=zoom set_zoom=set_zoom
+                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         completion_order=informed_order set_completion_order=set_informed_order />
                 </div>
             </div>

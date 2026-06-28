@@ -341,6 +341,7 @@ pub fn LifeGame(
         signal(initial_interval_ms.unwrap_or(16));
     let (show_settings, set_show_settings) = signal(false);
     let (zoom, set_zoom) = signal(1.0_f32);
+    let (is_navigate, set_is_navigate) = signal(false);
     #[cfg(feature = "ssr")]
     let (_zoom_center, _set_zoom_center) = signal((0.5_f32, 0.5_f32));
     #[cfg(not(feature = "ssr"))]
@@ -403,46 +404,107 @@ pub fn LifeGame(
             });
         }
 
-        // ── Mouse painting ────────────────────────────────────────────────────
+        // ── Mouse painting / drag navigation ──────────────────────────────────
         {
             let renderer = renderer.clone();
             let painting: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+            let dragging: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+            let drag_last: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
+            let drag_w: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
+            let drag_h: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
 
             let painting_down = painting.clone();
+            let dragging_down = dragging.clone();
+            let drag_last_down = drag_last.clone();
+            let drag_w_down = drag_w.clone();
+            let drag_h_down = drag_h.clone();
             let renderer_down = renderer.clone();
             let on_pointerdown = move |e: web_sys::PointerEvent| {
-                painting_down.set(true);
-                if let Some(ref gl) = *renderer_down.borrow() {
+                if is_navigate.get_untracked() {
                     let canvas = canvas_ref.get().unwrap();
                     let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
                     let rect = el.get_bounding_client_rect();
-                    let x = e.client_x() as f32 - rect.left() as f32;
-                    let y = e.client_y() as f32 - rect.top() as f32;
-                    gl.paint(x, y, rect.width() as f32, rect.height() as f32, 3);
+                    drag_w_down.set(rect.width() as f32);
+                    drag_h_down.set(rect.height() as f32);
+                    dragging_down.set(true);
+                    drag_last_down.set((e.client_x() as f32, e.client_y() as f32));
+                } else {
+                    painting_down.set(true);
+                    if let Some(ref gl) = *renderer_down.borrow() {
+                        let canvas = canvas_ref.get().unwrap();
+                        let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
+                        let rect = el.get_bounding_client_rect();
+                        let x = e.client_x() as f32 - rect.left() as f32;
+                        let y = e.client_y() as f32 - rect.top() as f32;
+                        gl.paint(x, y, rect.width() as f32, rect.height() as f32, 3);
+                    }
                 }
             };
 
             let painting_move = painting.clone();
+            let dragging_move = dragging.clone();
+            let drag_last_move = drag_last.clone();
+            let drag_w_move = drag_w.clone();
+            let drag_h_move = drag_h.clone();
             let renderer_move = renderer.clone();
             let on_pointermove = move |e: web_sys::PointerEvent| {
-                if !painting_move.get() { return; }
-                if let Some(ref gl) = *renderer_move.borrow() {
-                    let canvas = canvas_ref.get().unwrap();
-                    let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
-                    let rect = el.get_bounding_client_rect();
-                    let x = e.client_x() as f32 - rect.left() as f32;
-                    let y = e.client_y() as f32 - rect.top() as f32;
-                    gl.paint(x, y, rect.width() as f32, rect.height() as f32, 3);
+                if is_navigate.get_untracked() {
+                    if !dragging_move.get() { return; }
+                    let (lx, ly) = drag_last_move.get();
+                    let cx = e.client_x() as f32;
+                    let cy = e.client_y() as f32;
+                    let dx = (cx - lx) / drag_w_move.get();
+                    let dy = (cy - ly) / drag_h_move.get();
+                    drag_last_move.set((cx, cy));
+                    let z = zoom.get_untracked();
+                    set_zoom_center.update(|(ocx, ocy)| {
+                        *ocx -= dx / z;
+                        *ocy -= dy / z;
+                    });
+                } else {
+                    if !painting_move.get() { return; }
+                    if let Some(ref gl) = *renderer_move.borrow() {
+                        let canvas = canvas_ref.get().unwrap();
+                        let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
+                        let rect = el.get_bounding_client_rect();
+                        let x = e.client_x() as f32 - rect.left() as f32;
+                        let y = e.client_y() as f32 - rect.top() as f32;
+                        gl.paint(x, y, rect.width() as f32, rect.height() as f32, 3);
+                    }
                 }
             };
 
             let on_pointerup = move |_: web_sys::PointerEvent| {
                 painting.set(false);
+                dragging.set(false);
             };
 
             Effect::new(move |_| {
                 let Some(canvas) = canvas_ref.get() else { return; };
                 let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
+
+                // Wheel: zoom toward cursor (works in both modes)
+                {
+                    let el2 = el.clone();
+                    let cb = Closure::wrap(Box::new(move |e: web_sys::WheelEvent| {
+                        e.prevent_default();
+                        let rect = el2.get_bounding_client_rect();
+                        let sx = (e.client_x() as f32 - rect.left() as f32) / rect.width() as f32;
+                        let sy = (e.client_y() as f32 - rect.top() as f32) / rect.height() as f32;
+                        let old_z = zoom.get_untracked();
+                        let factor = if e.delta_y() > 0.0 { 1.0 / 1.15 } else { 1.15 };
+                        let new_z = (old_z * factor).clamp(1.0, 16.0);
+                        let (cx, cy) = zoom_center.get_untracked();
+                        let wx = (sx - cx) / old_z + cx;
+                        let wy = (sy - cy) / old_z + cy;
+                        let new_cx = if (new_z - 1.0).abs() > 1e-4 { (new_z * wx - sx) / (new_z - 1.0) } else { 0.5 };
+                        let new_cy = if (new_z - 1.0).abs() > 1e-4 { (new_z * wy - sy) / (new_z - 1.0) } else { 0.5 };
+                        set_zoom(new_z);
+                        set_zoom_center((new_cx, new_cy));
+                    }) as Box<dyn FnMut(_)>);
+                    el.add_event_listener_with_callback("wheel", cb.as_ref().unchecked_ref()).ok();
+                    cb.forget();
+                }
 
                 let cb_down = Closure::wrap(Box::new(on_pointerdown.clone()) as Box<dyn FnMut(_)>);
                 let cb_move = Closure::wrap(Box::new(on_pointermove.clone()) as Box<dyn FnMut(_)>);
@@ -535,6 +597,21 @@ pub fn LifeGame(
                         aria-label="Reset"
                     >"↻"</button>
                     <button
+                        class=move || format!(
+                            "px-4 py-1.5 text-sm rounded border transition-all duration-200 {}",
+                            if is_navigate() {
+                                "bg-blue-500 text-white border-blue-500"
+                            } else {
+                                "border-border text-charcoal hover:bg-border hover:bg-opacity-20"
+                            }
+                        )
+                        on:click=move |_| set_is_navigate.update(|v| *v = !*v)
+                        aria-label=move || if is_navigate() { "Switch to Draw mode" } else { "Switch to Navigate mode" }
+                        title=move || if is_navigate() { "Navigate (drag to pan, scroll to zoom) — click to draw" } else { "Draw — click to navigate" }
+                    >
+                        {move || if is_navigate() { "Navigate" } else { "Draw" }}
+                    </button>
+                    <button
                         class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
                         on:click=move |_| set_show_settings.update(|v| *v = !*v)
                         aria-label="Settings"
@@ -546,7 +623,7 @@ pub fn LifeGame(
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-charcoal-light font-mono">"zoom"</label>
                     <input
-                        type="range" min="1" max="8" step="0.5"
+                        type="range" min="1" max="16" step="0.5"
                         prop:value=move || zoom().to_string()
                         on:input=move |e| {
                             if let Ok(v) = event_target_value(&e).parse::<f32>() {
@@ -627,7 +704,9 @@ pub fn LifeGame(
 
             <canvas
                 node_ref=canvas_ref
-                class="w-full aspect-square border border-border cursor-crosshair touch-none"
+                class="w-full aspect-square border border-border touch-none"
+                class:cursor-crosshair=move || !is_navigate()
+                class:cursor-grab=move || is_navigate()
                 style="max-height: 60vh; object-fit: contain;"
                 on:click=move |e| {
                     #[cfg(feature = "ssr")]
