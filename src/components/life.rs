@@ -459,7 +459,7 @@ pub fn LifeGame(
                     let z = zoom.get_untracked();
                     set_zoom_center.update(|(ocx, ocy)| {
                         *ocx -= dx / z;
-                        *ocy -= dy / z;
+                        *ocy += dy / z;
                     });
                 } else {
                     if !painting_move.get() { return; }

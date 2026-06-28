@@ -377,6 +377,8 @@ fn AlgorithmSimulation(
     set_zoom: WriteSignal<f32>,
     zoom_center: ReadSignal<(f32, f32)>,
     set_zoom_center: WriteSignal<(f32, f32)>,
+    is_following: ReadSignal<bool>,
+    #[prop(default = false)] is_lead: bool,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
 
@@ -507,6 +509,32 @@ fn AlgorithmSimulation(
                             let (zcx, zcy) = zoom_center.get_untracked();
                             rend.draw(cw, ch, dark, run_ref.start, run_ref.end, zoom.get_untracked(), zcx, zcy);
                         }
+
+                        // Follow frontier centroid (lead panel only)
+                        if is_lead && is_following.get_untracked() {
+                            if let Some(ref run_ref) = *run.borrow() {
+                                if !run_ref.done {
+                                    let w = run_ref.w as u64;
+                                    let h = run_ref.h as u64;
+                                    let mut sx = 0u64;
+                                    let mut sy = 0u64;
+                                    let mut count = 0u64;
+                                    for (i, &s) in run_ref.state.iter().enumerate() {
+                                        if s == FRONTIER {
+                                            sx += i as u64 % w;
+                                            sy += i as u64 / w;
+                                            count += 1;
+                                        }
+                                    }
+                                    if count > 0 {
+                                        set_zoom_center((
+                                            sx as f32 / count as f32 / run_ref.w as f32,
+                                            sy as f32 / count as f32 / run_ref.h as f32,
+                                        ));
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     window.request_animation_frame(
@@ -577,7 +605,7 @@ fn AlgorithmSimulation(
                         let z = zoom.get_untracked();
                         set_zoom_center.update(|(ocx, ocy)| {
                             *ocx -= dx / z;
-                            *ocy -= dy / z;
+                            *ocy += dy / z;
                         });
                     });
                     el.add_event_listener_with_callback("pointermove", cb.as_ref().unchecked_ref()).ok();
@@ -672,6 +700,7 @@ pub fn PathSearch() -> impl IntoView {
     let (is_running, set_is_running) = signal(false);
     let (zoom, set_zoom) = signal(1.0_f32);
     let (zoom_center, set_zoom_center) = signal((0.5_f32, 0.5_f32));
+    let (is_following, set_is_following) = signal(false);
     #[cfg(feature = "ssr")]
     let (grid_version, _set_grid_version) = signal(0_u32);
     #[cfg(not(feature = "ssr"))]
@@ -837,6 +866,23 @@ pub fn PathSearch() -> impl IntoView {
                         {move || format!("{:.1}x", zoom())}
                     </span>
                 </div>
+                <button
+                    class=move || format!(
+                        "px-4 py-1.5 text-sm rounded border transition-all duration-200 {}",
+                        if is_following() {
+                            "border-accent bg-accent bg-opacity-10 text-accent"
+                        } else {
+                            "border-border text-charcoal-light hover:border-accent hover:text-accent"
+                        }
+                    )
+                    on:click=move |_| {
+                        let next = !is_following.get_untracked();
+                        set_is_following(next);
+                        if next { set_zoom(4.0); }
+                    }
+                >
+                    {move || if is_following() { "Following" } else { "Follow" }}
+                </button>
             </div>
 
             <div class="text-sm text-charcoal-light max-w-4xl mx-auto">
@@ -855,22 +901,27 @@ pub fn PathSearch() -> impl IntoView {
                     <AlgorithmSimulation algorithm=Algorithm::Bfs grid_version=grid_version
                         grid_data=gd1 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following is_lead=true
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Dfs grid_version=grid_version
                         grid_data=gd2 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Corner grid_version=grid_version
                         grid_data=gd3 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Wall grid_version=grid_version
                         grid_data=gd4 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::RandomWalk grid_version=grid_version
                         grid_data=gd5 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                 </div>
             </div>
@@ -887,10 +938,12 @@ pub fn PathSearch() -> impl IntoView {
                     <AlgorithmSimulation algorithm=Algorithm::AStar grid_version=grid_version
                         grid_data=gd6 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following
                         completion_order=informed_order set_completion_order=set_informed_order />
                     <AlgorithmSimulation algorithm=Algorithm::Greedy grid_version=grid_version
                         grid_data=gd7 is_running=is_running zoom=zoom set_zoom=set_zoom
                         zoom_center=zoom_center set_zoom_center=set_zoom_center
+                        is_following=is_following
                         completion_order=informed_order set_completion_order=set_informed_order />
                 </div>
             </div>
