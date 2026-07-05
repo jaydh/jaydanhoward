@@ -550,101 +550,15 @@ fn AlgorithmSimulation(
         }
 
         // ── Drag-to-pan + scroll-to-zoom ─────────────────────────────────────
-        {
-            let nav_attached: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-
-            Effect::new(move |_| {
-                let Some(canvas) = canvas_ref.get() else { return; };
-                if nav_attached.get() { return; }
-                nav_attached.set(true);
-
-                let el: web_sys::HtmlCanvasElement = {
-                    let r: &web_sys::HtmlCanvasElement = canvas.as_ref();
-                    r.clone()
-                };
-
-                let dragging: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-                let drag_last: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
-                let drag_w: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
-                let drag_h: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
-
-                // pointerdown – start drag
-                {
-                    let el2 = el.clone();
-                    let dragging = dragging.clone();
-                    let drag_last = drag_last.clone();
-                    let drag_w = drag_w.clone();
-                    let drag_h = drag_h.clone();
-                    let cb = Closure::<dyn FnMut(_)>::new(move |e: web_sys::PointerEvent| {
-                        let rect = el2.get_bounding_client_rect();
-                        drag_w.set(rect.width() as f32);
-                        drag_h.set(rect.height() as f32);
-                        dragging.set(true);
-                        drag_last.set((e.client_x() as f32, e.client_y() as f32));
-                        let _ = el2.set_pointer_capture(e.pointer_id());
-                        e.prevent_default();
-                    });
-                    el.add_event_listener_with_callback("pointerdown", cb.as_ref().unchecked_ref()).ok();
-                    cb.forget();
-                }
-
-                // pointermove – pan
-                {
-                    let dragging = dragging.clone();
-                    let drag_last = drag_last.clone();
-                    let drag_w = drag_w.clone();
-                    let drag_h = drag_h.clone();
-                    let cb = Closure::<dyn FnMut(_)>::new(move |e: web_sys::PointerEvent| {
-                        if !dragging.get() { return; }
-                        let (lx, ly) = drag_last.get();
-                        let cx = e.client_x() as f32;
-                        let cy = e.client_y() as f32;
-                        let dx = (cx - lx) / drag_w.get();
-                        let dy = (cy - ly) / drag_h.get();
-                        drag_last.set((cx, cy));
-                        let z = zoom.get_untracked();
-                        set_zoom_center.update(|(ocx, ocy)| {
-                            *ocx -= dx / z;
-                            *ocy += dy / z;
-                        });
-                    });
-                    el.add_event_listener_with_callback("pointermove", cb.as_ref().unchecked_ref()).ok();
-                    cb.forget();
-                }
-
-                // pointerup – end drag
-                {
-                    let cb = Closure::<dyn FnMut(_)>::new(move |_: web_sys::PointerEvent| {
-                        dragging.set(false);
-                    });
-                    el.add_event_listener_with_callback("pointerup", cb.as_ref().unchecked_ref()).ok();
-                    cb.forget();
-                }
-
-                // wheel – zoom toward cursor
-                {
-                    let el2 = el.clone();
-                    let cb = Closure::<dyn FnMut(_)>::new(move |e: web_sys::WheelEvent| {
-                        e.prevent_default();
-                        let rect = el2.get_bounding_client_rect();
-                        let sx = (e.client_x() as f32 - rect.left() as f32) / rect.width() as f32;
-                        let sy = (e.client_y() as f32 - rect.top() as f32) / rect.height() as f32;
-                        let old_z = zoom.get_untracked();
-                        let factor = if e.delta_y() > 0.0 { 1.0 / 1.15 } else { 1.15 };
-                        let new_z = (old_z * factor).clamp(1.0, 16.0);
-                        let (cx, cy) = zoom_center.get_untracked();
-                        let wx = (sx - cx) / old_z + cx;
-                        let wy = (sy - cy) / old_z + cy;
-                        let new_cx = if (new_z - 1.0).abs() > 1e-4 { (new_z * wx - sx) / (new_z - 1.0) } else { 0.5 };
-                        let new_cy = if (new_z - 1.0).abs() > 1e-4 { (new_z * wy - sy) / (new_z - 1.0) } else { 0.5 };
-                        set_zoom(new_z);
-                        set_zoom_center((new_cx, new_cy));
-                    });
-                    el.add_event_listener_with_callback("wheel", cb.as_ref().unchecked_ref()).ok();
-                    cb.forget();
-                }
-            });
-        }
+        crate::components::canvas_nav::attach_canvas_nav(
+            canvas_ref,
+            zoom,
+            set_zoom,
+            zoom_center,
+            set_zoom_center,
+            || true,
+            None,
+        );
     }
 
     let algo_name = algorithm.to_string();

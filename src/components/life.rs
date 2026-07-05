@@ -406,116 +406,20 @@ pub fn LifeGame(
 
         // ── Mouse painting / drag navigation ──────────────────────────────────
         {
-            let renderer = renderer.clone();
-            let painting: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-            let dragging: Rc<Cell<bool>> = Rc::new(Cell::new(false));
-            let drag_last: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
-            let drag_w: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
-            let drag_h: Rc<Cell<f32>> = Rc::new(Cell::new(1.0));
-
-            let painting_down = painting.clone();
-            let dragging_down = dragging.clone();
-            let drag_last_down = drag_last.clone();
-            let drag_w_down = drag_w.clone();
-            let drag_h_down = drag_h.clone();
-            let renderer_down = renderer.clone();
-            let on_pointerdown = move |e: web_sys::PointerEvent| {
-                if is_navigate.get_untracked() {
-                    let canvas = canvas_ref.get().unwrap();
-                    let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
-                    let rect = el.get_bounding_client_rect();
-                    drag_w_down.set(rect.width() as f32);
-                    drag_h_down.set(rect.height() as f32);
-                    dragging_down.set(true);
-                    drag_last_down.set((e.client_x() as f32, e.client_y() as f32));
-                } else {
-                    painting_down.set(true);
-                    if let Some(ref gl) = *renderer_down.borrow() {
-                        let canvas = canvas_ref.get().unwrap();
-                        let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
-                        let rect = el.get_bounding_client_rect();
-                        let x = e.client_x() as f32 - rect.left() as f32;
-                        let y = e.client_y() as f32 - rect.top() as f32;
-                        gl.paint(x, y, rect.width() as f32, rect.height() as f32, 3);
+            let paint_renderer = renderer.clone();
+            crate::components::canvas_nav::attach_canvas_nav(
+                canvas_ref,
+                zoom,
+                set_zoom,
+                zoom_center,
+                set_zoom_center,
+                move || is_navigate.get_untracked(),
+                Some(Box::new(move |x: f32, y: f32, w: f32, h: f32| {
+                    if let Some(ref gl) = *paint_renderer.borrow() {
+                        gl.paint(x, y, w, h, 3);
                     }
-                }
-            };
-
-            let painting_move = painting.clone();
-            let dragging_move = dragging.clone();
-            let drag_last_move = drag_last.clone();
-            let drag_w_move = drag_w.clone();
-            let drag_h_move = drag_h.clone();
-            let renderer_move = renderer.clone();
-            let on_pointermove = move |e: web_sys::PointerEvent| {
-                if is_navigate.get_untracked() {
-                    if !dragging_move.get() { return; }
-                    let (lx, ly) = drag_last_move.get();
-                    let cx = e.client_x() as f32;
-                    let cy = e.client_y() as f32;
-                    let dx = (cx - lx) / drag_w_move.get();
-                    let dy = (cy - ly) / drag_h_move.get();
-                    drag_last_move.set((cx, cy));
-                    let z = zoom.get_untracked();
-                    set_zoom_center.update(|(ocx, ocy)| {
-                        *ocx -= dx / z;
-                        *ocy += dy / z;
-                    });
-                } else {
-                    if !painting_move.get() { return; }
-                    if let Some(ref gl) = *renderer_move.borrow() {
-                        let canvas = canvas_ref.get().unwrap();
-                        let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
-                        let rect = el.get_bounding_client_rect();
-                        let x = e.client_x() as f32 - rect.left() as f32;
-                        let y = e.client_y() as f32 - rect.top() as f32;
-                        gl.paint(x, y, rect.width() as f32, rect.height() as f32, 3);
-                    }
-                }
-            };
-
-            let on_pointerup = move |_: web_sys::PointerEvent| {
-                painting.set(false);
-                dragging.set(false);
-            };
-
-            Effect::new(move |_| {
-                let Some(canvas) = canvas_ref.get() else { return; };
-                let el: &web_sys::HtmlCanvasElement = canvas.as_ref();
-
-                // Wheel: zoom toward cursor (works in both modes)
-                {
-                    let el2 = el.clone();
-                    let cb = Closure::wrap(Box::new(move |e: web_sys::WheelEvent| {
-                        e.prevent_default();
-                        let rect = el2.get_bounding_client_rect();
-                        let sx = (e.client_x() as f32 - rect.left() as f32) / rect.width() as f32;
-                        let sy = (e.client_y() as f32 - rect.top() as f32) / rect.height() as f32;
-                        let old_z = zoom.get_untracked();
-                        let factor = if e.delta_y() > 0.0 { 1.0 / 1.15 } else { 1.15 };
-                        let new_z = (old_z * factor).clamp(1.0, 16.0);
-                        let (cx, cy) = zoom_center.get_untracked();
-                        let wx = (sx - cx) / old_z + cx;
-                        let wy = (sy - cy) / old_z + cy;
-                        let new_cx = if (new_z - 1.0).abs() > 1e-4 { (new_z * wx - sx) / (new_z - 1.0) } else { 0.5 };
-                        let new_cy = if (new_z - 1.0).abs() > 1e-4 { (new_z * wy - sy) / (new_z - 1.0) } else { 0.5 };
-                        set_zoom(new_z);
-                        set_zoom_center((new_cx, new_cy));
-                    }) as Box<dyn FnMut(_)>);
-                    el.add_event_listener_with_callback("wheel", cb.as_ref().unchecked_ref()).ok();
-                    cb.forget();
-                }
-
-                let cb_down = Closure::wrap(Box::new(on_pointerdown.clone()) as Box<dyn FnMut(_)>);
-                let cb_move = Closure::wrap(Box::new(on_pointermove.clone()) as Box<dyn FnMut(_)>);
-                let cb_up = Closure::wrap(Box::new(on_pointerup.clone()) as Box<dyn FnMut(_)>);
-                el.add_event_listener_with_callback("pointerdown", cb_down.as_ref().unchecked_ref()).ok();
-                el.add_event_listener_with_callback("pointermove", cb_move.as_ref().unchecked_ref()).ok();
-                el.add_event_listener_with_callback("pointerup", cb_up.as_ref().unchecked_ref()).ok();
-                cb_down.forget();
-                cb_move.forget();
-                cb_up.forget();
-            });
+                })),
+            );
         }
 
         // ── IntersectionObserver: pause when off-screen ────────────────────────

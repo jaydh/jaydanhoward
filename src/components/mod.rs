@@ -1,5 +1,7 @@
 mod about;
 mod app;
+#[cfg(not(feature = "ssr"))]
+mod canvas_nav;
 pub mod conjunction;
 mod visitors;
 mod beliefs;
