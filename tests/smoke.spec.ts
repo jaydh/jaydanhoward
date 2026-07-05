@@ -36,6 +36,9 @@ test('server functions return non-500 on initial load', async ({ page }) => {
     // Requires Prometheus
     'get_top_network_pods', 'get_node_metrics', 'get_cluster_metrics',
     'get_network_insights_chart', 'get_gitops_status', 'get_historical_metrics',
+    // Requires CelesTrak network access (and DB for the stale-data fallback);
+    // CelesTrak blocks the CI runner's IP with 403.
+    'get_tle_data',
   ];
 
   page.on('response', res => {
