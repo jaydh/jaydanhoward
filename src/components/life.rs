@@ -210,32 +210,6 @@ impl LifeGl {
         gl.bind_vertex_array(None);
     }
 
-    /// Paint a circle of alive cells at the given canvas coordinates.
-    pub fn paint(&self, canvas_x: f32, canvas_y: f32, canvas_w: f32, canvas_h: f32, radius: i32) {
-        use web_sys::WebGl2RenderingContext as GL;
-        let cx = (canvas_x / canvas_w * self.grid_w as f32) as i32;
-        let cy = ((1.0 - canvas_y / canvas_h) * self.grid_h as f32) as i32; // flip Y
-        let dia = (2 * radius + 1) as u32;
-        let mut patch = vec![255u8; (dia * dia) as usize];
-        // mask to circle
-        for dy in -(radius)..=radius {
-            for dx in -(radius)..=radius {
-                if dx * dx + dy * dy > radius * radius {
-                    patch[((dy + radius) as u32 * dia + (dx + radius) as u32) as usize] = 0;
-                }
-            }
-        }
-        let x0 = (cx - radius).clamp(0, self.grid_w as i32 - dia as i32);
-        let y0 = (cy - radius).clamp(0, self.grid_h as i32 - dia as i32);
-        self.gl.bind_texture(GL::TEXTURE_2D, Some(&self.textures[self.current]));
-        let _ = self.gl.tex_sub_image_2d_with_i32_and_i32_and_u32_and_type_and_opt_u8_array(
-            GL::TEXTURE_2D, 0,
-            x0, y0, dia as i32, dia as i32,
-            GL::RED, GL::UNSIGNED_BYTE, Some(&patch),
-        );
-        self.gl.bind_texture(GL::TEXTURE_2D, None);
-    }
-
     fn upload_state(&self, data: &[u8]) {
         use web_sys::WebGl2RenderingContext as GL;
         self.gl.bind_texture(GL::TEXTURE_2D, Some(&self.textures[self.current]));
@@ -341,7 +315,6 @@ pub fn LifeGame(
         signal(initial_interval_ms.unwrap_or(16));
     let (show_settings, set_show_settings) = signal(false);
     let (zoom, set_zoom) = signal(1.0_f32);
-    let (is_navigate, set_is_navigate) = signal(false);
     #[cfg(feature = "ssr")]
     let (_zoom_center, _set_zoom_center) = signal((0.5_f32, 0.5_f32));
     #[cfg(not(feature = "ssr"))]
@@ -404,23 +377,14 @@ pub fn LifeGame(
             });
         }
 
-        // ── Mouse painting / drag navigation ──────────────────────────────────
-        {
-            let paint_renderer = renderer.clone();
-            crate::components::canvas_nav::attach_canvas_nav(
-                canvas_ref,
-                zoom,
-                set_zoom,
-                zoom_center,
-                set_zoom_center,
-                move || is_navigate.get_untracked(),
-                Some(Box::new(move |x: f32, y: f32, w: f32, h: f32| {
-                    if let Some(ref gl) = *paint_renderer.borrow() {
-                        gl.paint(x, y, w, h, 3);
-                    }
-                })),
-            );
-        }
+        // ── Drag-to-pan + scroll-to-zoom ───────────────────────────────────────
+        crate::components::canvas_nav::attach_canvas_nav(
+            canvas_ref,
+            zoom,
+            set_zoom,
+            zoom_center,
+            set_zoom_center,
+        );
 
         // ── IntersectionObserver: pause when off-screen ────────────────────────
         {
@@ -500,21 +464,6 @@ pub fn LifeGame(
                         on:click=move |_| reset()
                         aria-label="Reset"
                     >"↻"</button>
-                    <button
-                        class=move || format!(
-                            "px-4 py-1.5 text-sm rounded border transition-all duration-200 {}",
-                            if is_navigate() {
-                                "bg-blue-500 text-white border-blue-500"
-                            } else {
-                                "border-border text-charcoal hover:bg-border hover:bg-opacity-20"
-                            }
-                        )
-                        on:click=move |_| set_is_navigate.update(|v| *v = !*v)
-                        aria-label=move || if is_navigate() { "Switch to Draw mode" } else { "Switch to Navigate mode" }
-                        title=move || if is_navigate() { "Navigate (drag to pan, scroll to zoom) — click to draw" } else { "Draw — click to navigate" }
-                    >
-                        {move || if is_navigate() { "Navigate" } else { "Draw" }}
-                    </button>
                     <button
                         class="px-4 py-1.5 text-sm rounded border border-border text-charcoal hover:bg-border hover:bg-opacity-20 transition-all duration-200 flex items-center justify-center"
                         on:click=move |_| set_show_settings.update(|v| *v = !*v)
@@ -608,9 +557,7 @@ pub fn LifeGame(
 
             <canvas
                 node_ref=canvas_ref
-                class="w-full aspect-square border border-border touch-none"
-                class:cursor-crosshair=move || !is_navigate()
-                class:cursor-grab=move || is_navigate()
+                class="w-full aspect-square border border-border touch-none cursor-grab"
                 style="max-height: 60vh; object-fit: contain;"
                 on:click=move |e| {
                     #[cfg(feature = "ssr")]

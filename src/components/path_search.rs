@@ -217,6 +217,8 @@ pub struct AlgoRun {
     pub done: bool,
     pub steps: u64,
     pub completion_steps: Option<u64>,
+    /// Grid cell the algorithm is expanding this step — the point to follow.
+    pub current_pos: Option<(u32, u32)>,
 }
 
 #[cfg(not(feature = "ssr"))]
@@ -226,7 +228,8 @@ impl AlgoRun {
         let state = base.to_vec();
         let parent = vec![u32::MAX; (w * h) as usize];
         Self { state, parent, queue: Vec::new(), head: 0, w, h, start, end,
-               initialized: false, done: false, steps: 0, completion_steps: None }
+               initialized: false, done: false, steps: 0, completion_steps: None,
+               current_pos: Some(start) }
     }
 
     fn idx(&self, x: u32, y: u32) -> u32 { y * self.w + x }
@@ -288,6 +291,8 @@ impl AlgoRun {
             let s = self.state[c as usize];
             if s != VISITED && s != PATH { break c; }
         };
+
+        self.current_pos = Some((current % self.w, current / self.w));
 
         if current == ei {
             self.state[current as usize] = VISITED;
@@ -375,15 +380,15 @@ fn AlgorithmSimulation(
     set_completion_order: WriteSignal<Vec<Algorithm>>,
     zoom: ReadSignal<f32>,
     set_zoom: WriteSignal<f32>,
-    zoom_center: ReadSignal<(f32, f32)>,
-    set_zoom_center: WriteSignal<(f32, f32)>,
     is_following: ReadSignal<bool>,
-    #[prop(default = false)] is_lead: bool,
 ) -> impl IntoView {
     let canvas_ref = NodeRef::<leptos::html::Canvas>::new();
 
     let (completion_steps, set_completion_steps) = signal(None::<u64>);
     let (fps, set_fps) = signal(0.0_f64);
+    // Each panel tracks its own camera — panels explore different areas,
+    // so a shared pan point can't stay accurate for all of them at once.
+    let (zoom_center, set_zoom_center) = signal((0.5_f32, 0.5_f32));
 
     #[cfg(not(feature = "ssr"))]
     {
@@ -409,6 +414,9 @@ fn AlgorithmSimulation(
                 let _ = grid_version();
                 if let Some((ref base, w, h, start, end)) = *gd.borrow() {
                     *run.borrow_mut() = Some(AlgoRun::new(base, w, h, start, end));
+                    let cx = (start.0 as f32 / w as f32 + end.0 as f32 / w as f32) * 0.5;
+                    let cy = (start.1 as f32 / h as f32 + end.1 as f32 / h as f32) * 0.5;
+                    set_zoom_center((cx, cy));
                 }
                 set_completion_steps(None);
                 set_fps(0.0);
@@ -510,26 +518,14 @@ fn AlgorithmSimulation(
                             rend.draw(cw, ch, dark, run_ref.start, run_ref.end, zoom.get_untracked(), zcx, zcy);
                         }
 
-                        // Follow frontier centroid (lead panel only)
-                        if is_lead && is_following.get_untracked() {
+                        // Follow this panel's own current search point
+                        if is_following.get_untracked() {
                             if let Some(ref run_ref) = *run.borrow() {
                                 if !run_ref.done {
-                                    let w = run_ref.w as u64;
-                                    let h = run_ref.h as u64;
-                                    let mut sx = 0u64;
-                                    let mut sy = 0u64;
-                                    let mut count = 0u64;
-                                    for (i, &s) in run_ref.state.iter().enumerate() {
-                                        if s == FRONTIER {
-                                            sx += i as u64 % w;
-                                            sy += i as u64 / w;
-                                            count += 1;
-                                        }
-                                    }
-                                    if count > 0 {
+                                    if let Some((cx, cy)) = run_ref.current_pos {
                                         set_zoom_center((
-                                            sx as f32 / count as f32 / run_ref.w as f32,
-                                            sy as f32 / count as f32 / run_ref.h as f32,
+                                            cx as f32 / run_ref.w as f32,
+                                            cy as f32 / run_ref.h as f32,
                                         ));
                                     }
                                 }
@@ -556,8 +552,6 @@ fn AlgorithmSimulation(
             set_zoom,
             zoom_center,
             set_zoom_center,
-            || true,
-            None,
         );
     }
 
@@ -613,7 +607,6 @@ pub fn PathSearch() -> impl IntoView {
     const OBSTACLE_PROB: f64 = 0.2;
     let (is_running, set_is_running) = signal(false);
     let (zoom, set_zoom) = signal(1.0_f32);
-    let (zoom_center, set_zoom_center) = signal((0.5_f32, 0.5_f32));
     let (is_following, set_is_following) = signal(false);
     #[cfg(feature = "ssr")]
     let (grid_version, _set_grid_version) = signal(0_u32);
@@ -658,9 +651,6 @@ pub fn PathSearch() -> impl IntoView {
             set_blind_order(Vec::new());
             set_informed_order(Vec::new());
             set_zoom(1.0);
-            let cx = (start.0 as f32 / sz as f32 + end.0 as f32 / sz as f32) * 0.5;
-            let cy = (start.1 as f32 / sz as f32 + end.1 as f32 / sz as f32) * 0.5;
-            set_zoom_center((cx, cy));
         }
     };
 
@@ -814,27 +804,22 @@ pub fn PathSearch() -> impl IntoView {
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
                     <AlgorithmSimulation algorithm=Algorithm::Bfs grid_version=grid_version
                         grid_data=gd1 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
-                        is_following=is_following is_lead=true
+                        is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Dfs grid_version=grid_version
                         grid_data=gd2 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Corner grid_version=grid_version
                         grid_data=gd3 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::Wall grid_version=grid_version
                         grid_data=gd4 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                     <AlgorithmSimulation algorithm=Algorithm::RandomWalk grid_version=grid_version
                         grid_data=gd5 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         is_following=is_following
                         completion_order=blind_order set_completion_order=set_blind_order />
                 </div>
@@ -851,12 +836,10 @@ pub fn PathSearch() -> impl IntoView {
                 <div class="w-full flex flex-wrap gap-8 justify-center items-start">
                     <AlgorithmSimulation algorithm=Algorithm::AStar grid_version=grid_version
                         grid_data=gd6 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         is_following=is_following
                         completion_order=informed_order set_completion_order=set_informed_order />
                     <AlgorithmSimulation algorithm=Algorithm::Greedy grid_version=grid_version
                         grid_data=gd7 is_running=is_running zoom=zoom set_zoom=set_zoom
-                        zoom_center=zoom_center set_zoom_center=set_zoom_center
                         is_following=is_following
                         completion_order=informed_order set_completion_order=set_informed_order />
                 </div>
