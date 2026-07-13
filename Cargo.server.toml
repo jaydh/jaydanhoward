@@ -49,3 +49,6 @@ kube = { version = "3.1", default-features = false, features = ["client", "rustl
 k8s-openapi = { version = "0.27", features = ["v1_31"] }
 sgp4 = "2.1.0"
 rayon = "1"
+# Direct pin to force the transitive crossbeam-epoch (via rayon-core) past
+# RUSTSEC-2026-0204 (invalid pointer dereference in fmt::Pointer for Atomic/Shared).
+crossbeam-epoch = "0.9.20"
