@@ -1017,6 +1017,36 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     let (events, set_events) = signal(Vec::<ConjunctionEvent>::new());
     #[cfg(not(feature = "ssr"))]
     let (loading_events, set_loading_events) = signal(false);
+    #[cfg(not(feature = "ssr"))]
+    let (is_visible, set_is_visible) = signal(false);
+    let panel_ref: NodeRef<leptos::html::Div> = NodeRef::new();
+
+    // Only start polling once the panel scrolls into view, so the section doesn't
+    // fire network requests / re-renders during initial hydration while off-screen.
+    #[cfg(not(feature = "ssr"))]
+    Effect::new(move |_| {
+        use wasm_bindgen::prelude::*;
+        use wasm_bindgen::JsCast;
+
+        if let Some(el) = panel_ref.get_untracked() {
+            let callback = Closure::wrap(Box::new(move |entries: js_sys::Array| {
+                if let Some(entry) = entries.get(0).dyn_into::<web_sys::IntersectionObserverEntry>().ok() {
+                    set_is_visible.set(entry.is_intersecting());
+                }
+            }) as Box<dyn FnMut(js_sys::Array)>);
+
+            let options = web_sys::IntersectionObserverInit::new();
+            options.set_threshold(&JsValue::from_f64(0.1));
+
+            if let Ok(observer) = web_sys::IntersectionObserver::new_with_options(
+                callback.as_ref().unchecked_ref(),
+                &options,
+            ) {
+                observer.observe(&el);
+                callback.forget();
+            }
+        }
+    });
 
     // ── Client-side polling ──────────────────────────────────
     #[cfg(not(feature = "ssr"))]
@@ -1025,6 +1055,10 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
         use std::time::Duration;
 
         Effect::new(move |_| {
+            if !is_visible.get() {
+                return;
+            }
+
             let current_group = group.get();
             // Reset state when group changes
             set_status.set(None);
@@ -1103,7 +1137,7 @@ pub fn ConjunctionPanel(#[allow(unused_variables)] group: ReadSignal<String>) ->
     };
 
     view! {
-        <div class="w-full">
+        <div class="w-full" node_ref=panel_ref>
             <div class="flex items-center justify-between mt-2">
                 <ConjunctionStatusBadge status=status />
                 <button

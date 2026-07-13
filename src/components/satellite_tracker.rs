@@ -236,8 +236,14 @@ pub fn SatelliteTracker() -> impl IntoView {
     #[cfg(not(feature = "ssr"))]
     let (show_astranis, set_show_astranis) = signal(true);
 
-    // Fetch TLE data when component mounts
+    // Fetch TLE data once the tracker scrolls into view (avoids doing this work
+    // during initial hydration when the section is off-screen).
     Effect::new(move |_| {
+        #[cfg(not(feature = "ssr"))]
+        if !is_visible.get() {
+            return;
+        }
+
         set_loading.set(true);
         set_error.set(None);
 
@@ -283,6 +289,10 @@ pub fn SatelliteTracker() -> impl IntoView {
         use crate::components::satellite_calculations;
         use wasm_bindgen::prelude::*;
         use wasm_bindgen::JsCast;
+
+        if !is_visible.get() {
+            return;
+        }
 
         if let Some(canvas) = canvas_ref.get_untracked() {
             web_sys::console::log_1(&"Canvas ready for WebGL initialization".into());

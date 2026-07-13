@@ -131,6 +131,13 @@ pub fn App() -> impl IntoView {
         <Link rel="shortcut icon" type_="image/ico" href="/assets/favicon.ico" />
         <Link rel="preconnect" href="https://caddy.jaydanhoward.com" />
         <Link rel="dns-prefetch" href="https://caddy.jaydanhoward.com" />
+        <Link
+            rel="preload"
+            href="/assets/fonts/IBMPlexSans-latin.woff2"
+            as_="font"
+            type_="font/woff2"
+            crossorigin=""
+        />
         <Title text="Jay Dan Howard" />
         <main>
             <Html {..} />

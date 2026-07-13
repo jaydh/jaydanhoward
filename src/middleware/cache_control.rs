@@ -10,6 +10,13 @@ pub async fn cache_control(req: Request, next: Next) -> Response {
     let query = req.uri().query().unwrap_or("").to_string();
     let mut response = next.run(req).await;
 
+    // Routes that already set their own Cache-Control (e.g. dynamically generated
+    // content like /world-map.svg) know their freshness requirements better than
+    // a blanket extension-based policy does, so don't override them.
+    if response.headers().contains_key(CACHE_CONTROL) {
+        return response;
+    }
+
     let cache_header = if path.starts_with("/jaydanhoward_wasm/") && query.contains("v=") {
         // Versioned WASM assets: the ?v={hash} suffix changes whenever the binary changes,
         // so the pair is always atomically fresh and safe to cache indefinitely.
@@ -40,7 +47,9 @@ pub async fn cache_control(req: Request, next: Next) -> Response {
         || path.ends_with(".ico")
         || path.ends_with(".css")
     {
-        "public, max-age=604800, must-revalidate"
+        // Long TTL with revalidation: ServeDir emits strong ETags, so a stale cache
+        // after a deploy costs a cheap conditional 304 rather than a stale asset.
+        "public, max-age=2592000, must-revalidate"
     } else if path.ends_with(".html") || path == "/" {
         "public, max-age=0, must-revalidate"
     } else {
