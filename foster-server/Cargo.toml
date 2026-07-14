@@ -1,0 +1,17 @@
+[package]
+name = "jaydanhoward"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "jaydanhoward"
+path = "src/main.rs"
+
+[dependencies]
+foster-core = { git = "https://github.com/jaydh/foster", rev = "46109a8" }
+foster-server = { git = "https://github.com/jaydh/foster", rev = "46109a8" }
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["fs", "compression-full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
