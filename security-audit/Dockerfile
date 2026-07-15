@@ -5,10 +5,10 @@
 # kubernetes.io/arch: amd64 — so unlike the main site image this is
 # single-arch only.
 
-FROM rust:1-bookworm AS builder
+FROM docker.io/library/rust:1-bookworm AS builder
 RUN cargo install cargo-audit --locked --features vendored-openssl
 
-FROM python:3-slim
+FROM docker.io/library/python:3-slim
 WORKDIR /app
 COPY --from=builder /usr/local/cargo/bin/cargo-audit /app/cargo-audit
 COPY security-audit/entrypoint.py /app/entrypoint.py

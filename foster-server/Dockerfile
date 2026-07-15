@@ -6,7 +6,7 @@
 
 ARG FOSTER_REV=46109a8
 
-FROM rust:1-bookworm AS builder
+FROM docker.io/library/rust:1-bookworm AS builder
 ARG FOSTER_REV
 RUN rustup target add wasm32-unknown-unknown \
     && cargo install wasm-pack --locked
