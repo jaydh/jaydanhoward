@@ -26,14 +26,9 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
-      - name: Fetch advisory database
-        run: |
-          git clone --depth=1 https://github.com/RustSec/advisory-db.git ~/.cargo/advisory-db \
-            || git -C ~/.cargo/advisory-db pull --ff-only
       - name: Run security audit
         working-directory: foster-server
-        run: |
-          cargo audit --no-fetch --ignore RUSTSEC-2023-0071
+        run: cargo audit --ignore RUSTSEC-2023-0071
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s
@@ -91,14 +86,26 @@ jobs:
         # Redirect output to file so the background process doesn't keep the
         # step's stdout/stderr open (which would hang the step indefinitely).
         env:
-          DATABASE_URL: postgres://postgres:foster@postgres:5432/jaydanhoward
+          # arc-runner-set-k8s (Kubernetes-mode actions-runner-controller) runs
+          # the job container and service containers in the same pod/network
+          # namespace, so services are reachable via localhost — not the
+          # service ID hostname GitHub-hosted runners use. Confirmed by a real
+          # CI failure: "postgres" didn't resolve, the app panicked on
+          # connect, and the health-check retry loop masked it (no assertion
+          # on its own failure — Playwright's actual connection-refused
+          # errors caught it instead).
+          DATABASE_URL: postgres://postgres:foster@localhost:5432/jaydanhoward
           LIGHTHOUSE_UPDATE_TOKEN: ci-test-token
         run: |
           ./foster-server/target/release/jaydanhoward > /tmp/app.log 2>&1 &
           echo $! > /tmp/app.pid
           for i in $(seq 1 30); do
-            curl -sf http://127.0.0.1:8000/health_check && break || sleep 2
+            curl -sf http://127.0.0.1:8000/health_check && exit 0
+            sleep 2
           done
+          echo "App never became healthy:"
+          cat /tmp/app.log
+          exit 1
       - name: Start local HTTP/2 reverse proxy
         # Foster opens one SSE connection per machine (~10 on this page);
         # over plain HTTP/1.1 that exceeds Chromium's 6-connections-per-origin
