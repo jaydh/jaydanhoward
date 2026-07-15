@@ -162,25 +162,31 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install buildah
+      - name: Write Harbor auth config
         # arc-runner-set-k8s (this repo's dedicated runner set, unlike
-        # arc-runner-set-k8s-homelab) has no Docker-in-Docker sidecar — the
-        # old Bazel workflow never needed one since rules_oci pushes images
-        # itself without a daemon. buildah does the same daemonless build
-        # +push from a plain Dockerfile.
+        # arc-runner-set-k8s-homelab) has no Docker-in-Docker sidecar and no
+        # privileged pod security context — the old Bazel workflow never
+        # needed either since rules_oci pushes images itself, daemonless.
+        # buildah hit the same wall (rootless layer extraction needs a
+        # remount() this pod's security context denies), so this uses
+        # kaniko instead: it builds/pushes from userspace only, no
+        # mount/overlay operations, via its own per-step container image
+        # (below) rather than the job's own container.
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
-      - name: Login to Harbor
-        run: |
-          mkdir -p ~/.config/containers
+          mkdir -p .kaniko-auth
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.config/containers/auth.json
-      - name: Build and push
-        run: |
-          buildah bud --storage-driver=vfs -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64" .
-          buildah push --storage-driver=vfs "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64"
+            > .kaniko-auth/config.json
+      - name: Build and push with kaniko
+        uses: docker://gcr.io/kaniko-project/executor:v1.23.2
+        env:
+          DOCKER_CONFIG: /github/workspace/.kaniko-auth
+        with:
+          args: >-
+            --dockerfile=foster-server/Dockerfile
+            --context=dir:///github/workspace
+            --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [clippy, security-audit, integration-test]
@@ -190,20 +196,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install buildah
+      - name: Write Harbor auth config
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
-      - name: Login to Harbor
-        run: |
-          mkdir -p ~/.config/containers
+          mkdir -p .kaniko-auth
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.config/containers/auth.json
-      - name: Build and push
-        run: |
-          buildah bud --storage-driver=vfs -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64" .
-          buildah push --storage-driver=vfs "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64"
+            > .kaniko-auth/config.json
+      - name: Build and push with kaniko
+        uses: docker://gcr.io/kaniko-project/executor:v1.23.2
+        env:
+          DOCKER_CONFIG: /github/workspace/.kaniko-auth
+        with:
+          args: >-
+            --dockerfile=foster-server/Dockerfile
+            --context=dir:///github/workspace
+            --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
   security-audit-image-push:
     if: github.event_name == 'push'
     name: Push Security Audit Image
@@ -213,22 +221,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install buildah
+      - name: Write Harbor auth config
         run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
-      - name: Login to Harbor
-        run: |
-          mkdir -p ~/.config/containers
+          mkdir -p .kaniko-auth
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.config/containers/auth.json
-      - name: Build and push
+            > .kaniko-auth/config.json
+      - name: Build and push with kaniko
         # amd64 only — the real CronJob (homelab/service/security-audit.yaml)
         # pins nodeSelector kubernetes.io/arch: amd64.
-        run: |
-          buildah bud --storage-driver=vfs -f security-audit/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/security-audit:latest" .
-          buildah push --storage-driver=vfs "${{ vars.HARBOR_HOST }}/library/security-audit:latest"
+        uses: docker://gcr.io/kaniko-project/executor:v1.23.2
+        env:
+          DOCKER_CONFIG: /github/workspace/.kaniko-auth
+        with:
+          args: >-
+            --dockerfile=security-audit/Dockerfile
+            --context=dir:///github/workspace
+            --destination=${{ vars.HARBOR_HOST }}/library/security-audit:latest
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
