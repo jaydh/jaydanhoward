@@ -445,6 +445,29 @@
             </div>
           </div>
         </div>
+        <div class="cluster-box">
+          <h3>Security Audit</h3>
+          <div class="visit-row">
+            <span fx-text="sec_status_label"></span>
+            <span><span fx-text="sec_dependency_count"></span> deps</span>
+            <span><span fx-text="sec_advisory_count"></span> advisories</span>
+          </div>
+          <div class="visit-row"><span>Last scan</span><span fx-text="sec_scanned_at"></span></div>
+          <div fx-for="security_vulnerabilities">
+            <div class="visit-row">
+              <span fx-field="id"></span>
+              <span fx-field="package"></span>
+              <span fx-field="title"></span>
+            </div>
+          </div>
+          <div fx-for="security_warnings">
+            <div class="visit-row" style="opacity:0.7">
+              <span fx-field="id"></span>
+              <span fx-field="package"></span>
+              <span fx-field="title"></span>
+            </div>
+          </div>
+        </div>
       </div>
     </div><!-- /fx-machine=cluster -->
   </main>

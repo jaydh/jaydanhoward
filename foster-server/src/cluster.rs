@@ -468,6 +468,73 @@ async fn fetch_claude_audit_log(pool: &PgPool) -> Vec<Value> {
 /// Assembles every cluster panel into one context object for the "cluster"
 /// Foster machine. Real work (network I/O to Prometheus/k8s/Postgres);
 /// called via `block_in_place`, same pattern as visitors.rs/lighthouse.rs.
+/// Latest cargo-audit report — parsed the same way the real
+/// `src/components/security_audit.rs` server function does. The report
+/// itself is produced by a separate periodic scanner (a small standalone
+/// image running cargo-audit against this repo's lockfiles, POSTing the
+/// JSON result here with the same Basic-Auth token Lighthouse uses — see
+/// security_audit.rs::upload_security_audit and CI milestone 7's
+/// security-audit-image-push job), not computed by this process itself.
+async fn fetch_security_audit(pool: &PgPool) -> Value {
+    let row: Option<Value> = sqlx::query_scalar(
+        "SELECT report FROM security_audit ORDER BY uploaded_at DESC LIMIT 1",
+    )
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    let Some(v) = row else {
+        return json!({
+            "sec_scanned_at": "",
+            "sec_dependency_count": 0,
+            "sec_status_label": "No audit report yet",
+            "sec_advisory_count": 0,
+            "security_vulnerabilities": [],
+            "security_warnings": [],
+        });
+    };
+
+    let scanned_at = v["scanned_at"].as_str().unwrap_or("unknown").to_string();
+    let dependency_count = v["lockfile"]["dependency-count"].as_u64().unwrap_or(0);
+
+    let to_advisory = |entry: &Value| -> Value {
+        let a = &entry["advisory"];
+        json!({
+            "id": a["id"].as_str().unwrap_or(""),
+            "package": a["package"].as_str().unwrap_or(""),
+            "title": a["title"].as_str().unwrap_or(""),
+            "date": a["date"].as_str().unwrap_or(""),
+            "url": a["url"].as_str().unwrap_or(""),
+        })
+    };
+
+    let vulnerabilities: Vec<Value> = v["vulnerabilities"]["list"]
+        .as_array()
+        .map(|a| a.iter().map(to_advisory).collect())
+        .unwrap_or_default();
+
+    let mut warnings: Vec<Value> = Vec::new();
+    if let Some(warn_map) = v["warnings"].as_object() {
+        for entries in warn_map.values() {
+            for entry in entries.as_array().unwrap_or(&vec![]) {
+                warnings.push(to_advisory(entry));
+            }
+        }
+    }
+
+    let status_label = if vulnerabilities.is_empty() { "\u{2713} Clean" } else { "\u{2717} Vulnerabilities found" };
+
+    json!({
+        "sec_scanned_at": scanned_at,
+        "sec_dependency_count": dependency_count,
+        "sec_status_label": status_label,
+        "sec_advisory_count": vulnerabilities.len() + warnings.len(),
+        "security_vulnerabilities": vulnerabilities,
+        "security_warnings": warnings,
+    })
+}
+
 pub fn fetch_cluster_data(pool: &PgPool) -> Value {
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(async {
@@ -488,10 +555,11 @@ pub fn fetch_cluster_data(pool: &PgPool) -> Value {
                 None => (vec![], vec![]),
             };
 
-            let (insights, spike_config, claude_log) = tokio::join!(
+            let (insights, spike_config, claude_log, security_audit) = tokio::join!(
                 fetch_network_insights(pool),
                 fetch_spike_config(pool),
                 fetch_claude_audit_log(pool),
+                fetch_security_audit(pool),
             );
 
             // fx-text/fx-if/fx-bind-attr only look up a single top-level
@@ -518,6 +586,11 @@ pub fn fetch_cluster_data(pool: &PgPool) -> Value {
             ctx.insert("backups".to_string(), json!(backups));
             ctx.insert("network_insights".to_string(), json!(insights));
             ctx.insert("claude_log".to_string(), json!(claude_log));
+            if let Some(map) = security_audit.as_object() {
+                for (k, v) in map {
+                    ctx.insert(k.clone(), v.clone());
+                }
+            }
             // Wrapped in a one-element array so it can ride the same
             // fx-for + data-fx-item JS-reading pattern satellites.js uses
             // for structured (non-scalar) data — fx-for expects an array.

@@ -12,6 +12,7 @@ mod photography;
 mod prometheus_client;
 mod request_trace;
 mod satellites;
+mod security_audit;
 mod visitors;
 
 use axum::routing::{get, post};
@@ -309,6 +310,10 @@ async fn main() {
         .merge(conjunction_router)
         .merge(satellites_router)
         .route("/api/lighthouse", post(lighthouse::upload_lighthouse_report))
+        .route(
+            "/api/security-audit",
+            post(security_audit::upload_security_audit).with_state(pg_pool.clone()),
+        )
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))
         .fallback_service(ServeDir::new(static_dir))
