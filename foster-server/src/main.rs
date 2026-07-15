@@ -6,6 +6,7 @@
 //! schema (migrations/ here are byte-identical copies of the real site's).
 
 mod cluster;
+mod conjunction;
 mod lighthouse;
 mod photography;
 mod prometheus_client;
@@ -187,6 +188,19 @@ async fn main() {
     machines.insert("lighthouse".to_string(), lighthouse_machine);
     machines.insert("cluster".to_string(), cluster_machine);
 
+    // Real conjunction screening (Hoots + SGP4 + TCA + rayon — see
+    // conjunction.rs). Foster's role is deliberately tiny, same shape as
+    // the earlier PoC: just the button's idle/started label. The real
+    // screening pass and its results are a background job persisted to
+    // the real conjunction_screenings/conjunction_events tables, polled
+    // independently of Foster's own SSE for this machine.
+    let conjunction_machine = MachineBuilder::new("conjunction", "idle", serde_json::json!({}))
+        .state("started")
+        .pass("idle", "start_screening", "started")
+        .pass("started", "start_screening", "started")
+        .build();
+    machines.insert("conjunction".to_string(), conjunction_machine);
+
     let pkg_dir = "/app/pkg";
     let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
         pkg_dir.to_string()
@@ -200,6 +214,14 @@ async fn main() {
 
     let trace_router: Router = Router::new()
         .route("/api/request-trace", get(request_trace::get_request_trace));
+
+    let conjunction_router = Router::new()
+        .route("/api/conjunction", get(conjunction::get_screening))
+        .route("/api/conjunction/start", post(conjunction::start_screening))
+        .with_state(conjunction::ConjunctionAppState {
+            screening: conjunction::initial_state(),
+            pool: pg_pool.clone(),
+        });
 
     let world_map_router = {
         let svg = world_map_svg.clone();
@@ -220,6 +242,7 @@ async fn main() {
     let app = foster_server::router(machines)
         .merge(trace_router)
         .merge(world_map_router)
+        .merge(conjunction_router)
         .route("/api/lighthouse", post(lighthouse::upload_lighthouse_report))
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))

@@ -139,6 +139,15 @@
     .flux-row:last-child, .backup-row:last-child { border-bottom: none; }
     .flux-kind { color: var(--text-light); width: 6rem; flex-shrink: 0; }
     .flux-name { flex: 1; word-break: break-all; }
+    .screening-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; background: var(--surface); }
+    .screening-status { font-family: ui-monospace, monospace; font-size: 0.85rem; padding: 0.15rem 0.5rem; border-radius: 0.25rem; background: var(--border); }
+    #conjunction-start {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit; margin-bottom: 0.75rem;
+    }
+    #conjunction-start:hover { border-color: var(--accent); color: var(--accent); }
+    #conjunction-events { margin-top: 0.75rem; padding-left: 1.25rem; }
+    #conjunction-events li { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0.35rem; }
   </style>
 </head>
 <body>
@@ -155,6 +164,7 @@
       <a href="#photography" data-spy="photography">Photography</a>
       <a href="#lighthouse" data-spy="lighthouse">Lighthouse</a>
       <a href="#cluster" data-spy="cluster">Cluster</a>
+      <a href="#conjunction" data-spy="conjunction">Conjunctions</a>
 
       <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
         <span fx-show="light">&#9789;</span>
@@ -408,6 +418,29 @@
     </div><!-- /fx-machine=cluster -->
   </main>
 
+  <main id="conjunction">
+    <h1>Conjunction Screening</h1>
+    <p>
+      Real screening: Hoots altitude-band pre-filter, true SGP4 propagation,
+      a 288-step/5-minute rolling 24h window scan for local distance minima,
+      ternary-search TCA refinement, rayon-parallelized pair scanning —
+      ported from the real <code>src/components/conjunction.rs</code>.
+      Persisted to the real <code>conjunction_screenings</code>/
+      <code>conjunction_events</code> tables. Foster only owns the button's
+      idle/started label; the real pass is a background job polled
+      independently (<code>static/conjunction.js</code>).
+    </p>
+    <div fx-machine="conjunction" class="screening-box">
+      <button id="conjunction-start" fx-on="click->start_screening">
+        <span fx-show="idle">Screen</span>
+        <span fx-show="started">Screen again</span>
+      </button>
+      <div>Status: <span id="conjunction-status" class="screening-status">idle</span></div>
+      <div id="conjunction-stats" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);"></div>
+      <ul id="conjunction-events"></ul>
+    </div><!-- /fx-machine=conjunction -->
+  </main>
+
   <footer>
     &copy; Jay Dan Howard
   </footer>
@@ -421,6 +454,7 @@
   import { initPhotography } from '/photography.js';
   import { initVisitors } from '/visitors.js';
   import { initCluster } from '/cluster.js';
+  import { initConjunction } from '/conjunction.js';
   import { initScrollSpy } from '/scrollspy.js';
   init();
   initLife();
@@ -429,6 +463,7 @@
   initPhotography();
   initVisitors();
   initCluster();
+  initConjunction();
   initScrollSpy();
 </script>
 </body>
