@@ -162,17 +162,25 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install buildah
+        # arc-runner-set-k8s (this repo's dedicated runner set, unlike
+        # arc-runner-set-k8s-homelab) has no Docker-in-Docker sidecar — the
+        # old Bazel workflow never needed one since rules_oci pushes images
+        # itself without a daemon. buildah does the same daemonless build
+        # +push from a plain Dockerfile.
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
-          mkdir -p ~/.docker
+          mkdir -p ~/.config/containers
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.docker/config.json
+            > ~/.config/containers/auth.json
       - name: Build and push
         run: |
-          docker build -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64" .
-          docker push "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64"
+          buildah bud --storage-driver=vfs -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64" .
+          buildah push --storage-driver=vfs "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64"
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [clippy, security-audit, integration-test]
@@ -182,17 +190,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install buildah
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
-          mkdir -p ~/.docker
+          mkdir -p ~/.config/containers
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.docker/config.json
+            > ~/.config/containers/auth.json
       - name: Build and push
         run: |
-          docker build -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64" .
-          docker push "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64"
+          buildah bud --storage-driver=vfs -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64" .
+          buildah push --storage-driver=vfs "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64"
   security-audit-image-push:
     if: github.event_name == 'push'
     name: Push Security Audit Image
@@ -202,19 +213,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install buildah
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
-          mkdir -p ~/.docker
+          mkdir -p ~/.config/containers
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.docker/config.json
+            > ~/.config/containers/auth.json
       - name: Build and push
         # amd64 only — the real CronJob (homelab/service/security-audit.yaml)
         # pins nodeSelector kubernetes.io/arch: amd64.
         run: |
-          docker build -f security-audit/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/security-audit:latest" .
-          docker push "${{ vars.HARBOR_HOST }}/library/security-audit:latest"
+          buildah bud --storage-driver=vfs -f security-audit/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/security-audit:latest" .
+          buildah push --storage-driver=vfs "${{ vars.HARBOR_HOST }}/library/security-audit:latest"
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
@@ -222,21 +236,25 @@ jobs:
     container: ${{ vars.RUNNER_IMAGE_URL }}
     needs: [harbor-image-x86_64-push, harbor-image-arm64-push]
     steps:
+      - name: Install buildah
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
-          mkdir -p ~/.docker
+          mkdir -p ~/.config/containers
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
-            > ~/.docker/config.json
+            > ~/.config/containers/auth.json
       - name: Create and Push Multi-Arch Manifest
         run: |
           TAG=$(date -u +%Y%m%d-%H%M%S)
-          docker manifest create ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest \
-            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64 \
-            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
-          docker manifest push ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest
-          docker manifest create ${{ vars.HARBOR_HOST }}/library/jaydanhoward:${TAG} \
-            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64 \
-            --amend ${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
-          docker manifest push ${{ vars.HARBOR_HOST }}/library/jaydanhoward:${TAG}
+          for MTAG in latest "$TAG"; do
+            buildah manifest create "${{ vars.HARBOR_HOST }}/library/jaydanhoward:${MTAG}"
+            buildah manifest add "${{ vars.HARBOR_HOST }}/library/jaydanhoward:${MTAG}" \
+              "docker://${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64"
+            buildah manifest add "${{ vars.HARBOR_HOST }}/library/jaydanhoward:${MTAG}" \
+              "docker://${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64"
+            buildah manifest push --all "${{ vars.HARBOR_HOST }}/library/jaydanhoward:${MTAG}" \
+              "docker://${{ vars.HARBOR_HOST }}/library/jaydanhoward:${MTAG}"
+          done
