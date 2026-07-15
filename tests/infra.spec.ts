@@ -20,12 +20,17 @@ test('cache: HTML root gets max-age=0 must-revalidate', async ({ request }) => {
   expect(cc).toContain('must-revalidate');
 });
 
-test('cache: versioned WASM asset gets immutable TTL', async ({ page }) => {
+// Foster's /pkg (wasm-pack output) has no content-hash versioning yet,
+// unlike the real Leptos site's ?v={hash} query-string scheme — see
+// site_middleware.rs::cache_control's doc comment. Caching it immutably
+// without a busting mechanism would pin browsers to a stale WASM/JS pair
+// after a deploy, so this only asserts the safer fallback is in effect,
+// not the (currently inapplicable) immutable rule.
+test('cache: WASM asset does not use an unsafe immutable TTL without cache-busting', async ({ page }) => {
   let wasmCacheControl: string | null = null;
   let wasmUrl: string | null = null;
 
   page.on('response', res => {
-    // Use pathname so ?v=hash suffix doesn't break the endsWith check
     if (!wasmUrl && new URL(res.url()).pathname.endsWith('.wasm')) {
       wasmUrl = res.url();
       wasmCacheControl = res.headers()['cache-control'] ?? null;
@@ -37,7 +42,7 @@ test('cache: versioned WASM asset gets immutable TTL', async ({ page }) => {
 
   console.log(`WASM: ${wasmUrl}  →  ${wasmCacheControl}`);
   expect(wasmUrl, '.wasm file should be requested on page load').toBeTruthy();
-  expect(wasmCacheControl).toContain('immutable');
+  expect(wasmCacheControl).not.toContain('immutable');
 });
 
 test('cache: hashed JS gets immutable 1-year TTL', async ({ page }) => {

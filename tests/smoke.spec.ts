@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test';
 
-// The most important test: catches missing web-sys feature bindings (LinkError)
-// and any other fatal JS errors that break page load.
+// Foster's client (static/pkg/foster_client.js + .wasm) is the one piece of
+// WASM the new site ships — same class of failure as the old Leptos
+// hydration bundle (LinkError from a missing web-sys/JS shim binding).
 test('WASM instantiates and page loads without fatal errors', async ({ page }) => {
   const fatal: string[] = [];
 
@@ -16,34 +17,27 @@ test('WASM instantiates and page loads without fatal errors', async ({ page }) =
   });
 
   await page.goto('/');
-  // Allow time for WASM to download, compile, and hydrate
   await page.waitForTimeout(10_000);
 
   if (fatal.length) console.log('Fatal errors:', fatal);
   expect(fatal, 'No WASM/fatal JS errors on page load').toHaveLength(0);
 });
 
-// Catches broken server functions (500s) that would show blank panels to users.
-// DB-dependent and Prometheus-backed endpoints are excluded in CI since neither
-// is available — those are covered by testing against production.
-test('server functions return non-500 on initial load', async ({ page }) => {
+// Catches broken hand-rolled axum routes (500s) that would show blank
+// panels to users. DB/Prometheus/CelesTrak-dependent endpoints are excluded
+// in CI since none of those are available there — covered by testing
+// against production instead.
+test('API routes return non-500 on initial load', async ({ page }) => {
   const failures: string[] = [];
 
   const ciSkip = [
-    // Requires Postgres
-    'get_network_insights', 'get_claude_audit_log', 'get_spike_config',
-    'get_visitor_stats', 'save_spike_config',
-    // Requires Prometheus
-    'get_top_network_pods', 'get_node_metrics', 'get_cluster_metrics',
-    'get_network_insights_chart', 'get_gitops_status', 'get_historical_metrics',
-    // Requires CelesTrak network access (and DB for the stale-data fallback);
-    // CelesTrak blocks the CI runner's IP with 403.
-    'get_tle_data',
+    // Requires CelesTrak network access (blocks the CI runner's IP with 403)
+    '/api/conjunction', '/api/satellites',
   ];
 
   page.on('response', res => {
     const url = res.url();
-    if (!url.includes('/api/')) return;
+    if (!url.includes('/api/') && !url.includes('/world-map.svg')) return;
     if (res.status() < 500) return;
     if (ciSkip.some(e => url.includes(e))) return;
     failures.push(`${res.status()} ${url}`);
@@ -53,23 +47,5 @@ test('server functions return non-500 on initial load', async ({ page }) => {
   await page.waitForTimeout(20_000);
 
   if (failures.length) console.log('500 errors:', failures);
-  expect(failures, 'No unexpected server function 500s').toHaveLength(0);
-});
-
-// Catches regressions in the conjunction screening pipeline.
-// Skipped in CI: requires CelesTrak network access and a live DB.
-test('conjunction table populates within 60s', async ({ page }) => {
-  test.skip(
-    (process.env.BASE_URL ?? '').includes('127.0.0.1'),
-    'CelesTrak unreachable from CI runner',
-  );
-  await page.goto('/');
-  await page.locator('#satellites').scrollIntoViewIfNeeded();
-
-  const tableBody = page.locator('#satellites tbody');
-  await tableBody.waitFor({ state: 'visible', timeout: 60_000 });
-
-  const rows = await tableBody.locator('tr').count();
-  console.log(`Conjunction rows: ${rows}`);
-  expect(rows).toBeGreaterThan(0);
+  expect(failures, 'No unexpected server 500s').toHaveLength(0);
 });

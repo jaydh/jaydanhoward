@@ -1,0 +1,28 @@
+[package]
+name = "jaydanhoward"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "jaydanhoward"
+path = "src/main.rs"
+
+[dependencies]
+foster-core = { git = "https://github.com/jaydh/foster", rev = "46109a8" }
+foster-server = { git = "https://github.com/jaydh/foster", rev = "46109a8" }
+axum = { version = "0.7", features = ["multipart"] }
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.5", features = ["fs", "compression-full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "migrate"] }
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+rustls = "0.23"
+base64 = "0.22"
+thiserror = "1"
+anyhow = "1"
+kube = { version = "3.1", default-features = false, features = ["client", "rustls-tls"] }
+k8s-openapi = { version = "0.27", features = ["v1_31"] }
+sgp4 = "2.1.0"
+rayon = "1"

@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jay Dan Howard</title>
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --border: #e5e5e8;
+      --text: #1e1e1e;
+      --text-light: #555555;
+      --accent: #3b82f6;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; }
+    .page { background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    [fx-show] { display: none; }
+
+    .theme-dark {
+      --bg: #0b0e14; --surface: #0f1420; --border: #1f2637;
+      --text: #e5e7eb; --text-light: #9aa3b2; --accent: #60a5fa;
+    }
+
+    nav {
+      position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 2rem;
+      padding: 1.25rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    .nav-links { display: flex; margin-left: auto; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+    .nav-links a { padding: 0.5rem 1rem; color: var(--text); position: relative; }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-links a.active { color: var(--accent); font-weight: 600; }
+    .nav-links a.active::after {
+      content: ""; position: absolute; left: 1rem; right: 1rem; bottom: 0; height: 2px; background: var(--accent);
+    }
+    button.icon-btn { background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--text); font-size: 1.1rem; }
+    button.icon-btn:hover { color: var(--accent); }
+    .contact-wrap { position: relative; }
+    .contact-menu {
+      position: absolute; top: 100%; right: 0; margin-top: 0.5rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 0.5rem; min-width: 160px; overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .contact-menu a { display: block; padding: 0.75rem 1rem; color: var(--text); }
+    .contact-menu a:hover { background: var(--border); text-decoration: none; }
+
+    main { max-width: 860px; margin: 0 auto; padding: 4rem 2rem; min-height: 60vh; }
+    h1 { font-size: 1.75rem; margin-bottom: 1.5rem; }
+    p { color: var(--text-light); margin-bottom: 1rem; }
+
+    footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--text-light); font-size: 0.85rem; }
+
+    #life-canvas, #path-canvas {
+      display: block; width: 100%; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface);
+    }
+    #life-canvas { max-width: 720px; aspect-ratio: 96 / 54; }
+    #path-canvas { max-width: 800px; aspect-ratio: 800 / 480; }
+    .life-controls { display: flex; gap: 0.75rem; margin: 1rem 0; flex-wrap: wrap; }
+    .life-controls button {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit;
+    }
+    .life-controls button:hover { border-color: var(--accent); color: var(--accent); }
+
+    #request-trace-container { display: flex; flex-direction: column; align-items: center; max-width: 32rem; margin: 0 auto; }
+    .trace-loading, .trace-error { color: var(--text-light); font-size: 0.85rem; padding: 2rem 0; font-family: ui-monospace, monospace; }
+    .trace-card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
+    .trace-label { font-size: 0.7rem; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6rem; }
+    .trace-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+    .trace-row { display: flex; gap: 0.75rem; font-size: 0.75rem; font-family: ui-monospace, monospace; }
+    .trace-key { color: var(--text-light); width: 5rem; flex-shrink: 0; }
+    .trace-val { color: var(--text); word-break: break-all; }
+    .trace-hop { display: flex; flex-direction: column; align-items: center; padding: 0.15rem 0; }
+    .trace-hop-line { width: 1px; height: 1rem; background: var(--border); }
+    .trace-hop-label { font-size: 0.6rem; color: var(--text-light); font-family: ui-monospace, monospace; padding: 0.1rem 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 0.25rem; }
+    #request-trace-refresh {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem; margin-bottom: 1rem;
+    }
+    #request-trace-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+    .cluster-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; background: var(--surface); max-height: 22rem; overflow-y: auto; }
+    .cluster-box h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 0.6rem; }
+    .visitor-stats { display: flex; gap: 1.5rem; margin: 1rem 0; flex-wrap: wrap; }
+    .visitor-stat { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem 1.25rem; background: var(--surface); text-align: center; }
+    .visitor-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .visitor-stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
+    .visit-row { display: flex; gap: 0.75rem; font-size: 0.8rem; font-family: ui-monospace, monospace; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+    .visit-row:last-child { border-bottom: none; }
+    .visit-path { width: 8rem; flex-shrink: 0; }
+    .visit-when { color: var(--text-light); margin-left: auto; }
+    #visitors-refresh {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem;
+    }
+    #visitors-refresh:hover { border-color: var(--accent); color: var(--accent); }
+    .visitor-map { position: relative; width: 100%; max-width: 600px; margin: 1rem 0; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; background: var(--surface); }
+    .visitor-map img { display: block; width: 100%; color: var(--text-light); }
+    .visitor-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 4px var(--accent); }
+
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-top: 1rem; }
+    .photo-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0.375rem; cursor: pointer; display: block; background: var(--border); }
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+    .lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 0.5rem; }
+    .lightbox-controls { display: flex; gap: 1rem; }
+    .lightbox-controls button {
+      background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit;
+    }
+    .lightbox-controls button:hover { background: rgba(255,255,255,0.2); }
+    .photo-empty { color: var(--text-light); font-size: 0.85rem; }
+    .lh-gate {
+      min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem;
+      display: flex; align-items: center; justify-content: center; background: var(--surface);
+    }
+    .lh-gate button {
+      background: var(--accent); color: #fff; border: none; border-radius: 0.5rem;
+      padding: 0.6rem 1.25rem; cursor: pointer; font: inherit; font-weight: 600;
+    }
+    .lh-iframe { width: 100%; min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem; }
+
+    #cluster-refresh {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem; margin-bottom: 1rem;
+    }
+    #cluster-refresh:hover { border-color: var(--accent); color: var(--accent); }
+    .cluster-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+    #cluster-sparkline { display: block; width: 100%; max-width: 800px; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface); margin-bottom: 1.5rem; }
+    .cluster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 640px) { .cluster-grid { grid-template-columns: 1fr; } }
+    .flux-row, .backup-row { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
+    .flux-row:last-child, .backup-row:last-child { border-bottom: none; }
+    .flux-kind { color: var(--text-light); width: 6rem; flex-shrink: 0; }
+    .flux-name { flex: 1; word-break: break-all; }
+    .screening-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; background: var(--surface); }
+    .screening-status { font-family: ui-monospace, monospace; font-size: 0.85rem; padding: 0.15rem 0.5rem; border-radius: 0.25rem; background: var(--border); }
+    #conjunction-start {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit; margin-bottom: 0.75rem;
+    }
+    #conjunction-start:hover { border-color: var(--accent); color: var(--accent); }
+    #conjunction-events { margin-top: 0.75rem; padding-left: 1.25rem; }
+    #conjunction-events li { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0.35rem; }
+
+    .sat-box { display: flex; flex-direction: column; gap: 0.75rem; }
+    .sat-canvas-wrap { position: relative; width: 100%; background: linear-gradient(to bottom right, #111827, #000); border-radius: 0.75rem; overflow: hidden; }
+    #sat-canvas { display: block; width: 100%; height: 600px; cursor: grab; }
+    #sat-canvas:active { cursor: grabbing; }
+    .sat-controls { position: absolute; display: flex; gap: 0.5rem; }
+    .sat-controls button {
+      background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 0.25rem;
+      padding: 0.4rem 0.7rem; font: inherit; cursor: pointer; user-select: none;
+    }
+    .sat-controls button:hover { background: rgba(0,0,0,0.9); }
+    .sat-controls-zoom { top: 1rem; right: 1rem; flex-direction: column; }
+    .sat-controls-preset { top: 1rem; left: 1rem; flex-direction: column; }
+    .sat-controls-preset button { font-size: 0.85rem; padding: 0.3rem 0.6rem; }
+    .sat-hud {
+      position: absolute; bottom: 1rem; left: 1rem; background: rgba(0,0,0,0.7); color: #fff;
+      padding: 0.6rem 0.8rem; border-radius: 0.375rem; font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.4rem;
+    }
+    .sat-hud-time { color: #d1d5db; font-size: 0.8rem; }
+    .sat-hud-speed { display: flex; align-items: center; gap: 0.4rem; color: #d1d5db; }
+    .sat-hud-speed button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 0.25rem; padding: 0.1rem 0.5rem; cursor: pointer; font: inherit; }
+    .sat-hud button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 0.25rem; padding: 0.25rem 0.6rem; cursor: pointer; font: inherit; }
+    .sat-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+    .sat-filter-label { color: var(--text-light); }
+    .sat-filter {
+      display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.6rem; border-radius: 0.375rem;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font: inherit;
+    }
+    .sat-filter::before { content: ''; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--dot); flex-shrink: 0; }
+    .sat-filter.off { opacity: 0.4; text-decoration: line-through; }
+  </style>
+</head>
+<body>
+
+<div fx-machine="theme" class="page" fx-class="dark:theme-dark">
+  <nav>
+    <a href="#about" class="logo">Jay Dan Howard</a>
+    <div class="nav-links" id="scroll-spy-links">
+      <a href="#about" data-spy="about">About</a>
+      <a href="#trace" data-spy="trace">Request Trace</a>
+      <a href="#visitors" data-spy="visitors">Visitors</a>
+      <a href="#life" data-spy="life">Game of Life</a>
+      <a href="#path" data-spy="path">Pathfinding</a>
+      <a href="#photography" data-spy="photography">Photography</a>
+      <a href="#lighthouse" data-spy="lighthouse">Lighthouse</a>
+      <a href="#cluster" data-spy="cluster">Cluster</a>
+      <a href="#conjunction" data-spy="conjunction">Conjunctions</a>
+      <a href="#satellites" data-spy="satellites">Satellites</a>
+
+      <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
+        <span fx-show="light">&#9789;</span>
+        <span fx-show="dark">&#9788;</span>
+      </button>
+
+      <div fx-machine="nav" class="contact-wrap">
+        <button class="icon-btn" fx-on="click->toggle_contact">Contact &#9662;</button>
+        <div class="contact-menu" fx-show="open">
+          <a href="https://github.com/jaydh" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://www.linkedin.com/in/jaydanhoward/" target="_blank" rel="noreferrer">LinkedIn</a>
+          <a href="mailto:hello@jaydanhoward.com">Email</a>
+        </div>
+      </div><!-- /fx-machine=nav -->
+    </div>
+  </nav>
+
+  <main id="about">
+    <h1>About</h1>
+    <p>
+      You're on some old computers and Raspberry Pis in my closet. This site runs on a self-hosted
+      <a href="https://kubernetes.io/" target="_blank" rel="noreferrer">Kubernetes</a> cluster —
+      autoscaling <a href="https://github.com/actions/actions-runner-controller" target="_blank" rel="noreferrer">GitHub Actions runners</a>
+      (x86 + arm), in-cluster <a href="https://goharbor.io/" target="_blank" rel="noreferrer">Harbor</a> registry,
+      <a href="https://rook.io/" target="_blank" rel="noreferrer">Rook-Ceph</a> storage, built with Rust
+      (<a href="https://github.com/jaydh/foster" target="_blank" rel="noreferrer">Foster</a>), exposed via
+      <a href="https://www.cloudflare.com/products/tunnel/" target="_blank" rel="noreferrer">Cloudflare Tunnels</a>.
+    </p>
+    <p>
+      Software engineer at <a href="https://www.astranis.com/" target="_blank" rel="noreferrer">Astranis</a>
+      on the network and payload software team — tools to operate and monitor micro GEO satellites.
+    </p>
+  </main>
+
+  <main id="trace">
+    <h1>Request Trace</h1>
+    <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
+    <button id="request-trace-refresh">&#8635; Refresh</button>
+    <div id="request-trace-container"></div>
+  </main>
+
+  <main id="visitors">
+    <h1>Visitors</h1>
+    <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>
+    <div fx-machine="visitors">
+      <button id="visitors-refresh" fx-on="click->refresh">&#8635; Refresh</button>
+      <div class="visitor-stats">
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="total_visits">0</div>
+          <div class="visitor-stat-label">total visits (30d)</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="unique_ips">0</div>
+          <div class="visitor-stat-label">unique IPs</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="unique_countries">0</div>
+          <div class="visitor-stat-label">countries</div>
+        </div>
+      </div>
+      <div class="visitor-map">
+        <img src="/world-map.svg" alt="world map" />
+        <div id="visitor-map-points"></div>
+      </div>
+      <div class="cluster-box" style="max-width: 32rem;">
+        <h3>Recent visits</h3>
+        <div fx-for="recent_visits">
+          <div class="visit-row">
+            <span class="visit-path" fx-field="path"></span>
+            <span fx-field="location"></span>
+            <span class="visit-when" fx-field="minutes_ago"></span>
+          </div>
+        </div>
+      </div>
+      <div style="display:none"><div fx-for="points"><span></span></div></div>
+    </div><!-- /fx-machine=visitors -->
+  </main>
+
+  <main id="life">
+    <h1>Conway's Game of Life</h1>
+    <p>Plain <code>requestAnimationFrame</code> canvas; Foster owns run/pause/reset.</p>
+    <div fx-machine="life">
+      <canvas id="life-canvas" width="480" height="270"></canvas>
+      <div class="life-controls">
+        <button fx-on="click->toggle_run">
+          <span fx-show="paused">&#9654; Run</span>
+          <span fx-show="running">&#10074;&#10074; Pause</span>
+        </button>
+        <button fx-on="click->reset">&#8635; Reset</button>
+      </div>
+      <span id="life-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
+    </div><!-- /fx-machine=life -->
+  </main>
+
+  <main id="path">
+    <h1>Pathfinding</h1>
+    <p>BFS / A* over a random maze, animated step-by-step.</p>
+    <div fx-machine="pathfinding">
+      <canvas id="path-canvas" width="800" height="480"></canvas>
+      <div class="life-controls">
+        <button fx-on="click->toggle_run">
+          <span fx-show="paused">&#9654; Run</span>
+          <span fx-show="running">&#10074;&#10074; Pause</span>
+        </button>
+        <button fx-on="click->select_bfs">BFS</button>
+        <button fx-on="click->select_astar">A*</button>
+        <button fx-on="click->reset">&#8635; New maze</button>
+      </div>
+      <span id="pathfinding-algorithm" fx-text="algorithm" style="display:none">bfs</span>
+      <span id="pathfinding-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
+    </div><!-- /fx-machine=pathfinding -->
+  </main>
+
+  <main id="photography">
+    <h1>Photography</h1>
+    <p>Real photos served straight from the CDN.</p>
+    <div fx-machine="photography">
+      <div class="photo-grid" fx-for="photos">
+        <img class="photo-thumb" fx-on="click->view" alt="" />
+      </div>
+      <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
+      <div class="lightbox" fx-if='{"field":"viewing_index","op":"gte","value":0}'>
+        <img fx-bind-attr="src=ctx:viewing_url" alt="" />
+        <div class="lightbox-controls">
+          <button fx-on="click->prev">&#8592; Prev</button>
+          <button fx-on="click->close">Close</button>
+          <button fx-on="click->next">Next &#8594;</button>
+        </div>
+      </div>
+    </div><!-- /fx-machine=photography -->
+  </main>
+
+  <main id="lighthouse">
+    <h1>Lighthouse</h1>
+    <p>
+      Here is a programmatically generated lighthouse report
+      <a href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">for every deploy</a>
+      that gets kicked off as part of a k8s job for every new deploy of this site.
+    </p>
+    <div fx-machine="lighthouse">
+      <div fx-show="hidden" class="lh-gate">
+        <button fx-on="click->load_report">Load Report</button>
+      </div>
+      <div fx-show="loaded">
+        <iframe src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
+      </div>
+    </div><!-- /fx-machine=lighthouse -->
+  </main>
+
+  <main id="cluster">
+    <h1>Cluster</h1>
+    <p>
+      Real cluster telemetry — CPU/mem/disk/pod/node metrics, historical
+      24h series, Ceph health, network insights, GitOps status, backup Job
+      status, cloudflared tunnel stats, and the Claude audit log, all ported
+      from the real <code>src/components/cluster_stats.rs</code>. Most of
+      this is Prometheus-backed (<code>PROMETHEUS_URL</code>) — GitOps and
+      backup status go through the k8s API directly; network insights,
+      spike config, and the Claude audit log are Postgres-backed.
+    </p>
+    <div fx-machine="cluster">
+      <button id="cluster-refresh" fx-on="click->refresh">&#8635; Refresh</button>
+
+      <div class="cluster-summary">
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="cpu_usage_percent">0</div><div class="visitor-stat-label">CPU %</div></div>
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="memory_usage_gb">0</div><div class="visitor-stat-label">Mem GB</div></div>
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="disk_usage_gb">0</div><div class="visitor-stat-label">Disk GB</div></div>
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="pod_count">0</div><div class="visitor-stat-label">Pods</div></div>
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="healthy_node_count">0</div><div class="visitor-stat-label">Nodes Ready</div></div>
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="network_rx_mbps">0</div><div class="visitor-stat-label">RX Mbps</div></div>
+        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="network_tx_mbps">0</div><div class="visitor-stat-label">TX Mbps</div></div>
+      </div>
+
+      <canvas id="cluster-sparkline" width="800" height="120"></canvas>
+      <div style="display:none"><div fx-for="historical_series_list"><span></span></div></div>
+
+      <div class="cluster-grid">
+        <div class="cluster-box">
+          <h3>Nodes</h3>
+          <div fx-for="nodes">
+            <div class="flux-row">
+              <span class="flux-name" fx-field="name"></span>
+              <span fx-field="cpu_usage_percent"></span>%cpu
+              <span fx-field="memory_usage_gb"></span>G mem
+            </div>
+          </div>
+        </div>
+        <div class="cluster-box">
+          <h3>Ceph</h3>
+          <div class="visit-row"><span>health</span><span fx-text="ceph_health"></span></div>
+          <div class="visit-row"><span>mon quorum</span><span fx-text="ceph_mon_quorum"></span>/<span fx-text="ceph_mon_total"></span></div>
+          <div class="visit-row"><span>osd up</span><span fx-text="ceph_osd_up"></span>/<span fx-text="ceph_osd_total"></span></div>
+          <div class="visit-row"><span>pg clean</span><span fx-text="ceph_pg_clean"></span>/<span fx-text="ceph_pg_total"></span></div>
+        </div>
+        <div class="cluster-box">
+          <h3>Flux GitOps</h3>
+          <div fx-for="flux">
+            <div class="flux-row">
+              <span class="flux-kind" fx-field="kind"></span>
+              <span class="flux-name" fx-field="name"></span>
+              <span fx-field="ready_icon"></span>
+            </div>
+          </div>
+        </div>
+        <div class="cluster-box">
+          <h3>Backup Jobs</h3>
+          <div fx-for="backups">
+            <div class="backup-row">
+              <span fx-field="status_icon"></span>
+              <span class="flux-name" fx-field="name"></span>
+              <span class="flux-kind" fx-field="status_label"></span>
+            </div>
+          </div>
+        </div>
+        <div class="cluster-box">
+          <h3>Network Insights</h3>
+          <div fx-for="network_insights">
+            <div class="visit-row">
+              <span fx-field="occurred_at"></span>
+              <span fx-field="spike_tx_mbps"></span> Mbps
+            </div>
+          </div>
+        </div>
+        <div class="cluster-box">
+          <h3>Top Network Pods</h3>
+          <div fx-for="top_pods">
+            <div class="flux-row">
+              <span class="flux-name" fx-field="pod"></span>
+              <span fx-field="tx_mbps"></span>tx
+              <span fx-field="rx_mbps"></span>rx
+            </div>
+          </div>
+        </div>
+        <div class="cluster-box">
+          <h3>Cloudflared Tunnel</h3>
+          <div class="visit-row"><span>HA connections</span><span fx-text="cf_ha_connections"></span></div>
+          <div class="visit-row"><span>req/s</span><span fx-text="cf_total_req_per_sec"></span></div>
+          <div class="visit-row"><span>error rate</span><span fx-text="cf_error_rate"></span></div>
+        </div>
+        <div class="cluster-box">
+          <h3>Claude Audit Log</h3>
+          <div fx-for="claude_log">
+            <div class="visit-row">
+              <span fx-field="occurred_at"></span>
+              <span fx-field="model"></span>
+              <span fx-field="context"></span>
+            </div>
+          </div>
+        </div>
+        <div class="cluster-box">
+          <h3>Security Audit</h3>
+          <div class="visit-row">
+            <span fx-text="sec_status_label"></span>
+            <span><span fx-text="sec_dependency_count"></span> deps</span>
+            <span><span fx-text="sec_advisory_count"></span> advisories</span>
+          </div>
+          <div class="visit-row"><span>Last scan</span><span fx-text="sec_scanned_at"></span></div>
+          <div fx-for="security_vulnerabilities">
+            <div class="visit-row">
+              <span fx-field="id"></span>
+              <span fx-field="package"></span>
+              <span fx-field="title"></span>
+            </div>
+          </div>
+          <div fx-for="security_warnings">
+            <div class="visit-row" style="opacity:0.7">
+              <span fx-field="id"></span>
+              <span fx-field="package"></span>
+              <span fx-field="title"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div><!-- /fx-machine=cluster -->
+  </main>
+
+  <main id="conjunction">
+    <h1>Conjunction Screening</h1>
+    <p>
+      Real screening: Hoots altitude-band pre-filter, true SGP4 propagation,
+      a 288-step/5-minute rolling 24h window scan for local distance minima,
+      ternary-search TCA refinement, rayon-parallelized pair scanning —
+      ported from the real <code>src/components/conjunction.rs</code>.
+      Persisted to the real <code>conjunction_screenings</code>/
+      <code>conjunction_events</code> tables. Foster only owns the button's
+      idle/started label; the real pass is a background job polled
+      independently (<code>static/conjunction.js</code>).
+    </p>
+    <div fx-machine="conjunction" class="screening-box">
+      <button id="conjunction-start" fx-on="click->start_screening">
+        <span fx-show="idle">Screen</span>
+        <span fx-show="started">Screen again</span>
+      </button>
+      <div>Status: <span id="conjunction-status" class="screening-status">idle</span></div>
+      <div id="conjunction-stats" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);"></div>
+      <ul id="conjunction-events"></ul>
+    </div><!-- /fx-machine=conjunction -->
+  </main>
+
+  <main id="satellites">
+    <h1>Satellites</h1>
+    <p>
+      Real 3D orbital mechanics: the actual CelesTrak "active" TLE group
+      (~16,000 objects), real <code>sgp4</code> propagation over a real
+      288-step/5-minute rolling 24h window — ported from the real
+      <code>satellite_calculations.rs</code>/<code>satellite_renderer.rs</code>/
+      <code>satellite_tracker.rs</code>. The WebGL2 shader/matrix/camera
+      pipeline is a line-for-line port. Propagation itself runs server-side
+      once per tick (shared by every visitor) instead of in-browser WASM —
+      see <code>src/satellites.rs</code> for why — and the client
+      interpolates smoothly between real snapshots.
+    </p>
+    <div fx-machine="satellites" class="sat-box">
+      <div class="sat-canvas-wrap">
+        <canvas id="sat-canvas" width="1200" height="600">Your browser does not support canvas</canvas>
+        <div class="sat-controls sat-controls-zoom">
+          <button id="sat-zoom-in">+</button>
+          <button id="sat-zoom-out">&minus;</button>
+        </div>
+        <div class="sat-controls sat-controls-preset">
+          <button data-preset="equator">Equator</button>
+          <button data-preset="north">North</button>
+          <button data-preset="south">South</button>
+          <button data-preset="oblique">Oblique</button>
+        </div>
+        <div class="sat-hud">
+          <div><span id="sat-count">0</span> satellites tracked</div>
+          <div class="sat-hud-time">Time: <span id="sat-time">--:--</span> UTC</div>
+          <div class="sat-hud-speed">
+            <span>Speed:</span>
+            <button fx-on="click->speed_down">&minus;</button>
+            <span id="sat-speed-label"></span>
+            <span id="sat-steps-raw" fx-text="steps_per_tick" style="display:none"></span>
+            <button fx-on="click->speed_up">+</button>
+          </div>
+          <button fx-on="click->toggle_run">
+            <span fx-show="running">Pause</span>
+            <span fx-show="paused">Run</span>
+          </button>
+        </div>
+      </div>
+      <div class="sat-filters">
+        <span class="sat-filter-label">Filter:</span>
+        <button class="sat-filter" data-band="0" style="--dot:#4dccff">LEO &lt;600km</button>
+        <button class="sat-filter" data-band="1" style="--dot:#80ff80">LEO 600-2000km</button>
+        <button class="sat-filter" data-band="2" style="--dot:#ffcc33">MEO 2-20Mm</button>
+        <button class="sat-filter" data-band="3" style="--dot:#ff8033">MEO 20-35Mm</button>
+        <button class="sat-filter" data-band="4" style="--dot:#ff4d4d">GEO 35786km</button>
+        <button class="sat-filter" data-band="5" style="--dot:#cc99ff">HEO</button>
+        <button class="sat-filter" data-band="astranis" style="--dot:#00dcb4">Astranis</button>
+      </div>
+    </div><!-- /fx-machine=satellites -->
+  </main>
+
+  <footer>
+    &copy; Jay Dan Howard
+  </footer>
+</div><!-- /fx-machine=theme -->
+
+<script type="module">
+  import init from '/pkg/foster_client.js';
+  import { initLife } from '/life.js';
+  import { initPathfinding } from '/pathfinding.js';
+  import { initRequestTrace } from '/request_trace.js';
+  import { initPhotography } from '/photography.js';
+  import { initVisitors } from '/visitors.js';
+  import { initCluster } from '/cluster.js';
+  import { initConjunction } from '/conjunction.js';
+  import { initSatellites } from '/satellites.js';
+  import { initScrollSpy } from '/scrollspy.js';
+  init();
+  initLife();
+  initPathfinding();
+  initRequestTrace();
+  initPhotography();
+  initVisitors();
+  initCluster();
+  initConjunction();
+  initSatellites();
+  initScrollSpy();
+</script>
+</body>
+</html>

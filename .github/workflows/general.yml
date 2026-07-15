@@ -14,54 +14,97 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: arc-runner-set-k8s
-    container: ${{ vars.RUNNER_IMAGE_URL }}
+    container: rust:1-bookworm
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
       - name: Fetch advisory database
         run: |
           git clone --depth=1 https://github.com/RustSec/advisory-db.git ~/.cargo/advisory-db \
             || git -C ~/.cargo/advisory-db pull --ff-only
       - name: Run security audit
+        working-directory: foster-server
         run: |
-          bazel --bazelrc=.bazelrc.ci test //:security_audit --test_output=all
+          cargo audit --no-fetch --ignore RUSTSEC-2023-0071
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s
-    container: ${{ vars.RUNNER_IMAGE_URL }}
+    container: rust:1-bookworm
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
       - name: Clippy
-        run: |
-          bazel --bazelrc=.bazelrc.ci build clippy
+        working-directory: foster-server
+        run: cargo clippy --all-targets
   integration-test:
     name: Integration Test
     runs-on: arc-runner-set-k8s
-    container: ${{ vars.RUNNER_IMAGE_URL }}
+    container: rust:1-bookworm
     needs: [clippy]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: foster
+          POSTGRES_DB: jaydanhoward
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-      - name: Build binary
-        # Clippy already built this — Bazel remote cache makes this nearly instant
-        run: bazel --bazelrc=.bazelrc.ci build :jaydanhoward_bin
+      - name: Install wasm-pack + wasm32 target
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-pack --locked
+      - name: Build foster-client WASM
+        # foster-client (the WASM runtime) isn't published — it's a path-dependency
+        # workspace member in the foster repo, so check out the same rev
+        # foster-server/Cargo.toml git-depends on and build it with wasm-pack,
+        # same as foster/scripts/build-wasm.sh does locally and the Dockerfile
+        # does for the production image.
+        run: |
+          FOSTER_REV=$(grep '^ARG FOSTER_REV=' foster-server/Dockerfile | cut -d= -f2)
+          git clone https://github.com/jaydh/foster /tmp/foster-src
+          git -C /tmp/foster-src checkout "$FOSTER_REV"
+          (cd /tmp/foster-src/crates/foster-client && wasm-pack build --target web --out-dir pkg)
+          mkdir -p foster/pkg
+          cp -r /tmp/foster-src/crates/foster-client/pkg/. foster/pkg/
+      - name: Build server binary
+        working-directory: foster-server
+        run: cargo build --release
       - name: Start app
-        # No DATABASE_URL or PROMETHEUS_URL: runs in memory-only mode.
         # Redirect output to file so the background process doesn't keep the
         # step's stdout/stderr open (which would hang the step indefinitely).
+        env:
+          DATABASE_URL: postgres://postgres:foster@postgres:5432/jaydanhoward
+          LIGHTHOUSE_UPDATE_TOKEN: ci-test-token
         run: |
-          ./bazel-bin/jaydanhoward_bin > /tmp/app.log 2>&1 &
+          ./foster-server/target/release/jaydanhoward > /tmp/app.log 2>&1 &
           echo $! > /tmp/app.pid
           for i in $(seq 1 30); do
             curl -sf http://127.0.0.1:8000/health_check && break || sleep 2
           done
+      - name: Start local HTTP/2 reverse proxy
+        # Foster opens one SSE connection per machine (~10 on this page);
+        # over plain HTTP/1.1 that exceeds Chromium's 6-connections-per-origin
+        # cap and hangs any further request (e.g. a button click's POST
+        # /transition). Caddy multiplexes everything over one HTTP/2
+        # connection — see playwright.config.ts's ignoreHTTPSErrors comment.
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends debian-keyring debian-archive-keyring apt-transport-https curl gnupg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+          apt-get update && apt-get install -y caddy
+          caddy reverse-proxy --from https://127.0.0.1:8443 --to 127.0.0.1:8000 > /tmp/caddy.log 2>&1 &
+          echo $! > /tmp/caddy.pid
+          sleep 2
       - name: Set up Node.js
         uses: actions/setup-node@v4.4.0
         with:
@@ -73,7 +116,7 @@ jobs:
         run: npx playwright install chromium --with-deps
       - name: Run Playwright tests
         env:
-          BASE_URL: http://127.0.0.1:8000
+          BASE_URL: https://127.0.0.1:8443
         run: npx playwright test --reporter=github,html
       - name: Upload test report
         if: always()
@@ -87,10 +130,13 @@ jobs:
         run: |
           echo "=== app stdout/stderr ==="
           cat /tmp/app.log 2>/dev/null || true
+          echo "=== caddy log ==="
+          cat /tmp/caddy.log 2>/dev/null || true
       - name: Cleanup
         if: always()
         run: |
           [ -f /tmp/app.pid ] && kill $(cat /tmp/app.pid) 2>/dev/null || true
+          [ -f /tmp/caddy.pid ] && kill $(cat /tmp/caddy.pid) 2>/dev/null || true
 
   harbor-image-x86_64-push:
     if: github.event_name == 'push'
@@ -101,8 +147,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
@@ -110,10 +154,10 @@ jobs:
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
-      - name: Bazel Push
+      - name: Build and push
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_amd64_push -- \
-            --repository=${{ vars.HARBOR_HOST }}/library/jaydanhoward
+          docker build -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64" .
+          docker push "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64"
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [clippy, security-audit, integration-test]
@@ -123,8 +167,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
@@ -132,10 +174,10 @@ jobs:
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
-      - name: Bazel Push
+      - name: Build and push
         run: |
-          bazel --bazelrc=.bazelrc.ci run jaydanhoward_image_arm64_push -- \
-            --repository=${{ vars.HARBOR_HOST }}/library/jaydanhoward
+          docker build -f foster-server/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64" .
+          docker push "${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64"
   security-audit-image-push:
     if: github.event_name == 'push'
     name: Push Security Audit Image
@@ -145,8 +187,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
       - name: Login to Harbor
         run: |
           mkdir -p ~/.docker
@@ -154,10 +194,12 @@ jobs:
             "${{ vars.HARBOR_HOST }}" \
             "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
             > ~/.docker/config.json
-      - name: Bazel Push
+      - name: Build and push
+        # amd64 only — the real CronJob (homelab/service/security-audit.yaml)
+        # pins nodeSelector kubernetes.io/arch: amd64.
         run: |
-          bazel --bazelrc=.bazelrc.ci run security_audit_image_push -- \
-            --repository=${{ vars.HARBOR_HOST }}/library/security-audit
+          docker build -f security-audit/Dockerfile -t "${{ vars.HARBOR_HOST }}/library/security-audit:latest" .
+          docker push "${{ vars.HARBOR_HOST }}/library/security-audit:latest"
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
