@@ -65,8 +65,14 @@ pub async fn upload_lighthouse_report(headers: HeaderMap, mut multipart: Multipa
         }
     }
 
-    let static_dir = std::env::var("STATIC_DIR")
-        .unwrap_or_else(|_| concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string());
+    // Same runtime-path fallback as main.rs's static_dir: the compile-time
+    // CARGO_MANIFEST_DIR is the Docker builder stage's path, which doesn't
+    // exist in the final image — only /app/static does.
+    let static_dir = if std::path::Path::new("/app/static").exists() {
+        "/app/static".to_string()
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
+    };
     let file_path = format!("{static_dir}/lighthouse.html");
 
     let mut file = match std::fs::OpenOptions::new().create(true).truncate(true).write(true).open(&file_path) {

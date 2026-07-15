@@ -272,7 +272,19 @@ async fn main() {
     } else {
         concat!(env!("CARGO_MANIFEST_DIR"), "/../../foster/pkg").to_string()
     };
-    let static_dir = concat!(env!("CARGO_MANIFEST_DIR"), "/static");
+    // The compile-time CARGO_MANIFEST_DIR baked in by concat! is the
+    // Docker builder stage's path (/build), which doesn't exist in the
+    // final distroless runtime image — only /app/static does (see
+    // Dockerfile's final COPY). Same fallback shape as pkg_dir above; a
+    // real deploy silently 404s on every JS asset without this (only
+    // caught by an actual in-cluster deploy, not local `cargo run`, since
+    // CARGO_MANIFEST_DIR happens to still be a valid path there).
+    let static_dir = "/app/static";
+    let static_dir = if std::path::Path::new(static_dir).exists() {
+        static_dir.to_string()
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
+    };
 
     let http_client = reqwest::Client::new();
     let world_map_svg = std::sync::Arc::new(visitors::fetch_world_map_svg(&http_client).await);
