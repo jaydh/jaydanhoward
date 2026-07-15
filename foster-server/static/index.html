@@ -116,6 +116,15 @@
     }
     .lightbox-controls button:hover { background: rgba(255,255,255,0.2); }
     .photo-empty { color: var(--text-light); font-size: 0.85rem; }
+    .lh-gate {
+      min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem;
+      display: flex; align-items: center; justify-content: center; background: var(--surface);
+    }
+    .lh-gate button {
+      background: var(--accent); color: #fff; border: none; border-radius: 0.5rem;
+      padding: 0.6rem 1.25rem; cursor: pointer; font: inherit; font-weight: 600;
+    }
+    .lh-iframe { width: 100%; min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem; }
   </style>
 </head>
 <body>
@@ -130,6 +139,7 @@
       <a href="#life" data-spy="life">Game of Life</a>
       <a href="#path" data-spy="path">Pathfinding</a>
       <a href="#photography" data-spy="photography">Photography</a>
+      <a href="#lighthouse" data-spy="lighthouse">Lighthouse</a>
 
       <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
         <span fx-show="light">&#9789;</span>
@@ -260,6 +270,23 @@
         </div>
       </div>
     </div><!-- /fx-machine=photography -->
+  </main>
+
+  <main id="lighthouse">
+    <h1>Lighthouse</h1>
+    <p>
+      Here is a programmatically generated lighthouse report
+      <a href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">for every deploy</a>
+      that gets kicked off as part of a k8s job for every new deploy of this site.
+    </p>
+    <div fx-machine="lighthouse">
+      <div fx-show="hidden" class="lh-gate">
+        <button fx-on="click->load_report">Load Report</button>
+      </div>
+      <div fx-show="loaded">
+        <iframe src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
+      </div>
+    </div><!-- /fx-machine=lighthouse -->
   </main>
 
   <footer>

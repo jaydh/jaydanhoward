@@ -10,7 +10,7 @@ path = "src/main.rs"
 [dependencies]
 foster-core = { git = "https://github.com/jaydh/foster", rev = "46109a8" }
 foster-server = { git = "https://github.com/jaydh/foster", rev = "46109a8" }
-axum = "0.7"
+axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.5", features = ["fs", "compression-full"] }
 serde = { version = "1", features = ["derive"] }
@@ -19,3 +19,5 @@ sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chron
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 rustls = "0.23"
+base64 = "0.22"
+thiserror = "1"

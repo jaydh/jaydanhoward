@@ -5,11 +5,12 @@
 //! (foster/examples/jaydanhoward), now pointed at the real production
 //! schema (migrations/ here are byte-identical copies of the real site's).
 
+mod lighthouse;
 mod photography;
 mod request_trace;
 mod visitors;
 
-use axum::routing::get;
+use axum::routing::{get, post};
 use axum::{http::StatusCode, Router};
 use foster_core::MachineBuilder;
 use std::collections::HashMap;
@@ -147,6 +148,18 @@ async fn main() {
             .build()
     };
 
+    // Lighthouse "Load Report" gate — matches the real
+    // src/components/dev.rs::Lighthouse component's lazy-iframe UX exactly
+    // (a button that reveals the iframe on click, nothing more). The report
+    // content itself comes from an external CI job POSTing to
+    // /api/lighthouse (src/lighthouse.rs, real Basic-Auth-protected upload
+    // endpoint ported verbatim from routes/lighthouse/post.rs) — not a live
+    // self-audit.
+    let lighthouse_machine = MachineBuilder::new("lighthouse", "hidden", serde_json::json!({}))
+        .state("loaded")
+        .pass("hidden", "load_report", "loaded")
+        .build();
+
     let mut machines = HashMap::new();
     machines.insert("theme".to_string(), theme);
     machines.insert("nav".to_string(), nav);
@@ -154,6 +167,7 @@ async fn main() {
     machines.insert("pathfinding".to_string(), pathfinding);
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
+    machines.insert("lighthouse".to_string(), lighthouse_machine);
 
     let pkg_dir = "/app/pkg";
     let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
@@ -188,6 +202,7 @@ async fn main() {
     let app = foster_server::router(machines)
         .merge(trace_router)
         .merge(world_map_router)
+        .route("/api/lighthouse", post(lighthouse::upload_lighthouse_report))
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))
         .fallback_service(ServeDir::new(static_dir))
