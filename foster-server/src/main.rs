@@ -13,13 +13,17 @@ mod prometheus_client;
 mod request_trace;
 mod satellites;
 mod security_audit;
+mod site_middleware;
 mod visitors;
 
 use axum::routing::{get, post};
 use axum::{http::StatusCode, Router};
 use foster_core::MachineBuilder;
+use site_middleware::RateLimiter;
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::time::Duration;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 
 async fn health_check() -> StatusCode {
@@ -304,15 +308,37 @@ async fn main() {
         )
     };
 
+    // Rate limiter for the two Basic-Auth upload endpoints: 5 requests per
+    // minute each, same as the real site's lighthouse-only limiter (now
+    // shared across both upload routes rather than duplicated).
+    let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
+    let lighthouse_limiter = auth_rate_limiter.clone();
+    let security_audit_limiter = auth_rate_limiter.clone();
+
     let app = foster_server::router(machines)
         .merge(trace_router)
         .merge(world_map_router)
         .merge(conjunction_router)
         .merge(satellites_router)
-        .route("/api/lighthouse", post(lighthouse::upload_lighthouse_report))
+        .route(
+            "/api/lighthouse",
+            post(lighthouse::upload_lighthouse_report).layer(axum::middleware::from_fn(move |req, next| {
+                let limiter = lighthouse_limiter.clone();
+                async move { limiter.check_middleware(req, next).await }
+            })),
+        )
         .route(
             "/api/security-audit",
-            post(security_audit::upload_security_audit).with_state(pg_pool.clone()),
+            post(security_audit::upload_security_audit)
+                .layer(axum::middleware::from_fn(move |req, next| {
+                    let limiter = security_audit_limiter.clone();
+                    async move { limiter.check_middleware(req, next).await }
+                }))
+                .with_state(pg_pool.clone()),
+        )
+        .route(
+            "/api/audit/claude",
+            post(cluster::ingest_claude_audit).with_state(pg_pool.clone()),
         )
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))
@@ -320,7 +346,10 @@ async fn main() {
         .layer(axum::middleware::from_fn_with_state(
             pg_pool,
             visitors::visitor_logger,
-        ));
+        ))
+        .layer(axum::middleware::from_fn(site_middleware::cache_control))
+        .layer(axum::middleware::from_fn(site_middleware::security_headers))
+        .layer(CompressionLayer::new());
 
     let addr: SocketAddr = "0.0.0.0:8000".parse().unwrap();
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

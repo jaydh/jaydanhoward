@@ -15,14 +15,56 @@
 //! real Prometheus happens in milestone 8's in-cluster staging step.
 
 use crate::prometheus_client::{empty_data, parse_prometheus_value, query_prometheus, query_prometheus_range};
+use axum::extract::State;
+use axum::http::StatusCode;
 use k8s_openapi::api::batch::v1::Job;
 use kube::api::{Api, ListParams};
 use kube::core::DynamicObject;
 use kube::discovery::ApiResource;
 use kube::Client;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
+
+/// Real ingest endpoint for external Claude usage tracking, ported
+/// verbatim from `src/routes/audit.rs` — no auth (matches production; this
+/// is a same-network/internal reporting channel, not user-facing).
+#[derive(Deserialize)]
+pub struct ClaudeAuditPayload {
+    pub context: String,
+    pub model: String,
+    pub prompt: String,
+    pub response: Option<String>,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
+    pub error: Option<String>,
+}
+
+pub async fn ingest_claude_audit(
+    State(pool): State<PgPool>,
+    axum::Json(payload): axum::Json<ClaudeAuditPayload>,
+) -> StatusCode {
+    let result = sqlx::query(
+        "INSERT INTO claude_audit_log \
+         (context, model, prompt, response, input_tokens, output_tokens, error) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(&payload.context)
+    .bind(&payload.model)
+    .bind(&payload.prompt)
+    .bind(&payload.response)
+    .bind(payload.input_tokens)
+    .bind(payload.output_tokens)
+    .bind(&payload.error)
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(_) => StatusCode::OK,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
 
 // ── Cluster metrics (CPU/mem/disk/pod/node + storage) ──────────────────────
 
