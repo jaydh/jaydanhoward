@@ -169,7 +169,7 @@ jobs:
         # itself without a daemon. buildah does the same daemonless build
         # +push from a plain Dockerfile.
         run: |
-          apt-get update && apt-get install -y --no-install-recommends buildah
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
           mkdir -p ~/.config/containers
@@ -192,7 +192,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install buildah
         run: |
-          apt-get update && apt-get install -y --no-install-recommends buildah
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
           mkdir -p ~/.config/containers
@@ -215,7 +215,7 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install buildah
         run: |
-          apt-get update && apt-get install -y --no-install-recommends buildah
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
           mkdir -p ~/.config/containers
@@ -238,7 +238,7 @@ jobs:
     steps:
       - name: Install buildah
         run: |
-          apt-get update && apt-get install -y --no-install-recommends buildah
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends buildah
       - name: Login to Harbor
         run: |
           mkdir -p ~/.config/containers
