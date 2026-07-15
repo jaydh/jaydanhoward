@@ -11,6 +11,7 @@ mod lighthouse;
 mod photography;
 mod prometheus_client;
 mod request_trace;
+mod satellites;
 mod visitors;
 
 use axum::routing::{get, post};
@@ -201,6 +202,65 @@ async fn main() {
         .build();
     machines.insert("conjunction".to_string(), conjunction_machine);
 
+    // Real 3D satellite tracking — see satellites.rs for the full rationale.
+    // Foster only owns the run/pause + playback-speed labels (small,
+    // discrete state); the background propagation loop and the WebGL2
+    // rendering pipeline live outside Foster entirely (a shared tokio task
+    // and static/satellites.js respectively), same shape as conjunction.
+    let satellites_runtime = std::sync::Arc::new(satellites::SatellitesRuntime::new());
+    satellites::spawn_background_loop(satellites_runtime.clone());
+    let satellites_machine = {
+        let running_for_pause = satellites_runtime.running.clone();
+        let running_for_resume = satellites_runtime.running.clone();
+        let steps_up_running = satellites_runtime.steps_per_tick.clone();
+        let steps_up_paused = satellites_runtime.steps_per_tick.clone();
+        let steps_down_running = satellites_runtime.steps_per_tick.clone();
+        let steps_down_paused = satellites_runtime.steps_per_tick.clone();
+
+        fn steps_ctx(steps: u32) -> serde_json::Value {
+            serde_json::json!({ "steps_per_tick": steps })
+        }
+
+        MachineBuilder::new(
+            "satellites",
+            "running",
+            serde_json::json!({ "steps_per_tick": 12 }),
+        )
+        .state("paused")
+        .on("running", "toggle_run", "paused", move |ctx, _| {
+            running_for_pause.store(false, std::sync::atomic::Ordering::Relaxed);
+            Ok(ctx)
+        })
+        .on("paused", "toggle_run", "running", move |ctx, _| {
+            running_for_resume.store(true, std::sync::atomic::Ordering::Relaxed);
+            Ok(ctx)
+        })
+        .on("running", "speed_up", "running", move |_ctx, _| {
+            let next = (steps_up_running.load(std::sync::atomic::Ordering::Relaxed) * 2).min(96);
+            steps_up_running.store(next, std::sync::atomic::Ordering::Relaxed);
+            Ok(steps_ctx(next))
+        })
+        .on("paused", "speed_up", "paused", move |_ctx, _| {
+            let next = (steps_up_paused.load(std::sync::atomic::Ordering::Relaxed) * 2).min(96);
+            steps_up_paused.store(next, std::sync::atomic::Ordering::Relaxed);
+            Ok(steps_ctx(next))
+        })
+        .on("running", "speed_down", "running", move |_ctx, _| {
+            let cur = steps_down_running.load(std::sync::atomic::Ordering::Relaxed);
+            let next = (cur / 2).max(1);
+            steps_down_running.store(next, std::sync::atomic::Ordering::Relaxed);
+            Ok(steps_ctx(next))
+        })
+        .on("paused", "speed_down", "paused", move |_ctx, _| {
+            let cur = steps_down_paused.load(std::sync::atomic::Ordering::Relaxed);
+            let next = (cur / 2).max(1);
+            steps_down_paused.store(next, std::sync::atomic::Ordering::Relaxed);
+            Ok(steps_ctx(next))
+        })
+        .build()
+    };
+    machines.insert("satellites".to_string(), satellites_machine);
+
     let pkg_dir = "/app/pkg";
     let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
         pkg_dir.to_string()
@@ -223,6 +283,10 @@ async fn main() {
             pool: pg_pool.clone(),
         });
 
+    let satellites_router = Router::new()
+        .route("/api/satellites", get(satellites::get_positions))
+        .with_state(satellites_runtime);
+
     let world_map_router = {
         let svg = world_map_svg.clone();
         Router::new().route(
@@ -243,6 +307,7 @@ async fn main() {
         .merge(trace_router)
         .merge(world_map_router)
         .merge(conjunction_router)
+        .merge(satellites_router)
         .route("/api/lighthouse", post(lighthouse::upload_lighthouse_report))
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))

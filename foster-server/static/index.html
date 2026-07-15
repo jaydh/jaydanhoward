@@ -148,6 +148,36 @@
     #conjunction-start:hover { border-color: var(--accent); color: var(--accent); }
     #conjunction-events { margin-top: 0.75rem; padding-left: 1.25rem; }
     #conjunction-events li { color: var(--text-light); font-size: 0.9rem; margin-bottom: 0.35rem; }
+
+    .sat-box { display: flex; flex-direction: column; gap: 0.75rem; }
+    .sat-canvas-wrap { position: relative; width: 100%; background: linear-gradient(to bottom right, #111827, #000); border-radius: 0.75rem; overflow: hidden; }
+    #sat-canvas { display: block; width: 100%; height: 600px; cursor: grab; }
+    #sat-canvas:active { cursor: grabbing; }
+    .sat-controls { position: absolute; display: flex; gap: 0.5rem; }
+    .sat-controls button {
+      background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 0.25rem;
+      padding: 0.4rem 0.7rem; font: inherit; cursor: pointer; user-select: none;
+    }
+    .sat-controls button:hover { background: rgba(0,0,0,0.9); }
+    .sat-controls-zoom { top: 1rem; right: 1rem; flex-direction: column; }
+    .sat-controls-preset { top: 1rem; left: 1rem; flex-direction: column; }
+    .sat-controls-preset button { font-size: 0.85rem; padding: 0.3rem 0.6rem; }
+    .sat-hud {
+      position: absolute; bottom: 1rem; left: 1rem; background: rgba(0,0,0,0.7); color: #fff;
+      padding: 0.6rem 0.8rem; border-radius: 0.375rem; font-size: 0.85rem; display: flex; flex-direction: column; gap: 0.4rem;
+    }
+    .sat-hud-time { color: #d1d5db; font-size: 0.8rem; }
+    .sat-hud-speed { display: flex; align-items: center; gap: 0.4rem; color: #d1d5db; }
+    .sat-hud-speed button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 0.25rem; padding: 0.1rem 0.5rem; cursor: pointer; font: inherit; }
+    .sat-hud button { background: rgba(255,255,255,0.15); border: none; color: #fff; border-radius: 0.25rem; padding: 0.25rem 0.6rem; cursor: pointer; font: inherit; }
+    .sat-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.85rem; }
+    .sat-filter-label { color: var(--text-light); }
+    .sat-filter {
+      display: flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.6rem; border-radius: 0.375rem;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; font: inherit;
+    }
+    .sat-filter::before { content: ''; width: 0.6rem; height: 0.6rem; border-radius: 50%; background: var(--dot); flex-shrink: 0; }
+    .sat-filter.off { opacity: 0.4; text-decoration: line-through; }
   </style>
 </head>
 <body>
@@ -165,6 +195,7 @@
       <a href="#lighthouse" data-spy="lighthouse">Lighthouse</a>
       <a href="#cluster" data-spy="cluster">Cluster</a>
       <a href="#conjunction" data-spy="conjunction">Conjunctions</a>
+      <a href="#satellites" data-spy="satellites">Satellites</a>
 
       <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
         <span fx-show="light">&#9789;</span>
@@ -441,6 +472,61 @@
     </div><!-- /fx-machine=conjunction -->
   </main>
 
+  <main id="satellites">
+    <h1>Satellites</h1>
+    <p>
+      Real 3D orbital mechanics: the actual CelesTrak "active" TLE group
+      (~16,000 objects), real <code>sgp4</code> propagation over a real
+      288-step/5-minute rolling 24h window — ported from the real
+      <code>satellite_calculations.rs</code>/<code>satellite_renderer.rs</code>/
+      <code>satellite_tracker.rs</code>. The WebGL2 shader/matrix/camera
+      pipeline is a line-for-line port. Propagation itself runs server-side
+      once per tick (shared by every visitor) instead of in-browser WASM —
+      see <code>src/satellites.rs</code> for why — and the client
+      interpolates smoothly between real snapshots.
+    </p>
+    <div fx-machine="satellites" class="sat-box">
+      <div class="sat-canvas-wrap">
+        <canvas id="sat-canvas" width="1200" height="600">Your browser does not support canvas</canvas>
+        <div class="sat-controls sat-controls-zoom">
+          <button id="sat-zoom-in">+</button>
+          <button id="sat-zoom-out">&minus;</button>
+        </div>
+        <div class="sat-controls sat-controls-preset">
+          <button data-preset="equator">Equator</button>
+          <button data-preset="north">North</button>
+          <button data-preset="south">South</button>
+          <button data-preset="oblique">Oblique</button>
+        </div>
+        <div class="sat-hud">
+          <div><span id="sat-count">0</span> satellites tracked</div>
+          <div class="sat-hud-time">Time: <span id="sat-time">--:--</span> UTC</div>
+          <div class="sat-hud-speed">
+            <span>Speed:</span>
+            <button fx-on="click->speed_down">&minus;</button>
+            <span id="sat-speed-label"></span>
+            <span id="sat-steps-raw" fx-text="steps_per_tick" style="display:none"></span>
+            <button fx-on="click->speed_up">+</button>
+          </div>
+          <button fx-on="click->toggle_run">
+            <span fx-show="running">Pause</span>
+            <span fx-show="paused">Run</span>
+          </button>
+        </div>
+      </div>
+      <div class="sat-filters">
+        <span class="sat-filter-label">Filter:</span>
+        <button class="sat-filter" data-band="0" style="--dot:#4dccff">LEO &lt;600km</button>
+        <button class="sat-filter" data-band="1" style="--dot:#80ff80">LEO 600-2000km</button>
+        <button class="sat-filter" data-band="2" style="--dot:#ffcc33">MEO 2-20Mm</button>
+        <button class="sat-filter" data-band="3" style="--dot:#ff8033">MEO 20-35Mm</button>
+        <button class="sat-filter" data-band="4" style="--dot:#ff4d4d">GEO 35786km</button>
+        <button class="sat-filter" data-band="5" style="--dot:#cc99ff">HEO</button>
+        <button class="sat-filter" data-band="astranis" style="--dot:#00dcb4">Astranis</button>
+      </div>
+    </div><!-- /fx-machine=satellites -->
+  </main>
+
   <footer>
     &copy; Jay Dan Howard
   </footer>
@@ -455,6 +541,7 @@
   import { initVisitors } from '/visitors.js';
   import { initCluster } from '/cluster.js';
   import { initConjunction } from '/conjunction.js';
+  import { initSatellites } from '/satellites.js';
   import { initScrollSpy } from '/scrollspy.js';
   init();
   initLife();
@@ -464,6 +551,7 @@
   initVisitors();
   initCluster();
   initConjunction();
+  initSatellites();
   initScrollSpy();
 </script>
 </body>
