@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jay Dan Howard</title>
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f7f7f8;
+      --surface: #ffffff;
+      --border: #e5e5e8;
+      --text: #1e1e1e;
+      --text-light: #555555;
+      --accent: #3b82f6;
+    }
+
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; }
+    .page { background: var(--bg); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    [fx-show] { display: none; }
+
+    .theme-dark {
+      --bg: #0b0e14; --surface: #0f1420; --border: #1f2637;
+      --text: #e5e7eb; --text-light: #9aa3b2; --accent: #60a5fa;
+    }
+
+    nav {
+      position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 2rem;
+      padding: 1.25rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
+    .nav-links { display: flex; margin-left: auto; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
+    .nav-links a { padding: 0.5rem 1rem; color: var(--text); position: relative; }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-links a.active { color: var(--accent); font-weight: 600; }
+    .nav-links a.active::after {
+      content: ""; position: absolute; left: 1rem; right: 1rem; bottom: 0; height: 2px; background: var(--accent);
+    }
+    button.icon-btn { background: none; border: none; cursor: pointer; padding: 0.5rem; color: var(--text); font-size: 1.1rem; }
+    button.icon-btn:hover { color: var(--accent); }
+    .contact-wrap { position: relative; }
+    .contact-menu {
+      position: absolute; top: 100%; right: 0; margin-top: 0.5rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 0.5rem; min-width: 160px; overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    }
+    .contact-menu a { display: block; padding: 0.75rem 1rem; color: var(--text); }
+    .contact-menu a:hover { background: var(--border); text-decoration: none; }
+
+    main { max-width: 860px; margin: 0 auto; padding: 4rem 2rem; min-height: 60vh; }
+    h1 { font-size: 1.75rem; margin-bottom: 1.5rem; }
+    p { color: var(--text-light); margin-bottom: 1rem; }
+
+    footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--text-light); font-size: 0.85rem; }
+
+    #life-canvas, #path-canvas {
+      display: block; width: 100%; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface);
+    }
+    #life-canvas { max-width: 720px; aspect-ratio: 96 / 54; }
+    #path-canvas { max-width: 800px; aspect-ratio: 800 / 480; }
+    .life-controls { display: flex; gap: 0.75rem; margin: 1rem 0; flex-wrap: wrap; }
+    .life-controls button {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit;
+    }
+    .life-controls button:hover { border-color: var(--accent); color: var(--accent); }
+
+    #request-trace-container { display: flex; flex-direction: column; align-items: center; max-width: 32rem; margin: 0 auto; }
+    .trace-loading, .trace-error { color: var(--text-light); font-size: 0.85rem; padding: 2rem 0; font-family: ui-monospace, monospace; }
+    .trace-card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
+    .trace-label { font-size: 0.7rem; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.6rem; }
+    .trace-rows { display: flex; flex-direction: column; gap: 0.4rem; }
+    .trace-row { display: flex; gap: 0.75rem; font-size: 0.75rem; font-family: ui-monospace, monospace; }
+    .trace-key { color: var(--text-light); width: 5rem; flex-shrink: 0; }
+    .trace-val { color: var(--text); word-break: break-all; }
+    .trace-hop { display: flex; flex-direction: column; align-items: center; padding: 0.15rem 0; }
+    .trace-hop-line { width: 1px; height: 1rem; background: var(--border); }
+    .trace-hop-label { font-size: 0.6rem; color: var(--text-light); font-family: ui-monospace, monospace; padding: 0.1rem 0.5rem; background: var(--bg); border: 1px solid var(--border); border-radius: 0.25rem; }
+    #request-trace-refresh {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem; margin-bottom: 1rem;
+    }
+    #request-trace-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+    .cluster-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; background: var(--surface); max-height: 22rem; overflow-y: auto; }
+    .cluster-box h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 0.6rem; }
+    .visitor-stats { display: flex; gap: 1.5rem; margin: 1rem 0; flex-wrap: wrap; }
+    .visitor-stat { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem 1.25rem; background: var(--surface); text-align: center; }
+    .visitor-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+    .visitor-stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); }
+    .visit-row { display: flex; gap: 0.75rem; font-size: 0.8rem; font-family: ui-monospace, monospace; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+    .visit-row:last-child { border-bottom: none; }
+    .visit-path { width: 8rem; flex-shrink: 0; }
+    .visit-when { color: var(--text-light); margin-left: auto; }
+    #visitors-refresh {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem;
+    }
+    #visitors-refresh:hover { border-color: var(--accent); color: var(--accent); }
+    .visitor-map { position: relative; width: 100%; max-width: 600px; margin: 1rem 0; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; background: var(--surface); }
+    .visitor-map img { display: block; width: 100%; color: var(--text-light); }
+    .visitor-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 4px var(--accent); }
+
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-top: 1rem; }
+    .photo-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0.375rem; cursor: pointer; display: block; background: var(--border); }
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+    .lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 0.5rem; }
+    .lightbox-controls { display: flex; gap: 1rem; }
+    .lightbox-controls button {
+      background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit;
+    }
+    .lightbox-controls button:hover { background: rgba(255,255,255,0.2); }
+    .photo-empty { color: var(--text-light); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+
+<div fx-machine="theme" class="page" fx-class="dark:theme-dark">
+  <nav>
+    <a href="#about" class="logo">Jay Dan Howard</a>
+    <div class="nav-links" id="scroll-spy-links">
+      <a href="#about" data-spy="about">About</a>
+      <a href="#trace" data-spy="trace">Request Trace</a>
+      <a href="#visitors" data-spy="visitors">Visitors</a>
+      <a href="#life" data-spy="life">Game of Life</a>
+      <a href="#path" data-spy="path">Pathfinding</a>
+      <a href="#photography" data-spy="photography">Photography</a>
+
+      <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
+        <span fx-show="light">&#9789;</span>
+        <span fx-show="dark">&#9788;</span>
+      </button>
+
+      <div fx-machine="nav" class="contact-wrap">
+        <button class="icon-btn" fx-on="click->toggle_contact">Contact &#9662;</button>
+        <div class="contact-menu" fx-show="open">
+          <a href="https://github.com/jaydh" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="https://www.linkedin.com/in/jaydanhoward/" target="_blank" rel="noreferrer">LinkedIn</a>
+          <a href="mailto:hello@jaydanhoward.com">Email</a>
+        </div>
+      </div><!-- /fx-machine=nav -->
+    </div>
+  </nav>
+
+  <main id="about">
+    <h1>About</h1>
+    <p>
+      You're on some old computers and Raspberry Pis in my closet. This site runs on a self-hosted
+      <a href="https://kubernetes.io/" target="_blank" rel="noreferrer">Kubernetes</a> cluster —
+      autoscaling <a href="https://github.com/actions/actions-runner-controller" target="_blank" rel="noreferrer">GitHub Actions runners</a>
+      (x86 + arm), in-cluster <a href="https://goharbor.io/" target="_blank" rel="noreferrer">Harbor</a> registry,
+      <a href="https://rook.io/" target="_blank" rel="noreferrer">Rook-Ceph</a> storage, built with Rust
+      (<a href="https://github.com/jaydh/foster" target="_blank" rel="noreferrer">Foster</a>), exposed via
+      <a href="https://www.cloudflare.com/products/tunnel/" target="_blank" rel="noreferrer">Cloudflare Tunnels</a>.
+    </p>
+    <p>
+      Software engineer at <a href="https://www.astranis.com/" target="_blank" rel="noreferrer">Astranis</a>
+      on the network and payload software team — tools to operate and monitor micro GEO satellites.
+    </p>
+  </main>
+
+  <main id="trace">
+    <h1>Request Trace</h1>
+    <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
+    <button id="request-trace-refresh">&#8635; Refresh</button>
+    <div id="request-trace-container"></div>
+  </main>
+
+  <main id="visitors">
+    <h1>Visitors</h1>
+    <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>
+    <div fx-machine="visitors">
+      <button id="visitors-refresh" fx-on="click->refresh">&#8635; Refresh</button>
+      <div class="visitor-stats">
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="total_visits">0</div>
+          <div class="visitor-stat-label">total visits (30d)</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="unique_ips">0</div>
+          <div class="visitor-stat-label">unique IPs</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="unique_countries">0</div>
+          <div class="visitor-stat-label">countries</div>
+        </div>
+      </div>
+      <div class="visitor-map">
+        <img src="/world-map.svg" alt="world map" />
+        <div id="visitor-map-points"></div>
+      </div>
+      <div class="cluster-box" style="max-width: 32rem;">
+        <h3>Recent visits</h3>
+        <div fx-for="recent_visits">
+          <div class="visit-row">
+            <span class="visit-path" fx-field="path"></span>
+            <span fx-field="location"></span>
+            <span class="visit-when" fx-field="minutes_ago"></span>
+          </div>
+        </div>
+      </div>
+      <div style="display:none"><div fx-for="points"><span></span></div></div>
+    </div><!-- /fx-machine=visitors -->
+  </main>
+
+  <main id="life">
+    <h1>Conway's Game of Life</h1>
+    <p>Plain <code>requestAnimationFrame</code> canvas; Foster owns run/pause/reset.</p>
+    <div fx-machine="life">
+      <canvas id="life-canvas" width="480" height="270"></canvas>
+      <div class="life-controls">
+        <button fx-on="click->toggle_run">
+          <span fx-show="paused">&#9654; Run</span>
+          <span fx-show="running">&#10074;&#10074; Pause</span>
+        </button>
+        <button fx-on="click->reset">&#8635; Reset</button>
+      </div>
+      <span id="life-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
+    </div><!-- /fx-machine=life -->
+  </main>
+
+  <main id="path">
+    <h1>Pathfinding</h1>
+    <p>BFS / A* over a random maze, animated step-by-step.</p>
+    <div fx-machine="pathfinding">
+      <canvas id="path-canvas" width="800" height="480"></canvas>
+      <div class="life-controls">
+        <button fx-on="click->toggle_run">
+          <span fx-show="paused">&#9654; Run</span>
+          <span fx-show="running">&#10074;&#10074; Pause</span>
+        </button>
+        <button fx-on="click->select_bfs">BFS</button>
+        <button fx-on="click->select_astar">A*</button>
+        <button fx-on="click->reset">&#8635; New maze</button>
+      </div>
+      <span id="pathfinding-algorithm" fx-text="algorithm" style="display:none">bfs</span>
+      <span id="pathfinding-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
+    </div><!-- /fx-machine=pathfinding -->
+  </main>
+
+  <main id="photography">
+    <h1>Photography</h1>
+    <p>Real photos served straight from the CDN.</p>
+    <div fx-machine="photography">
+      <div class="photo-grid" fx-for="photos">
+        <img class="photo-thumb" fx-on="click->view" alt="" />
+      </div>
+      <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
+      <div class="lightbox" fx-if='{"field":"viewing_index","op":"gte","value":0}'>
+        <img fx-bind-attr="src=ctx:viewing_url" alt="" />
+        <div class="lightbox-controls">
+          <button fx-on="click->prev">&#8592; Prev</button>
+          <button fx-on="click->close">Close</button>
+          <button fx-on="click->next">Next &#8594;</button>
+        </div>
+      </div>
+    </div><!-- /fx-machine=photography -->
+  </main>
+
+  <footer>
+    &copy; Jay Dan Howard
+  </footer>
+</div><!-- /fx-machine=theme -->
+
+<script type="module">
+  import init from '/pkg/foster_client.js';
+  import { initLife } from '/life.js';
+  import { initPathfinding } from '/pathfinding.js';
+  import { initRequestTrace } from '/request_trace.js';
+  import { initPhotography } from '/photography.js';
+  import { initVisitors } from '/visitors.js';
+  import { initScrollSpy } from '/scrollspy.js';
+  init();
+  initLife();
+  initPathfinding();
+  initRequestTrace();
+  initPhotography();
+  initVisitors();
+  initScrollSpy();
+</script>
+</body>
+</html>
