@@ -10,6 +10,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # The repo root still has the old Bazel-era rust-toolchain.toml (pinned
+  # nightly, too old for cargo-audit's rustc >=1.88 requirement) alongside
+  # foster-server's own (stable). rustup resolves whichever toolchain file
+  # it finds walking up from cwd, which is fragile depending on each step's
+  # working-directory; pinning this everywhere sidesteps it entirely.
+  RUSTUP_TOOLCHAIN: stable
 jobs:
   security-audit:
     name: Security Audit
@@ -35,6 +41,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install clippy component
+        run: rustup component add clippy
       - name: Clippy
         working-directory: foster-server
         run: cargo clippy --all-targets
