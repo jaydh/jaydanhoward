@@ -22,6 +22,13 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     [fx-show] { display: none; }
+    /* Same reasoning as [fx-show]: fx-if only sets display:block/none once
+       Foster's JS hydrates, so without a hidden-by-default rule any fx-if
+       element renders in its plain CSS state (visible) until then — and
+       stays that way if hydration is ever delayed or never completes. The
+       lightbox (position:fixed; inset:0) made this a full-page-blocking
+       bug in production; this covers every current and future fx-if. */
+    [fx-if] { display: none; }
 
     .theme-dark {
       --bg: #0b0e14; --surface: #0f1420; --border: #1f2637;
@@ -107,7 +114,7 @@
 
     .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-top: 1rem; }
     .photo-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0.375rem; cursor: pointer; display: block; background: var(--border); }
-    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
     .lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 0.5rem; }
     .lightbox-controls { display: flex; gap: 1rem; }
     .lightbox-controls button {
@@ -115,7 +122,7 @@
       border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit;
     }
     .lightbox-controls button:hover { background: rgba(255,255,255,0.2); }
-    .photo-empty { color: var(--text-light); font-size: 0.85rem; }
+    .photo-empty { color: var(--text-light); font-size: 0.85rem; display: none; }
     .lh-gate {
       min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem;
       display: flex; align-items: center; justify-content: center; background: var(--surface);
