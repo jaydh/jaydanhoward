@@ -5,8 +5,10 @@
 //! (foster/examples/jaydanhoward), now pointed at the real production
 //! schema (migrations/ here are byte-identical copies of the real site's).
 
+mod cluster;
 mod lighthouse;
 mod photography;
+mod prometheus_client;
 mod request_trace;
 mod visitors;
 
@@ -160,6 +162,21 @@ async fn main() {
         .pass("hidden", "load_report", "loaded")
         .build();
 
+    // Full Prometheus-backed cluster panel (10+ real panels — see
+    // cluster.rs). PROMETHEUS_URL is unset here (unreachable from this dev
+    // laptop), so every metric gracefully degrades to zero locally; live
+    // verification happens in milestone 8's in-cluster staging step. GitOps
+    // + backup Job status (kube) and network insights/spike config/Claude
+    // audit log (Postgres) are all real right now, same as before.
+    let cluster_machine = {
+        let pool_for_reducer = pg_pool.clone();
+        MachineBuilder::new("cluster", "loaded", cluster::fetch_cluster_data(&pg_pool))
+            .on("loaded", "refresh", "loaded", move |_ctx, _payload| {
+                Ok(cluster::fetch_cluster_data(&pool_for_reducer))
+            })
+            .build()
+    };
+
     let mut machines = HashMap::new();
     machines.insert("theme".to_string(), theme);
     machines.insert("nav".to_string(), nav);
@@ -168,6 +185,7 @@ async fn main() {
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
     machines.insert("lighthouse".to_string(), lighthouse_machine);
+    machines.insert("cluster".to_string(), cluster_machine);
 
     let pkg_dir = "/app/pkg";
     let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
