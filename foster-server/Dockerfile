@@ -26,6 +26,7 @@ RUN cd foster-src/crates/foster-client \
 COPY foster-server/Cargo.toml Cargo.toml
 COPY foster-server/src src
 COPY foster-server/static static
+COPY foster-server/migrations migrations
 RUN cargo build --release
 
 FROM gcr.io/distroless/cc-debian13
