@@ -11,11 +11,13 @@ import urllib.request
 
 REPO = "jaydh/jaydanhoward"
 RAW = f"https://raw.githubusercontent.com/{REPO}/main"
+LOCKFILE = "foster-server/Cargo.lock"
+# RUSTSEC-2024-0436/-0370/-0384 were Leptos-toolchain-specific (tachys,
+# rstml, three-d/winit) — gone along with Leptos after the Foster
+# migration, so only the sqlx/rsa watch (still a real transitive dep)
+# remains relevant here.
 IGNORE_FLAGS = [
     "--ignore", "RUSTSEC-2023-0071",
-    "--ignore", "RUSTSEC-2024-0436",
-    "--ignore", "RUSTSEC-2024-0370",
-    "--ignore", "RUSTSEC-2024-0384",
 ]
 
 
@@ -64,15 +66,14 @@ def main():
     workdir = tempfile.mkdtemp()
     db_path = os.path.join(workdir, "advisory-db")
 
-    print(f"Fetching lock files from {REPO}...")
-    for lock in ["Cargo.server.lock", "Cargo.wasm.lock"]:
-        content = fetch_bytes(f"{RAW}/{lock}")
-        with open(os.path.join(workdir, lock), "wb") as f:
-            f.write(content)
+    print(f"Fetching {LOCKFILE} from {REPO}...")
+    content = fetch_bytes(f"{RAW}/{LOCKFILE}")
+    lock_path = os.path.join(workdir, "Cargo.lock")
+    with open(lock_path, "wb") as f:
+        f.write(content)
 
     print("Running cargo-audit...")
-    server = run_audit(cargo_audit, db_path, workdir, "Cargo.server.lock")
-    wasm = run_audit(cargo_audit, db_path, workdir, "Cargo.wasm.lock")
+    result = run_audit(cargo_audit, db_path, workdir, "Cargo.lock")
 
     print("Checking upstream versions on crates.io...")
 
@@ -88,62 +89,14 @@ def main():
         },
     ]
 
-    tachys_latest = latest_stable("tachys")
-    tachys_paste = dep_versions("tachys", tachys_latest, "paste") if tachys_latest else []
-    watches.append({
-        "crate": "tachys",
-        "advisory": "RUSTSEC-2024-0436",
-        "watching_for": "paste dep removed",
-        "latest_stable": tachys_latest,
-        "actionable": tachys_latest is not None and not tachys_paste,
-    })
-
-    threed_latest = latest_stable("three-d")
-    threed_winit = dep_versions("three-d", threed_latest, "winit") if threed_latest else []
-    winit_req = threed_winit[0] if threed_winit else None
-    actionable_winit = (
-        winit_req is not None
-        and not winit_req.startswith("^0.28")
-        and not winit_req.startswith("^0.29")
-    )
-    watches.append({
-        "crate": "three-d",
-        "advisory": "RUSTSEC-2024-0384",
-        "watching_for": "winit >=0.30 (dropped instant)",
-        "latest_stable": threed_latest,
-        "winit_req": winit_req,
-        "actionable": actionable_winit,
-    })
-
-    seen: set[str] = set()
-    vulns = []
-    for v in server.get("vulnerabilities", {}).get("list", []) + wasm.get("vulnerabilities", {}).get("list", []):
-        aid = v["advisory"]["id"]
-        if aid not in seen:
-            seen.add(aid)
-            vulns.append(v)
-
-    warn_seen: set[str] = set()
-    warns = []
-    for entries in list(server.get("warnings", {}).values()) + list(wasm.get("warnings", {}).values()):
-        for w in entries:
-            aid = w["advisory"]["id"]
-            if aid not in warn_seen:
-                warn_seen.add(aid)
-                warns.append(w)
+    vulns = result.get("vulnerabilities", {}).get("list", [])
+    warns = [w for entries in result.get("warnings", {}).values() for w in entries]
 
     report = {
         "scanned_at": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "database": server.get("database", {}),
-        "lockfile": {
-            "server_dependency_count": server.get("lockfile", {}).get("dependency-count", 0),
-            "wasm_dependency_count": wasm.get("lockfile", {}).get("dependency-count", 0),
-            "dependency-count": (
-                server.get("lockfile", {}).get("dependency-count", 0)
-                + wasm.get("lockfile", {}).get("dependency-count", 0)
-            ),
-        },
-        "settings": server.get("settings", {}),
+        "database": result.get("database", {}),
+        "lockfile": result.get("lockfile", {}),
+        "settings": result.get("settings", {}),
         "vulnerabilities": {"found": len(vulns) > 0, "count": len(vulns), "list": vulns},
         "warnings": {"unmaintained": warns},
         "upstream_watches": watches,

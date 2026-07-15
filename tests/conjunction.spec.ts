@@ -6,36 +6,37 @@ test('conjunction events do not flash after loading completes', async ({ page })
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
 
-  // Track conjunction_status responses to detect if screening ever starts.
+  // Track /api/conjunction poll responses to detect if screening ever starts.
   let screeningActive = false;
   page.on('response', async res => {
-    if (res.url().includes('conjunction_status')) {
+    if (res.url().includes('/api/conjunction')) {
       try {
         const body = await res.text();
-        if (body.includes('Running') || body.includes('Complete')) screeningActive = true;
+        if (body.includes('"running"') || body.includes('"complete"')) screeningActive = true;
       } catch {}
     }
   });
 
   await page.goto('/');
-  await page.locator('#satellites').scrollIntoViewIfNeeded();
+  await page.locator('#conjunction').scrollIntoViewIfNeeded();
+  await page.click('#conjunction-start').catch(() => {});
 
   // Give the server 15 s to start a screening. If CelesTrak is unreachable (CI with
-  // no egress to external hosts) and there is no DB, screening never starts — skip
-  // rather than fail, since there is nothing to flash-test in that case.
+  // no egress to external hosts), screening never completes — skip rather than
+  // fail, since there is nothing to flash-test in that case.
   await page.waitForTimeout(15_000);
   if (!screeningActive) {
-    test.skip(true, 'Conjunction screening did not start — CelesTrak unreachable and no DB in this environment');
+    test.skip(true, 'Conjunction screening did not start — CelesTrak unreachable in this environment');
   }
 
-  // Wait up to 30 s for the conjunction table (screening was confirmed running above).
-  const tableBody = page.locator('#satellites tbody');
-  await tableBody.waitFor({ state: 'visible', timeout: 30_000 });
+  const events = page.locator('#conjunction-events li');
+  await expect(async () => {
+    expect(await events.count()).toBeGreaterThan(0);
+  }).toPass({ timeout: 30_000 });
 
-  // Give it a couple more seconds to stabilise
   await page.waitForTimeout(2_000);
 
-  const initialRows = await tableBody.locator('tr').count();
+  const initialRows = await events.count();
   console.log(`Stable row count: ${initialRows}`);
   expect(initialRows).toBeGreaterThan(0);
 
@@ -45,7 +46,7 @@ test('conjunction events do not flash after loading completes', async ({ page })
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     await page.waitForTimeout(500);
-    const count = await tableBody.locator('tr').count();
+    const count = await events.count();
     totalSamples++;
     if (count === 0) {
       zeroCount++;
