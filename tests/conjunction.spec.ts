@@ -18,7 +18,9 @@ test('conjunction events do not flash after loading completes', async ({ page })
   });
 
   await page.goto('/');
-  await page.locator('#conjunction').scrollIntoViewIfNeeded();
+  // Conjunction screening is nested inside the Satellites section (matching
+  // the real site's src/components/app.rs layout), not its own top-level id.
+  await page.locator('[fx-machine="conjunction"]').scrollIntoViewIfNeeded();
   await page.click('#conjunction-start').catch(() => {});
 
   // Give the server 15 s to start a screening. If CelesTrak is unreachable (CI with
