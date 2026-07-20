@@ -66,37 +66,29 @@ async fn main() {
         })
         .build();
 
+    // Real site races 7 algorithms (BFS/DFS/A*/Greedy/Corner/Wall/Random
+    // Walk) simultaneously over one shared random grid — all client-side,
+    // no server data dependency (same as the real src/components/
+    // path_search.rs, which is entirely #[cfg(not(feature = "ssr"))]).
+    // Foster only owns run/pause and a reset nonce to trigger regenerating
+    // the shared grid; static/pathfinding.js owns the 7 algorithm runners,
+    // WebGL2 rendering, and zoom/pan/follow (client-only view state, same
+    // as satellites.js's camera controls).
     let pathfinding = MachineBuilder::new(
         "pathfinding",
         "paused",
-        serde_json::json!({ "algorithm": "bfs", "reset_nonce": 0 }),
+        serde_json::json!({ "reset_nonce": 0 }),
     )
     .state("running")
     .pass("paused", "toggle_run", "running")
     .pass("running", "toggle_run", "paused")
-    .on("paused", "select_bfs", "paused", |ctx, _| {
-        let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "algorithm": "bfs", "reset_nonce": n + 1 }))
-    })
-    .on("running", "select_bfs", "running", |ctx, _| {
-        let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "algorithm": "bfs", "reset_nonce": n + 1 }))
-    })
-    .on("paused", "select_astar", "paused", |ctx, _| {
-        let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "algorithm": "astar", "reset_nonce": n + 1 }))
-    })
-    .on("running", "select_astar", "running", |ctx, _| {
-        let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "algorithm": "astar", "reset_nonce": n + 1 }))
-    })
     .on("paused", "reset", "paused", |ctx, _| {
         let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "algorithm": ctx["algorithm"], "reset_nonce": n + 1 }))
+        Ok(serde_json::json!({ "reset_nonce": n + 1 }))
     })
     .on("running", "reset", "running", |ctx, _| {
         let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "algorithm": ctx["algorithm"], "reset_nonce": n + 1 }))
+        Ok(serde_json::json!({ "reset_nonce": n + 1 }))
     })
     .build();
 
