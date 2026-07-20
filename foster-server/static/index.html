@@ -60,6 +60,7 @@
 
     main { max-width: 860px; margin: 0 auto; padding: 4rem 2rem; min-height: 60vh; }
     h1 { font-size: 1.75rem; margin-bottom: 1.5rem; }
+    h2 { font-size: 1.3rem; margin: 2.5rem 0 1rem; padding-top: 2rem; border-top: 1px solid var(--border); }
     p { color: var(--text-light); margin-bottom: 1rem; }
 
     footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--text-light); font-size: 0.85rem; }
@@ -195,14 +196,11 @@
     <div class="nav-links" id="scroll-spy-links">
       <a href="#about" data-spy="about">About</a>
       <a href="#trace" data-spy="trace">Request Trace</a>
-      <a href="#visitors" data-spy="visitors">Visitors</a>
+      <a href="#cluster" data-spy="cluster">Cluster</a>
+      <a href="#satellites" data-spy="satellites">Satellites</a>
       <a href="#life" data-spy="life">Game of Life</a>
       <a href="#path" data-spy="path">Pathfinding</a>
       <a href="#photography" data-spy="photography">Photography</a>
-      <a href="#lighthouse" data-spy="lighthouse">Lighthouse</a>
-      <a href="#cluster" data-spy="cluster">Cluster</a>
-      <a href="#conjunction" data-spy="conjunction">Conjunctions</a>
-      <a href="#satellites" data-spy="satellites">Satellites</a>
 
       <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
         <span fx-show="light">&#9789;</span>
@@ -242,114 +240,6 @@
     <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
     <button id="request-trace-refresh">&#8635; Refresh</button>
     <div id="request-trace-container"></div>
-  </main>
-
-  <main id="visitors">
-    <h1>Visitors</h1>
-    <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>
-    <div fx-machine="visitors">
-      <button id="visitors-refresh" fx-on="click->refresh">&#8635; Refresh</button>
-      <div class="visitor-stats">
-        <div class="visitor-stat">
-          <div class="visitor-stat-value" fx-text="total_visits">0</div>
-          <div class="visitor-stat-label">total visits (30d)</div>
-        </div>
-        <div class="visitor-stat">
-          <div class="visitor-stat-value" fx-text="unique_ips">0</div>
-          <div class="visitor-stat-label">unique IPs</div>
-        </div>
-        <div class="visitor-stat">
-          <div class="visitor-stat-value" fx-text="unique_countries">0</div>
-          <div class="visitor-stat-label">countries</div>
-        </div>
-      </div>
-      <div class="visitor-map">
-        <img src="/world-map.svg" alt="world map" />
-        <div id="visitor-map-points"></div>
-      </div>
-      <div class="cluster-box" style="max-width: 32rem;">
-        <h3>Recent visits</h3>
-        <div fx-for="recent_visits">
-          <div class="visit-row">
-            <span class="visit-path" fx-field="path"></span>
-            <span fx-field="location"></span>
-            <span class="visit-when" fx-field="minutes_ago"></span>
-          </div>
-        </div>
-      </div>
-      <div style="display:none"><div fx-for="points"><span></span></div></div>
-    </div><!-- /fx-machine=visitors -->
-  </main>
-
-  <main id="life">
-    <h1>Conway's Game of Life</h1>
-    <p>Plain <code>requestAnimationFrame</code> canvas; Foster owns run/pause/reset.</p>
-    <div fx-machine="life">
-      <canvas id="life-canvas" width="480" height="270"></canvas>
-      <div class="life-controls">
-        <button fx-on="click->toggle_run">
-          <span fx-show="paused">&#9654; Run</span>
-          <span fx-show="running">&#10074;&#10074; Pause</span>
-        </button>
-        <button fx-on="click->reset">&#8635; Reset</button>
-      </div>
-      <span id="life-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
-    </div><!-- /fx-machine=life -->
-  </main>
-
-  <main id="path">
-    <h1>Pathfinding</h1>
-    <p>BFS / A* over a random maze, animated step-by-step.</p>
-    <div fx-machine="pathfinding">
-      <canvas id="path-canvas" width="800" height="480"></canvas>
-      <div class="life-controls">
-        <button fx-on="click->toggle_run">
-          <span fx-show="paused">&#9654; Run</span>
-          <span fx-show="running">&#10074;&#10074; Pause</span>
-        </button>
-        <button fx-on="click->select_bfs">BFS</button>
-        <button fx-on="click->select_astar">A*</button>
-        <button fx-on="click->reset">&#8635; New maze</button>
-      </div>
-      <span id="pathfinding-algorithm" fx-text="algorithm" style="display:none">bfs</span>
-      <span id="pathfinding-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
-    </div><!-- /fx-machine=pathfinding -->
-  </main>
-
-  <main id="photography">
-    <h1>Photography</h1>
-    <p>Real photos served straight from the CDN.</p>
-    <div fx-machine="photography">
-      <div class="photo-grid" fx-for="photos">
-        <img class="photo-thumb" fx-on="click->view" alt="" />
-      </div>
-      <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
-      <div class="lightbox" fx-if='{"field":"viewing_index","op":"gte","value":0}'>
-        <img fx-bind-attr="src=ctx:viewing_url" alt="" />
-        <div class="lightbox-controls">
-          <button fx-on="click->prev">&#8592; Prev</button>
-          <button fx-on="click->close">Close</button>
-          <button fx-on="click->next">Next &#8594;</button>
-        </div>
-      </div>
-    </div><!-- /fx-machine=photography -->
-  </main>
-
-  <main id="lighthouse">
-    <h1>Lighthouse</h1>
-    <p>
-      Here is a programmatically generated lighthouse report
-      <a href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">for every deploy</a>
-      that gets kicked off as part of a k8s job for every new deploy of this site.
-    </p>
-    <div fx-machine="lighthouse">
-      <div fx-show="hidden" class="lh-gate">
-        <button fx-on="click->load_report">Load Report</button>
-      </div>
-      <div fx-show="loaded">
-        <iframe src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
-      </div>
-    </div><!-- /fx-machine=lighthouse -->
   </main>
 
   <main id="cluster">
@@ -477,29 +367,56 @@
         </div>
       </div>
     </div><!-- /fx-machine=cluster -->
-  </main>
 
-  <main id="conjunction">
-    <h1>Conjunction Screening</h1>
+    <h2>Visitors</h2>
+    <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>
+    <div fx-machine="visitors">
+      <button id="visitors-refresh" fx-on="click->refresh">&#8635; Refresh</button>
+      <div class="visitor-stats">
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="total_visits">0</div>
+          <div class="visitor-stat-label">total visits (30d)</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="unique_ips">0</div>
+          <div class="visitor-stat-label">unique IPs</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="unique_countries">0</div>
+          <div class="visitor-stat-label">countries</div>
+        </div>
+      </div>
+      <div class="visitor-map">
+        <img src="/world-map.svg" alt="world map" />
+        <div id="visitor-map-points"></div>
+      </div>
+      <div class="cluster-box" style="max-width: 32rem;">
+        <h3>Recent visits</h3>
+        <div fx-for="recent_visits">
+          <div class="visit-row">
+            <span class="visit-path" fx-field="path"></span>
+            <span fx-field="location"></span>
+            <span class="visit-when" fx-field="minutes_ago"></span>
+          </div>
+        </div>
+      </div>
+      <div style="display:none"><div fx-for="points"><span></span></div></div>
+    </div><!-- /fx-machine=visitors -->
+
+    <h2>Lighthouse</h2>
     <p>
-      Real screening: Hoots altitude-band pre-filter, true SGP4 propagation,
-      a 288-step/5-minute rolling 24h window scan for local distance minima,
-      ternary-search TCA refinement, rayon-parallelized pair scanning —
-      ported from the real <code>src/components/conjunction.rs</code>.
-      Persisted to the real <code>conjunction_screenings</code>/
-      <code>conjunction_events</code> tables. Foster only owns the button's
-      idle/started label; the real pass is a background job polled
-      independently (<code>static/conjunction.js</code>).
+      Here is a programmatically generated lighthouse report
+      <a href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">for every deploy</a>
+      that gets kicked off as part of a k8s job for every new deploy of this site.
     </p>
-    <div fx-machine="conjunction" class="screening-box">
-      <button id="conjunction-start" fx-on="click->start_screening">
-        <span fx-show="idle">Screen</span>
-        <span fx-show="started">Screen again</span>
-      </button>
-      <div>Status: <span id="conjunction-status" class="screening-status">idle</span></div>
-      <div id="conjunction-stats" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);"></div>
-      <ul id="conjunction-events"></ul>
-    </div><!-- /fx-machine=conjunction -->
+    <div fx-machine="lighthouse">
+      <div fx-show="hidden" class="lh-gate">
+        <button fx-on="click->load_report">Load Report</button>
+      </div>
+      <div fx-show="loaded">
+        <iframe src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
+      </div>
+    </div><!-- /fx-machine=lighthouse -->
   </main>
 
   <main id="satellites">
@@ -555,6 +472,81 @@
         <button class="sat-filter" data-band="astranis" style="--dot:#00dcb4">Astranis</button>
       </div>
     </div><!-- /fx-machine=satellites -->
+
+    <h2>Conjunction Screening</h2>
+    <p>
+      Real screening: Hoots altitude-band pre-filter, true SGP4 propagation,
+      a 288-step/5-minute rolling 24h window scan for local distance minima,
+      ternary-search TCA refinement, rayon-parallelized pair scanning —
+      ported from the real <code>src/components/conjunction.rs</code>.
+      Persisted to the real <code>conjunction_screenings</code>/
+      <code>conjunction_events</code> tables. Foster only owns the button's
+      idle/started label; the real pass is a background job polled
+      independently (<code>static/conjunction.js</code>).
+    </p>
+    <div fx-machine="conjunction" class="screening-box">
+      <button id="conjunction-start" fx-on="click->start_screening">
+        <span fx-show="idle">Screen</span>
+        <span fx-show="started">Screen again</span>
+      </button>
+      <div>Status: <span id="conjunction-status" class="screening-status">idle</span></div>
+      <div id="conjunction-stats" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);"></div>
+      <ul id="conjunction-events"></ul>
+    </div><!-- /fx-machine=conjunction -->
+  </main>
+
+  <main id="life">
+    <h1>Conway's Game of Life</h1>
+    <p>Plain <code>requestAnimationFrame</code> canvas; Foster owns run/pause/reset.</p>
+    <div fx-machine="life">
+      <canvas id="life-canvas" width="480" height="270"></canvas>
+      <div class="life-controls">
+        <button fx-on="click->toggle_run">
+          <span fx-show="paused">&#9654; Run</span>
+          <span fx-show="running">&#10074;&#10074; Pause</span>
+        </button>
+        <button fx-on="click->reset">&#8635; Reset</button>
+      </div>
+      <span id="life-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
+    </div><!-- /fx-machine=life -->
+  </main>
+
+  <main id="path">
+    <h1>Pathfinding</h1>
+    <p>BFS / A* over a random maze, animated step-by-step.</p>
+    <div fx-machine="pathfinding">
+      <canvas id="path-canvas" width="800" height="480"></canvas>
+      <div class="life-controls">
+        <button fx-on="click->toggle_run">
+          <span fx-show="paused">&#9654; Run</span>
+          <span fx-show="running">&#10074;&#10074; Pause</span>
+        </button>
+        <button fx-on="click->select_bfs">BFS</button>
+        <button fx-on="click->select_astar">A*</button>
+        <button fx-on="click->reset">&#8635; New maze</button>
+      </div>
+      <span id="pathfinding-algorithm" fx-text="algorithm" style="display:none">bfs</span>
+      <span id="pathfinding-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
+    </div><!-- /fx-machine=pathfinding -->
+  </main>
+
+  <main id="photography">
+    <h1>Photography</h1>
+    <p>Real photos served straight from the CDN.</p>
+    <div fx-machine="photography">
+      <div class="photo-grid" fx-for="photos">
+        <img class="photo-thumb" fx-on="click->view" alt="" />
+      </div>
+      <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
+      <div class="lightbox" fx-if='{"field":"viewing_index","op":"gte","value":0}'>
+        <img fx-bind-attr="src=ctx:viewing_url" alt="" />
+        <div class="lightbox-controls">
+          <button fx-on="click->prev">&#8592; Prev</button>
+          <button fx-on="click->close">Close</button>
+          <button fx-on="click->next">Next &#8594;</button>
+        </div>
+      </div>
+    </div><!-- /fx-machine=photography -->
   </main>
 
   <footer>
