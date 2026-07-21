@@ -255,14 +255,14 @@
           <span id="theme-icon-sun" style="display:none">&#9788;</span>
         </button>
 
-        <div fx-machine="nav" class="contact-wrap">
-          <button class="icon-btn" fx-on="click->toggle_contact">Contact &#9662;</button>
-          <div class="contact-menu" fx-show="open">
+        <div class="contact-wrap" id="contact-wrap">
+          <button class="icon-btn" id="contact-toggle">Contact &#9662;</button>
+          <div class="contact-menu" id="contact-menu" style="display:none">
             <a href="https://github.com/jaydh" target="_blank" rel="noreferrer">GitHub</a>
             <a href="https://www.linkedin.com/in/jaydanhoward/" target="_blank" rel="noreferrer">LinkedIn</a>
             <a href="mailto:hello@jaydanhoward.com">Email</a>
           </div>
-        </div><!-- /fx-machine=nav -->
+        </div>
       </div>
     </div>
   </nav>
@@ -458,14 +458,19 @@
       <a href="https://github.com/jaydh/jaydanhoward/blob/main/lighthouse/entrypoint.sh" target="_blank" rel="noreferrer">for every deploy</a>
       that gets kicked off as part of a k8s job for every new deploy of this site.
     </p>
-    <div fx-machine="lighthouse">
-      <div fx-show="hidden" class="lh-gate">
-        <button fx-on="click->load_report">Load Report</button>
+    <!-- Whether this gate is open is per-visitor UI state (just "did I
+         click this button"), not shared data — plain client-side toggle
+         rather than a Foster machine, same reasoning as theme/life/
+         pathfinding/photography's lightbox. The iframe content itself
+         (lighthouse.html) is the one real shared thing here. -->
+    <div id="lighthouse-widget">
+      <div id="lh-gate" class="lh-gate">
+        <button id="lh-load-report">Load Report</button>
       </div>
-      <div fx-show="loaded">
+      <div id="lh-report" style="display:none">
         <iframe src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
       </div>
-    </div><!-- /fx-machine=lighthouse -->
+    </div>
   </main>
 
   <main id="satellites">
@@ -614,18 +619,22 @@
     <p>Real photos served straight from the CDN.</p>
     <div fx-machine="photography">
       <div class="photo-grid" fx-for="photos">
-        <img class="photo-thumb" fx-on="click->view" alt="" />
+        <img class="photo-thumb" alt="" />
       </div>
       <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
-      <div class="lightbox" fx-if='{"field":"viewing_index","op":"gte","value":0}'>
-        <img fx-bind-attr="src=ctx:viewing_url" alt="" />
-        <div class="lightbox-controls">
-          <button fx-on="click->prev">&#8592; Prev</button>
-          <button fx-on="click->close">Close</button>
-          <button fx-on="click->next">Next &#8594;</button>
-        </div>
-      </div>
     </div><!-- /fx-machine=photography -->
+    <!-- Which photo is open in the lightbox is per-visitor UI state, not
+         shared data, so it lives entirely outside the Foster machine above
+         (which only owns the real, shared photo list) — same reasoning as
+         theme/life/pathfinding. -->
+    <div class="lightbox" id="photo-lightbox" style="display:none">
+      <img id="photo-lightbox-img" alt="" />
+      <div class="lightbox-controls">
+        <button id="photo-prev">&#8592; Prev</button>
+        <button id="photo-close">Close</button>
+        <button id="photo-next">Next &#8594;</button>
+      </div>
+    </div>
   </main>
 
   <footer>
@@ -645,6 +654,8 @@
   import { initSatellites } from '/satellites.js';
   import { initScrollSpy } from '/scrollspy.js';
   import { initTheme } from '/theme.js';
+  import { initLighthouse } from '/lighthouse.js';
+  import { initNav } from '/nav.js';
   init();
   initLife();
   initPathfinding();
@@ -656,6 +667,8 @@
   initSatellites();
   initScrollSpy();
   initTheme();
+  initLighthouse();
+  initNav();
 </script>
 </body>
 </html>

@@ -38,14 +38,6 @@ async fn main() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    let nav = MachineBuilder::new("nav", "closed", serde_json::json!({}))
-        .state("open")
-        .pass("closed", "toggle_contact", "open")
-        .pass("open", "toggle_contact", "closed")
-        .pass("open", "close_contact", "closed")
-        .template(include_str!("../static/index.html"))
-        .build();
-
     // Real site races 7 algorithms (BFS/DFS/A*/Greedy/Corner/Wall/Random
     // Walk) simultaneously over one shared random grid — all client-side,
     // no server data dependency (same as the real src/components/
@@ -57,47 +49,16 @@ async fn main() {
     // every connected client, which would make one visitor's scroll
     // position control play/pause for everyone.
 
-    let photography = {
-        let initial = photography::fetch_photos();
-        let photos_for_reducers = initial["photos"].clone();
-        let photo_count = photos_for_reducers.as_array().map(|a| a.len()).unwrap_or(0) as i64;
-
-        fn set_viewing(mut ctx: serde_json::Value, photos: &serde_json::Value, index: i64) -> serde_json::Value {
-            ctx["viewing_index"] = serde_json::json!(index);
-            if index >= 0 {
-                if let Some(photo) = photos.as_array().and_then(|a| a.get(index as usize)) {
-                    ctx["viewing_url"] = photo["medium_url"].clone();
-                    ctx["viewing_name"] = photo["name"].clone();
-                }
-            } else {
-                ctx["viewing_url"] = serde_json::json!("");
-                ctx["viewing_name"] = serde_json::json!("");
-            }
-            ctx
-        }
-
-        let photos_1 = photos_for_reducers.clone();
-        let photos_2 = photos_for_reducers.clone();
-        let photos_3 = photos_for_reducers.clone();
-
-        MachineBuilder::new("photography", "loaded", initial)
-            .on("loaded", "view", "loaded", move |ctx, payload| {
-                let i = payload.get("index").and_then(|v| v.as_i64()).unwrap_or(-1);
-                Ok(set_viewing(ctx, &photos_1, i))
-            })
-            .on("loaded", "close", "loaded", |ctx, _| Ok(set_viewing(ctx, &serde_json::Value::Null, -1)))
-            .on("loaded", "next", "loaded", move |ctx, _| {
-                let i = ctx["viewing_index"].as_i64().unwrap_or(-1);
-                let next = if photo_count > 0 && i >= 0 { (i + 1) % photo_count } else { i };
-                Ok(set_viewing(ctx, &photos_2, next))
-            })
-            .on("loaded", "prev", "loaded", move |ctx, _| {
-                let i = ctx["viewing_index"].as_i64().unwrap_or(-1);
-                let prev = if photo_count > 0 && i >= 0 { (i - 1 + photo_count) % photo_count } else { i };
-                Ok(set_viewing(ctx, &photos_3, prev))
-            })
-            .build()
-    };
+    // Which photo is open in the lightbox used to live here (view/close/
+    // next/prev reducers), but that's per-visitor UI state, not shared
+    // data — Foster machines are one shared instance across every
+    // connected client, so one visitor opening a photo would pop it open
+    // in everyone else's lightbox too. Moved entirely to static/
+    // photography.js (same reasoning as theme/life/pathfinding); this
+    // machine now only holds the real, shared photo list.
+    let photography = MachineBuilder::new("photography", "loaded", photography::fetch_photos())
+        .template(include_str!("../static/index.html"))
+        .build();
 
     let database_url = std::env::var("DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:foster@localhost:5433/jaydanhoward".to_string());
@@ -114,17 +75,13 @@ async fn main() {
             .build()
     };
 
-    // Lighthouse "Load Report" gate — matches the real
-    // src/components/dev.rs::Lighthouse component's lazy-iframe UX exactly
-    // (a button that reveals the iframe on click, nothing more). The report
-    // content itself comes from an external CI job POSTing to
-    // /api/lighthouse (src/lighthouse.rs, real Basic-Auth-protected upload
-    // endpoint ported verbatim from routes/lighthouse/post.rs) — not a live
-    // self-audit.
-    let lighthouse_machine = MachineBuilder::new("lighthouse", "hidden", serde_json::json!({}))
-        .state("loaded")
-        .pass("hidden", "load_report", "loaded")
-        .build();
+    // Lighthouse "Load Report" gate: whether it's open is per-visitor UI
+    // state, not shared data, so it's plain client-side state in
+    // static/lighthouse.js rather than a Foster machine (same reasoning as
+    // theme/life/pathfinding/photography's lightbox). The report content
+    // itself comes from an external CI job POSTing to /api/lighthouse
+    // (src/lighthouse.rs, real Basic-Auth-protected upload endpoint ported
+    // verbatim from routes/lighthouse/post.rs) — not a live self-audit.
 
     // Full Prometheus-backed cluster panel (10+ real panels — see
     // cluster.rs). PROMETHEUS_URL is unset here (unreachable from this dev
@@ -142,10 +99,8 @@ async fn main() {
     };
 
     let mut machines = HashMap::new();
-    machines.insert("nav".to_string(), nav);
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
-    machines.insert("lighthouse".to_string(), lighthouse_machine);
     machines.insert("cluster".to_string(), cluster_machine);
 
     // Real conjunction screening (Hoots + SGP4 + TCA + rayon — see
