@@ -356,14 +356,38 @@ function rankLabel(pos) {
 }
 
 export function initPathfinding() {
-  const root = document.querySelector('[fx-machine="pathfinding"]');
-  const nonceEl = document.getElementById('pathfinding-reset-nonce');
-  if (!root || !nonceEl) return;
+  const root = document.getElementById('pathfinding-widget');
+  if (!root) return;
 
   let zoom = 1.0;
   let following = false;
   let blindOrder = [];
   let informedOrder = [];
+  let running = false;
+
+  const toggleBtn = document.getElementById('pf-toggle-run');
+  const playLabel = toggleBtn.querySelector('.pf-play-label');
+  const pauseLabel = toggleBtn.querySelector('.pf-pause-label');
+
+  function syncToggleButton() {
+    playLabel.style.display = running ? 'none' : '';
+    pauseLabel.style.display = running ? '' : 'none';
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    running = !running;
+    syncToggleButton();
+  });
+
+  // Auto-play when scrolled into view, pause when scrolled away — same
+  // per-visitor behavior as the real site's IntersectionObserver, and the
+  // same reasoning as life.js for why this isn't a Foster machine.
+  new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      running = entry.isIntersecting;
+      syncToggleButton();
+    }
+  }, { threshold: 0.1 }).observe(root);
 
   const panels = ALL_ALGOS.map((algo) => {
     const el = root.querySelector(`.pf-panel[data-algo="${algo}"]`);
@@ -411,6 +435,8 @@ export function initPathfinding() {
 
   regenerate();
 
+  document.getElementById('pf-reset').addEventListener('click', regenerate);
+
   document.getElementById('pf-zoom-slider').addEventListener('input', (e) => {
     zoom = parseFloat(e.target.value);
     document.getElementById('pf-zoom-label').textContent = `${zoom.toFixed(1)}x`;
@@ -428,17 +454,10 @@ export function initPathfinding() {
     }
   });
 
-  let lastNonce = nonceEl.textContent;
   let lastFpsTick = performance.now();
 
   function frame() {
-    if (nonceEl.textContent !== lastNonce) {
-      lastNonce = nonceEl.textContent;
-      regenerate();
-    }
-
-    const running = root.getAttribute('data-fx-state') === 'running';
-    const dark = document.querySelector('.page')?.classList.contains('theme-dark') || false;
+    const dark = document.documentElement.classList.contains('dark');
     const now = performance.now();
     const fpsWindow = now - lastFpsTick >= 1000;
 

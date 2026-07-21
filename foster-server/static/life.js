@@ -1,9 +1,11 @@
-// Conway's Game of Life — plain canvas + requestAnimationFrame, deliberately
-// independent of Foster. It only touches the "life" machine's DOM through the
-// public contract every fx-machine root exposes: `data-fx-state`, updated
-// by foster-client on every snapshot (initial fetch, transition response, or
-// SSE push). No Rust/WASM binding into foster-client, no server round trip
-// per frame — the whole point of this file is to prove that's enough.
+// Conway's Game of Life — plain canvas + requestAnimationFrame, entirely
+// client-side. Run/pause/reset used to be a Foster machine, but that state
+// is inherently per-visitor (auto-play-on-scroll-into-view, matching the
+// real src/components/life.rs's own IntersectionObserver-driven local
+// signal) — Foster machines are one shared instance across every
+// connected client, so that had made one visitor's scroll position
+// control play/pause for everyone. No server round trip per frame either
+// way; this just also drops the unnecessary shared-state layer.
 
 const GRID_W = 96;
 const GRID_H = 54;
@@ -39,17 +41,48 @@ function step(cells) {
 
 export function initLife() {
   const canvas = document.getElementById('life-canvas');
-  const root = document.querySelector('[fx-machine="life"]');
-  const nonceEl = document.getElementById('life-reset-nonce');
-  if (!canvas || !root || !nonceEl) return;
+  const widget = document.getElementById('life-widget');
+  const toggleBtn = document.getElementById('life-toggle-run');
+  const resetBtn = document.getElementById('life-reset');
+  if (!canvas || !widget || !toggleBtn || !resetBtn) return;
 
+  const runLabel = toggleBtn.querySelector('.life-run-label');
+  const pauseLabel = toggleBtn.querySelector('.life-pause-label');
   const ctx2d = canvas.getContext('2d');
   const cw = canvas.width / GRID_W;
   const ch = canvas.height / GRID_H;
 
   let cells = makeGrid(0.35);
-  let lastNonce = nonceEl.textContent;
+  let running = false;
   let lastStep = 0;
+
+  function syncButton() {
+    runLabel.style.display = running ? 'none' : '';
+    pauseLabel.style.display = running ? '' : 'none';
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    running = !running;
+    syncButton();
+  });
+
+  resetBtn.addEventListener('click', () => {
+    cells = makeGrid(0.35);
+  });
+
+  // Auto-play when scrolled into view, pause when scrolled away — same
+  // IntersectionObserver behavior as the real site.
+  const observer = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (entry.isIntersecting) {
+        running = true;
+      } else {
+        running = false;
+      }
+      syncButton();
+    }
+  }, { threshold: 0.1 });
+  observer.observe(widget);
 
   function draw() {
     ctx2d.fillStyle = getComputedStyle(document.body).getPropertyValue('--surface') || '#0f1420';
@@ -65,24 +98,15 @@ export function initLife() {
   }
 
   function frame(ts) {
-    // The only thing read from Foster: whether we're "running", straight off
-    // the DOM attribute foster-client keeps in sync with the server.
-    const state = root.getAttribute('data-fx-state');
-
-    if (nonceEl.textContent !== lastNonce) {
-      lastNonce = nonceEl.textContent;
-      cells = makeGrid(0.35);
-    }
-
-    if (state === 'running' && ts - lastStep >= STEP_MS) {
+    if (running && ts - lastStep >= STEP_MS) {
       cells = step(cells);
       lastStep = ts;
     }
-
     draw();
     requestAnimationFrame(frame);
   }
 
+  syncButton();
   draw();
   requestAnimationFrame(frame);
 }

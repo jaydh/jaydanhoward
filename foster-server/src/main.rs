@@ -46,45 +46,16 @@ async fn main() {
         .template(include_str!("../static/index.html"))
         .build();
 
-    let life = MachineBuilder::new("life", "paused", serde_json::json!({ "reset_nonce": 0 }))
-        .state("running")
-        .pass("paused", "toggle_run", "running")
-        .pass("running", "toggle_run", "paused")
-        .on("paused", "reset", "paused", |ctx, _| {
-            let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-            Ok(serde_json::json!({ "reset_nonce": n + 1 }))
-        })
-        .on("running", "reset", "running", |ctx, _| {
-            let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-            Ok(serde_json::json!({ "reset_nonce": n + 1 }))
-        })
-        .build();
-
     // Real site races 7 algorithms (BFS/DFS/A*/Greedy/Corner/Wall/Random
     // Walk) simultaneously over one shared random grid — all client-side,
     // no server data dependency (same as the real src/components/
     // path_search.rs, which is entirely #[cfg(not(feature = "ssr"))]).
-    // Foster only owns run/pause and a reset nonce to trigger regenerating
-    // the shared grid; static/pathfinding.js owns the 7 algorithm runners,
-    // WebGL2 rendering, and zoom/pan/follow (client-only view state, same
-    // as satellites.js's camera controls).
-    let pathfinding = MachineBuilder::new(
-        "pathfinding",
-        "paused",
-        serde_json::json!({ "reset_nonce": 0 }),
-    )
-    .state("running")
-    .pass("paused", "toggle_run", "running")
-    .pass("running", "toggle_run", "paused")
-    .on("paused", "reset", "paused", |ctx, _| {
-        let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "reset_nonce": n + 1 }))
-    })
-    .on("running", "reset", "running", |ctx, _| {
-        let n = ctx["reset_nonce"].as_i64().unwrap_or(0);
-        Ok(serde_json::json!({ "reset_nonce": n + 1 }))
-    })
-    .build();
+    // Run/pause/reset are plain client state in static/pathfinding.js, not
+    // a Foster machine — same reasoning as life.js and theme.js: this is
+    // per-visitor UI state (auto-play-on-scroll, like the real site's own
+    // local signal), and a Foster machine is one shared instance across
+    // every connected client, which would make one visitor's scroll
+    // position control play/pause for everyone.
 
     let photography = {
         let initial = photography::fetch_photos();
@@ -172,8 +143,6 @@ async fn main() {
 
     let mut machines = HashMap::new();
     machines.insert("nav".to_string(), nav);
-    machines.insert("life".to_string(), life);
-    machines.insert("pathfinding".to_string(), pathfinding);
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
     machines.insert("lighthouse".to_string(), lighthouse_machine);

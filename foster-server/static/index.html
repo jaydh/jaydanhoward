@@ -546,18 +546,21 @@
 
   <main id="life">
     <h1>Conway's Game of Life</h1>
-    <p>Plain <code>requestAnimationFrame</code> canvas; Foster owns run/pause/reset.</p>
-    <div fx-machine="life">
+    <p>
+      Plain <code>requestAnimationFrame</code> canvas. Auto-plays when
+      scrolled into view and pauses when scrolled away — per-visitor state
+      like the real site's own local signal, not shared server state.
+    </p>
+    <div id="life-widget">
       <canvas id="life-canvas" width="480" height="270"></canvas>
       <div class="life-controls">
-        <button fx-on="click->toggle_run">
-          <span fx-show="paused">&#9654; Run</span>
-          <span fx-show="running">&#10074;&#10074; Pause</span>
+        <button id="life-toggle-run">
+          <span class="life-run-label">&#9654; Run</span>
+          <span class="life-pause-label" style="display:none">&#10074;&#10074; Pause</span>
         </button>
-        <button fx-on="click->reset">&#8635; Reset</button>
+        <button id="life-reset">&#8635; Reset</button>
       </div>
-      <span id="life-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
-    </div><!-- /fx-machine=life -->
+    </div>
   </main>
 
   <main id="path">
@@ -566,17 +569,19 @@
       Seven algorithms racing from start (green) to end (amber) on the same
       random 2048&times;2048 obstacle grid, each rendered via its own WebGL2
       canvas (R8 state texture) — ported line-for-line from the real
-      <code>src/components/path_search.rs</code>. Foster owns run/pause and
-      the reset nonce; zoom/pan/follow and all seven algorithm runners are
-      plain client-side state, same as the real site's own local signals.
+      <code>src/components/path_search.rs</code>. Run/pause (auto-plays
+      when scrolled into view, same as the real site) and all seven
+      algorithm runners are plain per-visitor client state, not a Foster
+      machine — this is the same per-visitor UI state Foster's shared
+      server model isn't the right fit for, same as Life and theme.
     </p>
-    <div fx-machine="pathfinding" class="pf-box">
+    <div id="pathfinding-widget" class="pf-box">
       <div class="pf-controls">
-        <button fx-on="click->toggle_run">
-          <span fx-show="paused">&#9654; Play</span>
-          <span fx-show="running">&#10074;&#10074; Pause</span>
+        <button id="pf-toggle-run">
+          <span class="pf-play-label">&#9654; Play</span>
+          <span class="pf-pause-label" style="display:none">&#10074;&#10074; Pause</span>
         </button>
-        <button fx-on="click->reset">&#8635; Randomize</button>
+        <button id="pf-reset">&#8635; Randomize</button>
         <label class="pf-zoom">
           <span>zoom</span>
           <input id="pf-zoom-slider" type="range" min="1" max="16" step="0.5" value="1">
@@ -584,7 +589,6 @@
         </label>
         <button id="pf-follow">Follow</button>
       </div>
-      <span id="pathfinding-reset-nonce" fx-text="reset_nonce" style="display:none">0</span>
 
       <h2>Blind Search</h2>
       <p class="pf-group-desc">Explores without knowing the destination location.</p>
@@ -602,7 +606,7 @@
         <div class="pf-panel" data-algo="astar"><h3>A*</h3><canvas></canvas><div class="pf-meta"></div></div>
         <div class="pf-panel" data-algo="greedy"><h3>Greedy Best-First</h3><canvas></canvas><div class="pf-meta"></div></div>
       </div>
-    </div><!-- /fx-machine=pathfinding -->
+    </div>
   </main>
 
   <main id="photography">
