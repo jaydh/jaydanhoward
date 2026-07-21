@@ -38,12 +38,6 @@ async fn main() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    let theme = MachineBuilder::new("theme", "light", serde_json::json!({}))
-        .state("dark")
-        .pass("light", "toggle_theme", "dark")
-        .pass("dark", "toggle_theme", "light")
-        .build();
-
     let nav = MachineBuilder::new("nav", "closed", serde_json::json!({}))
         .state("open")
         .pass("closed", "toggle_contact", "open")
@@ -177,7 +171,6 @@ async fn main() {
     };
 
     let mut machines = HashMap::new();
-    machines.insert("theme".to_string(), theme);
     machines.insert("nav".to_string(), nav);
     machines.insert("life".to_string(), life);
     machines.insert("pathfinding".to_string(), pathfinding);

@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jay Dan Howard</title>
+  <script>
+    // Dark-mode FOUC prevention — real theme preference is a per-visitor
+    // client-side thing (localStorage + system preference), not server
+    // state, so unlike the rest of this page's UI this deliberately isn't
+    // a Foster machine (that would make it one shared global toggle for
+    // every visitor at once). Ported verbatim from the real
+    // src/components/app.rs inline script.
+    (function(){
+        if(localStorage.theme==='dark'||!('theme' in localStorage)||(localStorage.theme!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches)){
+            document.documentElement.classList.add('dark')
+        }
+    })()
+  </script>
   <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
   <link rel="preload" href="/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <style>
@@ -44,7 +57,7 @@
        bug in production; this covers every current and future fx-if. */
     [fx-if] { display: none; }
 
-    .theme-dark {
+    html.dark .page {
       --surface: #111827; --bg: var(--surface); --border: #374151;
       --text: #e5e7eb; --text-light: #9ca3af; --accent: #60a5fa;
     }
@@ -224,7 +237,7 @@
 </head>
 <body>
 
-<div fx-machine="theme" class="page" fx-class="dark:theme-dark">
+<div class="page">
   <nav>
     <div class="nav-inner">
       <a href="#about" class="logo">Jay Dan Howard</a>
@@ -237,9 +250,9 @@
         <a href="#path" data-spy="path">Pathfinding</a>
         <a href="#photography" data-spy="photography">Photography</a>
 
-        <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
-          <span fx-show="light">&#9789;</span>
-          <span fx-show="dark">&#9788;</span>
+        <button class="icon-btn" id="theme-toggle" aria-label="Toggle dark mode">
+          <span id="theme-icon-moon">&#9789;</span>
+          <span id="theme-icon-sun" style="display:none">&#9788;</span>
         </button>
 
         <div fx-machine="nav" class="contact-wrap">
@@ -627,6 +640,7 @@
   import { initConjunction } from '/conjunction.js';
   import { initSatellites } from '/satellites.js';
   import { initScrollSpy } from '/scrollspy.js';
+  import { initTheme } from '/theme.js';
   init();
   initLife();
   initPathfinding();
@@ -637,6 +651,7 @@
   initConjunction();
   initSatellites();
   initScrollSpy();
+  initTheme();
 </script>
 </body>
 </html>
