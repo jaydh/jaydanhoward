@@ -50,9 +50,10 @@
     }
 
     nav {
-      position: sticky; top: 0; z-index: 40; display: flex; align-items: center; gap: 2rem;
-      padding: 1.25rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface);
+      position: sticky; top: 0; z-index: 40;
+      padding: 1.5rem 2rem; border-bottom: 1px solid var(--border); background: var(--surface);
     }
+    .nav-inner { display: flex; align-items: center; gap: 2rem; max-width: 1280px; margin: 0 auto; width: 100%; }
     .logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
     .nav-links { display: flex; margin-left: auto; align-items: center; gap: 0.25rem; flex-wrap: wrap; }
     .nav-links a { padding: 0.5rem 1rem; color: var(--text); position: relative; }
@@ -72,7 +73,7 @@
     .contact-menu a { display: block; padding: 0.75rem 1rem; color: var(--text); }
     .contact-menu a:hover { background: var(--border); text-decoration: none; }
 
-    main { max-width: 860px; margin: 0 auto; padding: 4rem 2rem; min-height: 60vh; }
+    main { max-width: 1280px; margin: 0 auto; padding: 5rem 2rem; min-height: 60vh; }
     h1 { font-size: 1.75rem; margin-bottom: 1.5rem; }
     h2 { font-size: 1.3rem; margin: 2.5rem 0 1rem; padding-top: 2rem; border-top: 1px solid var(--border); }
     p { color: var(--text-light); margin-bottom: 1rem; }
@@ -225,29 +226,31 @@
 
 <div fx-machine="theme" class="page" fx-class="dark:theme-dark">
   <nav>
-    <a href="#about" class="logo">Jay Dan Howard</a>
-    <div class="nav-links" id="scroll-spy-links">
-      <a href="#about" data-spy="about">About</a>
-      <a href="#trace" data-spy="trace">Request Trace</a>
-      <a href="#cluster" data-spy="cluster">Cluster</a>
-      <a href="#satellites" data-spy="satellites">Satellites</a>
-      <a href="#life" data-spy="life">Game of Life</a>
-      <a href="#path" data-spy="path">Pathfinding</a>
-      <a href="#photography" data-spy="photography">Photography</a>
+    <div class="nav-inner">
+      <a href="#about" class="logo">Jay Dan Howard</a>
+      <div class="nav-links" id="scroll-spy-links">
+        <a href="#about" data-spy="about">About</a>
+        <a href="#trace" data-spy="trace">Request Trace</a>
+        <a href="#cluster" data-spy="cluster">Cluster</a>
+        <a href="#satellites" data-spy="satellites">Satellites</a>
+        <a href="#life" data-spy="life">Game of Life</a>
+        <a href="#path" data-spy="path">Pathfinding</a>
+        <a href="#photography" data-spy="photography">Photography</a>
 
-      <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
-        <span fx-show="light">&#9789;</span>
-        <span fx-show="dark">&#9788;</span>
-      </button>
+        <button class="icon-btn" fx-on="click->toggle_theme" aria-label="Toggle dark mode">
+          <span fx-show="light">&#9789;</span>
+          <span fx-show="dark">&#9788;</span>
+        </button>
 
-      <div fx-machine="nav" class="contact-wrap">
-        <button class="icon-btn" fx-on="click->toggle_contact">Contact &#9662;</button>
-        <div class="contact-menu" fx-show="open">
-          <a href="https://github.com/jaydh" target="_blank" rel="noreferrer">GitHub</a>
-          <a href="https://www.linkedin.com/in/jaydanhoward/" target="_blank" rel="noreferrer">LinkedIn</a>
-          <a href="mailto:hello@jaydanhoward.com">Email</a>
-        </div>
-      </div><!-- /fx-machine=nav -->
+        <div fx-machine="nav" class="contact-wrap">
+          <button class="icon-btn" fx-on="click->toggle_contact">Contact &#9662;</button>
+          <div class="contact-menu" fx-show="open">
+            <a href="https://github.com/jaydh" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="https://www.linkedin.com/in/jaydanhoward/" target="_blank" rel="noreferrer">LinkedIn</a>
+            <a href="mailto:hello@jaydanhoward.com">Email</a>
+          </div>
+        </div><!-- /fx-machine=nav -->
+      </div>
     </div>
   </nav>
 
