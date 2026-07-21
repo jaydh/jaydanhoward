@@ -5,19 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jay Dan Howard</title>
   <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico">
+  <link rel="preload" href="/IBMPlexSans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <style>
+    @font-face {
+      font-family: 'IBM Plex Sans';
+      font-style: normal;
+      font-weight: 100 900;
+      font-display: swap;
+      src: url('/IBMPlexSans-latin.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    /* Same real values as the actual site's assets/tailwind.css
+       (--color-charcoal/-light, --color-accent, --color-surface,
+       --color-border); --bg is an alias so this port's page-level
+       background matches (the real root div is just bg-surface directly,
+       no separate lighter page shade). */
     :root {
-      --bg: #f7f7f8;
       --surface: #ffffff;
-      --border: #e5e5e8;
+      --bg: var(--surface);
+      --border: #e5e7eb;
       --text: #1e1e1e;
       --text-light: #555555;
       --accent: #3b82f6;
     }
 
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; }
+    body { font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; }
     .page { background: var(--bg); color: var(--text); min-height: 100vh; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
@@ -31,8 +45,8 @@
     [fx-if] { display: none; }
 
     .theme-dark {
-      --bg: #0b0e14; --surface: #0f1420; --border: #1f2637;
-      --text: #e5e7eb; --text-light: #9aa3b2; --accent: #60a5fa;
+      --surface: #111827; --bg: var(--surface); --border: #374151;
+      --text: #e5e7eb; --text-light: #9ca3af; --accent: #60a5fa;
     }
 
     nav {
