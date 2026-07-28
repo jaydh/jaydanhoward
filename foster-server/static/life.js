@@ -85,9 +85,16 @@ export function initLife() {
   observer.observe(widget);
 
   function draw() {
-    ctx2d.fillStyle = getComputedStyle(document.body).getPropertyValue('--surface') || '#0f1420';
+    // --surface/--accent are set on .page (and overridden by html.dark
+    // .page for dark mode) — document.body is an ancestor of .page, not a
+    // descendant, so custom-property inheritance never reaches it and
+    // getComputedStyle(document.body) always returns the light-mode :root
+    // default. Reading off .page itself gets the real, currently-active
+    // value in either theme.
+    const pageStyle = getComputedStyle(document.querySelector('.page') || document.body);
+    ctx2d.fillStyle = pageStyle.getPropertyValue('--surface') || '#0f1420';
     ctx2d.fillRect(0, 0, canvas.width, canvas.height);
-    ctx2d.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent') || '#60a5fa';
+    ctx2d.fillStyle = pageStyle.getPropertyValue('--accent') || '#60a5fa';
     for (let y = 0; y < GRID_H; y++) {
       for (let x = 0; x < GRID_W; x++) {
         if (cells[y * GRID_W + x]) {

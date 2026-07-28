@@ -336,6 +336,7 @@ pub async fn latest_from_db(pool: &PgPool) -> Value {
                 "total_pairs": r.try_get::<i64,_>("total_pairs").unwrap_or(0),
                 "pairs_after_hoots": r.try_get::<i64,_>("pairs_after_hoots").unwrap_or(0),
                 "events_found": r.try_get::<i32,_>("events_found").unwrap_or(0),
+                "elapsed_ms": r.try_get::<i64,_>("elapsed_ms").unwrap_or(0),
                 "events": events,
             })
         }

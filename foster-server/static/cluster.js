@@ -22,7 +22,11 @@ export function initCluster() {
     const data = JSON.parse(el.getAttribute('data-fx-item'));
 
     ctx2d.clearRect(0, 0, canvas.width, canvas.height);
-    ctx2d.fillStyle = getComputedStyle(document.body).getPropertyValue('--surface') || '#fff';
+    // --surface is set on .page (and overridden by html.dark .page for
+    // dark mode) — document.body is an ancestor of .page, not a
+    // descendant, so getComputedStyle(document.body) never sees the
+    // override and always returns the light-mode :root default.
+    ctx2d.fillStyle = getComputedStyle(document.querySelector('.page') || document.body).getPropertyValue('--surface') || '#fff';
     ctx2d.fillRect(0, 0, canvas.width, canvas.height);
 
     for (const { key, color } of SERIES) {
