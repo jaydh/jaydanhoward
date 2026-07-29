@@ -117,7 +117,21 @@ jobs:
           curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
           curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
           apt-get update && apt-get install -y caddy
-          caddy reverse-proxy --from https://127.0.0.1:8443 --to 127.0.0.1:8000 > /tmp/caddy.log 2>&1 &
+          # `caddy reverse-proxy` (the ad-hoc CLI helper) doesn't accept
+          # --debug; a real Caddyfile with the `debug` global option is
+          # needed to get debug-level reverse_proxy logs (investigating
+          # intermittent net::ERR_ABORTED on /pkg/foster_client.js — see
+          # tests/infra.spec.ts's WASM cache test comment).
+          cat > /tmp/Caddyfile <<'CADDYEOF'
+          {
+            debug
+          }
+
+          https://127.0.0.1:8443 {
+            reverse_proxy 127.0.0.1:8000
+          }
+          CADDYEOF
+          caddy run --config /tmp/Caddyfile --adapter caddyfile > /tmp/caddy.log 2>&1 &
           echo $! > /tmp/caddy.pid
           sleep 2
       - name: Set up Node.js
