@@ -93,17 +93,43 @@
 
     footer { border-top: 1px solid var(--border); padding: 2rem; text-align: center; color: var(--text-light); font-size: 0.85rem; }
 
-    #life-canvas, #path-canvas {
-      display: block; width: 100%; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface);
+    .life-box { display: flex; flex-direction: column; align-items: center; gap: 1rem; position: relative; }
+    .life-controls { display: flex; gap: 0.75rem; margin: 0; flex-wrap: wrap; align-items: center; justify-content: center; }
+    .life-icon-btn {
+      background: transparent; color: var(--accent); border: 1px solid var(--accent);
+      border-radius: 0.375rem; padding: 0.4rem 1rem; cursor: pointer; font: inherit; line-height: 1;
     }
-    #life-canvas { max-width: 720px; aspect-ratio: 96 / 54; }
-    #path-canvas { max-width: 800px; aspect-ratio: 800 / 480; }
-    .life-controls { display: flex; gap: 0.75rem; margin: 1rem 0; flex-wrap: wrap; }
-    .life-controls button {
+    .life-icon-btn:hover { background: rgba(59,130,246,0.1); }
+    .life-settings-btn { color: var(--text-light); border-color: var(--border); display: flex; align-items: center; justify-content: center; }
+    .life-settings-btn svg { width: 1rem; height: 1rem; }
+    .life-settings-btn:hover { background: var(--border); color: var(--text); }
+    .life-grid-label { font-size: 0.85rem; color: var(--text-light); }
+    .life-zoom { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-light); }
+    .life-zoom span:last-child { font-family: ui-monospace, monospace; width: 3rem; }
+    .life-zoom input[type="range"] { accent-color: var(--accent); }
+    #life-canvas {
+      display: block; width: 100%; max-width: 720px; aspect-ratio: 1; border: 1px solid var(--border);
+      border-radius: 0.5rem; background: var(--surface); cursor: grab; touch-action: none;
+    }
+    #life-canvas:active { cursor: grabbing; }
+    .life-settings-panel {
+      position: absolute; top: 3rem; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 0.5rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); padding: 1.25rem; min-width: 280px;
+      display: flex; flex-direction: column; gap: 1rem;
+    }
+    .life-settings-header { display: flex; align-items: center; justify-content: space-between; }
+    .life-settings-header h3 { font-size: 1rem; font-weight: 600; }
+    .life-settings-header button { background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 0.9rem; }
+    .life-settings-header button:hover { color: var(--text); }
+    .life-settings-field { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; }
+    .life-settings-field label { font-weight: 500; }
+    .life-settings-field input[type="range"] { accent-color: var(--accent); width: 100%; }
+    .life-settings-value { align-self: flex-end; color: var(--text-light); font-size: 0.75rem; }
+    .life-settings-field select {
       background: var(--surface); color: var(--text); border: 1px solid var(--border);
-      border-radius: 0.375rem; padding: 0.5rem 1rem; cursor: pointer; font: inherit;
+      border-radius: 0.375rem; padding: 0.4rem 0.6rem; font: inherit;
     }
-    .life-controls button:hover { border-color: var(--accent); color: var(--accent); }
+    .life-learn-more { font-size: 0.85rem; color: var(--accent); }
 
     #request-trace-container { display: flex; flex-direction: column; align-items: center; max-width: 32rem; margin: 0 auto; }
     .trace-loading, .trace-error { color: var(--text-light); font-size: 0.85rem; padding: 2rem 0; font-family: ui-monospace, monospace; }
@@ -553,19 +579,53 @@
   <main id="life">
     <h1>Conway's Game of Life</h1>
     <p>
-      Plain <code>requestAnimationFrame</code> canvas. Auto-plays when
-      scrolled into view and pauses when scrolled away — per-visitor state
-      like the real site's own local signal, not shared server state.
+      A real GPU ping-pong shader simulation — 2048&times;2048 cells, stepped
+      entirely on the GPU (state stored in an R8 texture, next-generation
+      computed by a fragment shader) — ported line-for-line from the real
+      <code>src/components/life.rs</code>. Auto-plays when scrolled into
+      view and pauses when scrolled away; zoom/pan and the settings panel
+      are all plain per-visitor client state, not shared server state.
     </p>
-    <div id="life-widget">
-      <canvas id="life-canvas" width="480" height="270"></canvas>
+    <div id="life-widget" class="life-box">
       <div class="life-controls">
-        <button id="life-toggle-run">
-          <span class="life-run-label">&#9654; Run</span>
-          <span class="life-pause-label" style="display:none">&#10074;&#10074; Pause</span>
+        <button id="life-toggle-run" class="life-icon-btn" aria-label="Play/Pause">
+          <span class="life-run-label">&#9654;</span>
+          <span class="life-pause-label" style="display:none">&#10074;&#10074;</span>
         </button>
-        <button id="life-reset">&#8635; Reset</button>
+        <button id="life-reset" class="life-icon-btn" aria-label="Reset">&#8635;</button>
+        <button id="life-settings-toggle" class="life-icon-btn life-settings-btn" aria-label="Settings">
+          <svg viewBox="0 0 512 512" fill="currentColor"><path d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4L83.1 425.9c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4C64.6 273.1 64 264.6 64 256s.6-17.1 1.7-25.4L22.4 191.2c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160 80 80 0 1 0 0 160z"/></svg>
+        </button>
+        <span class="life-grid-label">2048&times;2048</span>
+        <label class="life-zoom">
+          <span>zoom</span>
+          <input id="life-zoom-slider" type="range" min="1" max="16" step="0.5" value="1">
+          <span id="life-zoom-label">1.0x</span>
+        </label>
       </div>
+      <div id="life-settings-panel" class="life-settings-panel" style="display:none">
+        <div class="life-settings-header">
+          <h3>Settings</h3>
+          <button id="life-settings-close" aria-label="Close">&#10005;</button>
+        </div>
+        <div class="life-settings-field">
+          <label>Alive Probability</label>
+          <input id="life-prob-slider" type="range" min="0.1" max="0.9" step="0.05" value="0.35">
+          <span id="life-prob-label" class="life-settings-value">35%</span>
+        </div>
+        <div class="life-settings-field">
+          <label>Speed</label>
+          <select id="life-speed-select">
+            <option value="16">~60 fps</option>
+            <option value="33">~30 fps</option>
+            <option value="66">~15 fps</option>
+            <option value="125">~8 fps</option>
+            <option value="250">~4 fps</option>
+          </select>
+        </div>
+        <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life" target="_blank" rel="noreferrer" class="life-learn-more">Learn More</a>
+      </div>
+      <canvas id="life-canvas"></canvas>
     </div>
   </main>
 
