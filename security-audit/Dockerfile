@@ -6,7 +6,7 @@
 # single-arch only.
 
 FROM docker.io/library/rust:1-bookworm AS builder
-RUN cargo install cargo-audit --locked --features vendored-openssl
+RUN cargo install cargo-audit --locked
 
 FROM docker.io/library/python:3-slim
 WORKDIR /app
