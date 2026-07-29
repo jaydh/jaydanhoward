@@ -730,7 +730,6 @@
 </div><!-- /fx-machine=theme -->
 
 <script type="module">
-  import init from '/pkg/foster_client.js';
   import { initLife } from '/life.js';
   import { initPathfinding } from '/pathfinding.js';
   import { initRequestTrace } from '/request_trace.js';
@@ -743,6 +742,25 @@
   import { initTheme } from '/theme.js';
   import { initLighthouse } from '/lighthouse.js';
   import { initNav } from '/nav.js';
+
+  // Dynamic (not static) import so a dropped request can be retried: a
+  // failed static `import init from '/pkg/foster_client.js'` kills the
+  // whole module graph with no recovery. Observed in CI — this one file
+  // (the largest JS asset on the page) occasionally gets net::ERR_ABORTED
+  // through the Caddy HTTP/2 front while every other static asset on the
+  // same load succeeds. A few retries cover the same transient proxy/
+  // network blip for real visitors too, not just CI.
+  async function loadFosterClient(attempts = 3) {
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return (await import('/pkg/foster_client.js')).default;
+      } catch (err) {
+        if (i === attempts - 1) throw err;
+        await new Promise(r => setTimeout(r, 500 * (i + 1)));
+      }
+    }
+  }
+  const init = await loadFosterClient();
   init();
   initLife();
   initPathfinding();
