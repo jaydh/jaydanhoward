@@ -87,6 +87,7 @@
     .contact-menu a:hover { background: var(--border); text-decoration: none; }
 
     main { max-width: 1280px; margin: 0 auto; padding: 5rem 2rem; min-height: 60vh; }
+    .narrow { max-width: 42rem; margin: 0 auto; }
     h1 { font-size: 1.75rem; margin-bottom: 1.5rem; }
     h2 { font-size: 1.3rem; margin: 2.5rem 0 1rem; padding-top: 2rem; border-top: 1px solid var(--border); }
     p { color: var(--text-light); margin-bottom: 1rem; }
@@ -167,8 +168,25 @@
     .visitor-map img { display: block; width: 100%; color: var(--text-light); }
     .visitor-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 4px var(--accent); }
 
-    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; margin-top: 1rem; }
-    .photo-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0.375rem; cursor: pointer; display: block; background: var(--border); }
+    .photo-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; margin-top: 1rem; }
+    @media (min-width: 640px) { .photo-grid { grid-template-columns: 1fr 1fr; } }
+    @media (min-width: 1024px) { .photo-grid { grid-template-columns: 1fr 1fr 1fr; } }
+    .photo-tile {
+      position: relative; overflow: hidden; border-radius: 0.75rem; cursor: pointer;
+      aspect-ratio: 1; background: var(--border); transition: transform 0.3s, box-shadow 0.3s;
+    }
+    .photo-tile:hover { transform: scale(1.05); box-shadow: 0 12px 24px rgba(0,0,0,0.25); }
+    .photo-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .photo-tile-overlay {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .photo-tile:hover .photo-tile-overlay { opacity: 1; }
+    .photo-tile-overlay span {
+      width: 3rem; height: 3rem; border-radius: 50%; background: rgba(255,255,255,0.9);
+      display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .photo-tile-overlay svg { width: 1.5rem; height: 1.5rem; fill: #1a1a1a; }
     .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
     .lightbox img { max-width: 90vw; max-height: 80vh; border-radius: 0.5rem; }
     .lightbox-controls { display: flex; gap: 1rem; }
@@ -323,27 +341,31 @@
   </nav>
 
   <main id="about">
-    <h1>About</h1>
-    <p>
-      You're on some old computers and Raspberry Pis in my closet. This site runs on a self-hosted
-      <a href="https://kubernetes.io/" target="_blank" rel="noreferrer">Kubernetes</a> cluster —
-      autoscaling <a href="https://github.com/actions/actions-runner-controller" target="_blank" rel="noreferrer">GitHub Actions runners</a>
-      (x86 + arm), in-cluster <a href="https://goharbor.io/" target="_blank" rel="noreferrer">Harbor</a> registry,
-      <a href="https://rook.io/" target="_blank" rel="noreferrer">Rook-Ceph</a> storage, built with Rust
-      (<a href="https://github.com/jaydh/foster" target="_blank" rel="noreferrer">Foster</a>), exposed via
-      <a href="https://www.cloudflare.com/products/tunnel/" target="_blank" rel="noreferrer">Cloudflare Tunnels</a>.
-    </p>
-    <p>
-      Software engineer at <a href="https://www.astranis.com/" target="_blank" rel="noreferrer">Astranis</a>
-      on the network and payload software team — tools to operate and monitor micro GEO satellites.
-    </p>
+    <div class="narrow">
+      <h1>About</h1>
+      <p>
+        You're on some old computers and Raspberry Pis in my closet. This site runs on a self-hosted
+        <a href="https://kubernetes.io/" target="_blank" rel="noreferrer">Kubernetes</a> cluster —
+        autoscaling <a href="https://github.com/actions/actions-runner-controller" target="_blank" rel="noreferrer">GitHub Actions runners</a>
+        (x86 + arm), in-cluster <a href="https://goharbor.io/" target="_blank" rel="noreferrer">Harbor</a> registry,
+        <a href="https://rook.io/" target="_blank" rel="noreferrer">Rook-Ceph</a> storage, built with Rust
+        (<a href="https://github.com/jaydh/foster" target="_blank" rel="noreferrer">Foster</a>), exposed via
+        <a href="https://www.cloudflare.com/products/tunnel/" target="_blank" rel="noreferrer">Cloudflare Tunnels</a>.
+      </p>
+      <p>
+        Software engineer at <a href="https://www.astranis.com/" target="_blank" rel="noreferrer">Astranis</a>
+        on the network and payload software team — tools to operate and monitor micro GEO satellites.
+      </p>
+    </div>
   </main>
 
   <main id="trace">
-    <h1>Request Trace</h1>
-    <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
-    <button id="request-trace-refresh">&#8635; Refresh</button>
-    <div id="request-trace-container"></div>
+    <div class="narrow" style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+      <h1>How You Got Here</h1>
+      <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
+      <button id="request-trace-refresh">&#8635; Refresh</button>
+      <div id="request-trace-container"></div>
+    </div>
   </main>
 
   <main id="cluster">
@@ -679,7 +701,12 @@
     <p>Real photos served straight from the CDN.</p>
     <div fx-machine="photography">
       <div class="photo-grid" fx-for="photos">
-        <img class="photo-thumb" alt="" />
+        <div class="photo-tile">
+          <img class="photo-thumb" alt="" />
+          <div class="photo-tile-overlay">
+            <span><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span>
+          </div>
+        </div>
       </div>
       <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
     </div><!-- /fx-machine=photography -->

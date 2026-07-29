@@ -24,14 +24,17 @@ export function initPhotography() {
 
   function fillThumbnails() {
     const items = [];
-    for (const img of grid.querySelectorAll('img[data-fx-item]')) {
-      const item = JSON.parse(img.getAttribute('data-fx-item'));
+    // fx-for sets data-fx-item on the immediate repeated child (the
+    // .photo-tile wrapper), not on the nested <img> itself.
+    for (const tile of grid.querySelectorAll('[data-fx-item]')) {
+      const item = JSON.parse(tile.getAttribute('data-fx-item'));
       items.push(item);
-      if (!img.dataset.filled) {
+      const img = tile.querySelector('img');
+      if (img && !img.dataset.filled) {
         img.src = item.thumb_url || item.medium_url;
         img.alt = item.name;
         img.dataset.filled = '1';
-        img.addEventListener('click', () => open(items.indexOf(item)));
+        tile.addEventListener('click', () => open(items.indexOf(item)));
       }
     }
     photos = items;
