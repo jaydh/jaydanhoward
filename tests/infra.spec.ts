@@ -27,13 +27,42 @@ test('cache: HTML root gets max-age=0 must-revalidate', async ({ request }) => {
 // after a deploy, so this only asserts the safer fallback is in effect,
 // not the (currently inapplicable) immutable rule.
 test('cache: WASM asset does not use an unsafe immutable TTL without cache-busting', async ({ page }) => {
+  // This test has failed on every CI run since the Foster migration
+  // (never reproduces locally, in isolation or under the full suite) —
+  // the failure mode is a bare 30s timeout with zero '.wasm' response
+  // ever observed. These listeners exist to turn the next CI failure into
+  // real evidence (every request + its outcome, plus JS/page errors)
+  // instead of another blind guess-and-check cycle.
+  const allRequests: string[] = [];
+  const failedRequests: string[] = [];
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+
+  page.on('request', req => allRequests.push(req.url()));
+  page.on('requestfailed', req => failedRequests.push(`${req.url()} — ${req.failure()?.errorText}`));
+  page.on('pageerror', err => pageErrors.push(err.message));
+  page.on('console', msg => {
+    if (msg.type() === 'error') consoleErrors.push(msg.text());
+  });
+
   const wasmResponsePromise = page.waitForResponse(
     res => new URL(res.url()).pathname.endsWith('.wasm'),
     { timeout: 30_000 },
   );
 
   await page.goto('/');
-  const res = await wasmResponsePromise;
+
+  let res;
+  try {
+    res = await wasmResponsePromise;
+  } catch (err) {
+    console.log('--- WASM response never observed. Diagnostics: ---');
+    console.log('All requests:', JSON.stringify(allRequests, null, 2));
+    console.log('Failed requests:', JSON.stringify(failedRequests, null, 2));
+    console.log('Page errors:', JSON.stringify(pageErrors, null, 2));
+    console.log('Console errors:', JSON.stringify(consoleErrors, null, 2));
+    throw err;
+  }
   const wasmCacheControl = res.headers()['cache-control'] ?? null;
 
   console.log(`WASM: ${res.url()}  →  ${wasmCacheControl}`);
