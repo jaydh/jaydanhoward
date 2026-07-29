@@ -1213,6 +1213,7 @@ dependencies = [
  "chrono",
  "foster-core",
  "foster-server",
+ "futures-util",
  "k8s-openapi",
  "kube",
  "rayon",
@@ -1224,6 +1225,7 @@ dependencies = [
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "tower-http 0.5.2",
 ]
 

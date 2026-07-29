@@ -188,19 +188,47 @@
     }
     .lh-iframe { width: 100%; min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem; }
 
-    #cluster-refresh {
-      background: var(--surface); color: var(--text); border: 1px solid var(--border);
-      border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem; margin-bottom: 1rem;
+    .cluster-card { background: var(--bg); border-radius: 0.75rem; padding: 1.25rem; }
+    .cluster-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
+    .cluster-header h1 { margin: 0; font-size: 1.15rem; }
+    .cluster-live { font-size: 0.75rem; color: #16a34a; }
+    .cluster-live-time { font-size: 0.75rem; color: var(--text-light); margin-left: 0.5rem; }
+    .cluster-error { text-align: center; color: #ef4444; padding: 1rem; }
+    .cluster-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; gap: 0.25rem; flex-wrap: wrap; }
+    .cluster-tab {
+      background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-light);
+      padding: 0.5rem 0.9rem; font: inherit; font-size: 0.85rem; cursor: pointer;
     }
-    #cluster-refresh:hover { border-color: var(--accent); color: var(--accent); }
-    .cluster-summary { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
-    #cluster-sparkline { display: block; width: 100%; max-width: 800px; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface); margin-bottom: 1.5rem; }
-    .cluster-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
-    @media (max-width: 640px) { .cluster-grid { grid-template-columns: 1fr; } }
+    .cluster-tab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
+    .cluster-tab:hover { color: var(--text); }
+    .cluster-tabpanel { display: none; }
+    .cluster-tabpanel.active { display: block; }
+    .cluster-summary { display: flex; gap: 1.5rem; margin: 0 0 1rem; flex-wrap: wrap; font-size: 0.85rem; }
+    .cluster-summary strong { font-size: 1.4rem; color: var(--accent); margin-right: 0.35rem; }
+    .cluster-sparks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
+    @media (max-width: 640px) { .cluster-sparks { grid-template-columns: 1fr; } }
+    .cluster-spark { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.6rem; background: var(--surface); }
+    .cluster-spark-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 0.3rem; }
+    .cluster-spark canvas { display: block; width: 100%; height: 50px; }
+    .cluster-nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
+    .cluster-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; background: var(--surface); max-height: 22rem; overflow-y: auto; margin-bottom: 1rem; }
+    .cluster-box h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 0.6rem; }
+    .cluster-bar-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; margin-bottom: 0.3rem; }
+    .cluster-bar-label { width: 8rem; flex-shrink: 0; font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cluster-bar-track { flex: 1; background: var(--border); border-radius: 999px; height: 0.35rem; overflow: hidden; }
+    .cluster-bar-fill { height: 100%; background: var(--accent); }
+    .cluster-bar-val { width: 7rem; text-align: right; flex-shrink: 0; font-family: ui-monospace, monospace; color: var(--text-light); }
+    .cluster-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; font-family: ui-monospace, monospace; }
+    .cluster-table th { text-align: left; color: var(--text-light); font-weight: 400; padding-bottom: 0.3rem; }
+    .cluster-table td { padding: 0.2rem 0; border-top: 1px solid var(--border); }
+    .cluster-table td.num { text-align: right; }
     .flux-row, .backup-row { display: flex; gap: 0.5rem; align-items: baseline; font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
     .flux-row:last-child, .backup-row:last-child { border-bottom: none; }
     .flux-kind { color: var(--text-light); width: 6rem; flex-shrink: 0; }
     .flux-name { flex: 1; word-break: break-all; }
+    .cluster-audit-row { font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
+    .cluster-audit-row:last-child { border-bottom: none; }
+    .cluster-audit-err { color: #ef4444; }
     .screening-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; background: var(--surface); }
     .screening-status { font-family: ui-monospace, monospace; font-size: 0.85rem; padding: 0.15rem 0.5rem; border-radius: 0.25rem; background: var(--border); }
     #conjunction-start {
@@ -321,128 +349,99 @@
   <main id="cluster">
     <h1>Cluster</h1>
     <p>
-      Real cluster telemetry — CPU/mem/disk/pod/node metrics, historical
-      24h series, Ceph health, network insights, GitOps status, backup Job
-      status, cloudflared tunnel stats, and the Claude audit log, all ported
-      from the real <code>src/components/cluster_stats.rs</code>. Most of
-      this is Prometheus-backed (<code>PROMETHEUS_URL</code>) — GitOps and
-      backup status go through the k8s API directly; network insights,
-      spike config, and the Claude audit log are Postgres-backed.
+      A real, live server-push feed of this site's own homelab — CPU/mem/
+      disk/pod/node metrics, historical 24h series, Ceph health, network
+      insights, GitOps status, backup Job status, cloudflared tunnel stats,
+      and the Claude audit log, all ported from the real
+      <code>src/components/cluster_stats.rs</code>. This is a genuine
+      <code>EventSource</code> stream (<code>/api/metrics/stream</code>),
+      not a Foster machine — the data really is global (one homelab, not
+      per-visitor), and this matches the real site's actual transport.
     </p>
-    <div fx-machine="cluster">
-      <button id="cluster-refresh" fx-on="click->refresh">&#8635; Refresh</button>
+    <div id="cluster-widget" class="cluster-card">
+      <div class="cluster-header">
+        <h1 style="font-size:1.15rem;margin:0;">Homelab Cluster</h1>
+        <div>
+          <span class="cluster-live">&#9679; Live</span>
+          <span id="cluster-last-refresh" class="cluster-live-time"></span>
+        </div>
+      </div>
+      <div id="cluster-error" class="cluster-error" style="display:none"></div>
 
-      <div class="cluster-summary">
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="cpu_usage_percent">0</div><div class="visitor-stat-label">CPU %</div></div>
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="memory_usage_gb">0</div><div class="visitor-stat-label">Mem GB</div></div>
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="disk_usage_gb">0</div><div class="visitor-stat-label">Disk GB</div></div>
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="pod_count">0</div><div class="visitor-stat-label">Pods</div></div>
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="healthy_node_count">0</div><div class="visitor-stat-label">Nodes Ready</div></div>
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="network_rx_mbps">0</div><div class="visitor-stat-label">RX Mbps</div></div>
-        <div class="visitor-stat"><div class="visitor-stat-value" fx-text="network_tx_mbps">0</div><div class="visitor-stat-label">TX Mbps</div></div>
+      <div class="cluster-tabs">
+        <button class="cluster-tab active" data-tab="overview">Overview</button>
+        <button class="cluster-tab" data-tab="storage">Storage</button>
+        <button class="cluster-tab" data-tab="network">Network</button>
+        <button class="cluster-tab" data-tab="gitops">GitOps</button>
+        <button class="cluster-tab" data-tab="audit">AI Audit</button>
       </div>
 
-      <canvas id="cluster-sparkline" width="800" height="120"></canvas>
-      <div style="display:none"><div fx-for="historical_series_list"><span></span></div></div>
+      <div id="cluster-tab-overview" class="cluster-tabpanel active">
+        <div class="cluster-summary">
+          <div><strong id="cluster-pod-count">0</strong>pods</div>
+          <div><strong id="cluster-node-count">0/0</strong>nodes ready</div>
+        </div>
+        <div class="cluster-sparks">
+          <div class="cluster-spark"><div class="cluster-spark-title">CPU Usage</div><canvas id="cluster-spark-cpu"></canvas></div>
+          <div class="cluster-spark"><div class="cluster-spark-title">Memory Usage</div><canvas id="cluster-spark-memory"></canvas></div>
+          <div class="cluster-spark"><div class="cluster-spark-title">Storage Usage</div><canvas id="cluster-spark-disk"></canvas></div>
+        </div>
+        <div class="cluster-spark"><div class="cluster-spark-title">Network (RX/TX Mbps)</div><canvas id="cluster-spark-network" style="height:70px"></canvas></div>
+        <div id="cluster-nodes" class="cluster-nodes"></div>
+      </div>
 
-      <div class="cluster-grid">
+      <div id="cluster-tab-storage" class="cluster-tabpanel">
         <div class="cluster-box">
-          <h3>Nodes</h3>
-          <div fx-for="nodes">
-            <div class="flux-row">
-              <span class="flux-name" fx-field="name"></span>
-              <span fx-field="cpu_usage_percent"></span>%cpu
-              <span fx-field="memory_usage_gb"></span>G mem
-            </div>
-          </div>
+          <h3>Persistent Volumes</h3>
+          <div id="cluster-pvcs"></div>
         </div>
         <div class="cluster-box">
           <h3>Ceph</h3>
-          <div class="visit-row"><span>health</span><span fx-text="ceph_health"></span></div>
-          <div class="visit-row"><span>mon quorum</span><span fx-text="ceph_mon_quorum"></span>/<span fx-text="ceph_mon_total"></span></div>
-          <div class="visit-row"><span>osd up</span><span fx-text="ceph_osd_up"></span>/<span fx-text="ceph_osd_total"></span></div>
-          <div class="visit-row"><span>pg clean</span><span fx-text="ceph_pg_clean"></span>/<span fx-text="ceph_pg_total"></span></div>
-        </div>
-        <div class="cluster-box">
-          <h3>Flux GitOps</h3>
-          <div fx-for="flux">
-            <div class="flux-row">
-              <span class="flux-kind" fx-field="kind"></span>
-              <span class="flux-name" fx-field="name"></span>
-              <span fx-field="ready_icon"></span>
-            </div>
-          </div>
+          <div id="cluster-ceph"></div>
         </div>
         <div class="cluster-box">
           <h3>Backup Jobs</h3>
-          <div fx-for="backups">
-            <div class="backup-row">
-              <span fx-field="status_icon"></span>
-              <span class="flux-name" fx-field="name"></span>
-              <span class="flux-kind" fx-field="status_label"></span>
-            </div>
-          </div>
+          <div id="cluster-backups"></div>
+        </div>
+      </div>
+
+      <div id="cluster-tab-network" class="cluster-tabpanel">
+        <div class="cluster-box">
+          <h3>Cloudflare Tunnel</h3>
+          <div id="cluster-cloudflared"></div>
+        </div>
+        <div class="cluster-box">
+          <h3>Top Pods by Traffic (5m avg)</h3>
+          <div id="cluster-top-pods"></div>
+        </div>
+        <div class="cluster-box">
+          <h3>Spike Detector</h3>
+          <div id="cluster-spike-config"></div>
         </div>
         <div class="cluster-box">
           <h3>Network Insights</h3>
-          <div fx-for="network_insights">
-            <div class="visit-row">
-              <span fx-field="occurred_at"></span>
-              <span fx-field="spike_tx_mbps"></span> Mbps
-            </div>
-          </div>
+          <div id="cluster-insights"></div>
         </div>
+      </div>
+
+      <div id="cluster-tab-gitops" class="cluster-tabpanel">
         <div class="cluster-box">
-          <h3>Top Network Pods</h3>
-          <div fx-for="top_pods">
-            <div class="flux-row">
-              <span class="flux-name" fx-field="pod"></span>
-              <span fx-field="tx_mbps"></span>tx
-              <span fx-field="rx_mbps"></span>rx
-            </div>
-          </div>
+          <h3>Flux Resources</h3>
+          <div id="cluster-gitops"></div>
         </div>
+      </div>
+
+      <div id="cluster-tab-audit" class="cluster-tabpanel">
         <div class="cluster-box">
-          <h3>Cloudflared Tunnel</h3>
-          <div class="visit-row"><span>HA connections</span><span fx-text="cf_ha_connections"></span></div>
-          <div class="visit-row"><span>req/s</span><span fx-text="cf_total_req_per_sec"></span></div>
-          <div class="visit-row"><span>error rate</span><span fx-text="cf_error_rate"></span></div>
+          <h3>Security Audit</h3>
+          <div id="cluster-security-audit"></div>
         </div>
         <div class="cluster-box">
           <h3>Claude Audit Log</h3>
-          <div fx-for="claude_log">
-            <div class="visit-row">
-              <span fx-field="occurred_at"></span>
-              <span fx-field="model"></span>
-              <span fx-field="context"></span>
-            </div>
-          </div>
-        </div>
-        <div class="cluster-box">
-          <h3>Security Audit</h3>
-          <div class="visit-row">
-            <span fx-text="sec_status_label"></span>
-            <span><span fx-text="sec_dependency_count"></span> deps</span>
-            <span><span fx-text="sec_advisory_count"></span> advisories</span>
-          </div>
-          <div class="visit-row"><span>Last scan</span><span fx-text="sec_scanned_at"></span></div>
-          <div fx-for="security_vulnerabilities">
-            <div class="visit-row">
-              <span fx-field="id"></span>
-              <span fx-field="package"></span>
-              <span fx-field="title"></span>
-            </div>
-          </div>
-          <div fx-for="security_warnings">
-            <div class="visit-row" style="opacity:0.7">
-              <span fx-field="id"></span>
-              <span fx-field="package"></span>
-              <span fx-field="title"></span>
-            </div>
-          </div>
+          <div id="cluster-claude-log"></div>
         </div>
       </div>
-    </div><!-- /fx-machine=cluster -->
+    </div><!-- /cluster-widget -->
 
     <h2>Visitors</h2>
     <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>

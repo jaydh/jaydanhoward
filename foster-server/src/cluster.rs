@@ -17,6 +17,7 @@
 use crate::prometheus_client::{empty_data, parse_prometheus_value, query_prometheus, query_prometheus_range};
 use axum::extract::State;
 use axum::http::StatusCode;
+use axum::response::sse::{Event, KeepAlive, Sse};
 use k8s_openapi::api::batch::v1::Job;
 use kube::api::{Api, ListParams};
 use kube::core::DynamicObject;
@@ -577,69 +578,75 @@ async fn fetch_security_audit(pool: &PgPool) -> Value {
     })
 }
 
-pub fn fetch_cluster_data(pool: &PgPool) -> Value {
-    tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(async {
-            let kube_client = Client::try_default().await.ok();
+/// Real live snapshot for the SSE stream (see main.rs's /api/metrics/stream
+/// route) — the real site's tabbed "Homelab Cluster" card is fed by a true
+/// server-push EventSource, not a request/response round trip, so this is
+/// called every tick from an already-async context (no block_in_place/
+/// block_on nesting needed, unlike fetch_cluster_data below which exists
+/// for the synchronous Foster reducer closure this replaces for cluster's
+/// own data). Nested JSON (not flattened) since this is consumed by plain
+/// JS/EventSource, not Foster's fx-text/fx-if scalar-only bindings.
+pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
+    let kube_client = Client::try_default().await.ok();
 
-            let (metrics, nodes, historical, ceph, top_pods, cloudflared) = tokio::join!(
-                fetch_cluster_metrics(),
-                fetch_node_metrics(),
-                fetch_historical_metrics(),
-                fetch_ceph_status(),
-                fetch_top_network_pods(),
-                fetch_cloudflared_status(),
-            );
-            let (historical_series, historical_summary) = historical;
+    let (metrics, nodes, historical, ceph, top_pods, cloudflared) = tokio::join!(
+        fetch_cluster_metrics(),
+        fetch_node_metrics(),
+        fetch_historical_metrics(),
+        fetch_ceph_status(),
+        fetch_top_network_pods(),
+        fetch_cloudflared_status(),
+    );
+    let (historical_series, historical_summary) = historical;
 
-            let (gitops, backups) = match &kube_client {
-                Some(c) => (fetch_gitops_status(c).await, fetch_backup_status(c).await),
-                None => (vec![], vec![]),
-            };
+    let (gitops, backups) = match &kube_client {
+        Some(c) => (fetch_gitops_status(c).await, fetch_backup_status(c).await),
+        None => (vec![], vec![]),
+    };
 
-            let (insights, spike_config, claude_log, security_audit) = tokio::join!(
-                fetch_network_insights(pool),
-                fetch_spike_config(pool),
-                fetch_claude_audit_log(pool),
-                fetch_security_audit(pool),
-            );
+    let (insights, spike_config, claude_log, security_audit) = tokio::join!(
+        fetch_network_insights(pool),
+        fetch_spike_config(pool),
+        fetch_claude_audit_log(pool),
+        fetch_security_audit(pool),
+    );
 
-            // fx-text/fx-if/fx-bind-attr only look up a single top-level
-            // ctx[key] (no dotted paths), so every scalar we want to bind
-            // declaratively has to live at the context root — hence the
-            // flattening (via serde_json::Value::Object merge) below,
-            // rather than nesting each panel under its own key.
-            let mut ctx = serde_json::Map::new();
-            for (obj, prefix) in [(&metrics, ""), (&ceph, "ceph_"), (&cloudflared, "cf_"), (&historical_summary, "")] {
-                if let Some(map) = obj.as_object() {
-                    for (k, v) in map {
-                        ctx.insert(format!("{prefix}{k}"), v.clone());
-                    }
-                }
-            }
-            if let Some(map) = spike_config.as_object() {
-                for (k, v) in map {
-                    ctx.insert(format!("spike_{k}"), v.clone());
-                }
-            }
-            ctx.insert("nodes".to_string(), json!(nodes));
-            ctx.insert("top_pods".to_string(), json!(top_pods));
-            ctx.insert("flux".to_string(), json!(gitops));
-            ctx.insert("backups".to_string(), json!(backups));
-            ctx.insert("network_insights".to_string(), json!(insights));
-            ctx.insert("claude_log".to_string(), json!(claude_log));
-            if let Some(map) = security_audit.as_object() {
-                for (k, v) in map {
-                    ctx.insert(k.clone(), v.clone());
-                }
-            }
-            // Wrapped in a one-element array so it can ride the same
-            // fx-for + data-fx-item JS-reading pattern satellites.js uses
-            // for structured (non-scalar) data — fx-for expects an array.
-            ctx.insert("historical_series_list".to_string(), json!([historical_series]));
-            ctx.insert("kube_connected".to_string(), json!(kube_client.is_some()));
-
-            Value::Object(ctx)
-        })
+    json!({
+        "cluster": metrics,
+        "nodes": nodes,
+        "ceph": ceph,
+        "historical": { "series": historical_series, "summary": historical_summary },
+        "top_pods": top_pods,
+        "cloudflared": cloudflared,
+        "gitops": gitops,
+        "backups": backups,
+        "network_insights": insights,
+        "spike_config": spike_config,
+        "claude_log": claude_log,
+        "security_audit": security_audit,
+        "kube_connected": kube_client.is_some(),
     })
 }
+
+/// GET /api/metrics/stream — real server-push live feed for the tabbed
+/// "Homelab Cluster" card (see static/cluster.js), ported from the real
+/// site's routes/metrics_stream.rs: one tick per second, each tick re-fetches
+/// every panel and pushes the whole snapshot as a single SSE event.
+pub async fn metrics_stream(
+    State(pool): State<PgPool>,
+) -> Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>> {
+    use futures_util::StreamExt;
+    use tokio_stream::wrappers::IntervalStream;
+
+    let interval = tokio::time::interval(std::time::Duration::from_secs(1));
+    let stream = IntervalStream::new(interval).then(move |_| {
+        let pool = pool.clone();
+        async move {
+            let snapshot = fetch_cluster_snapshot(&pool).await;
+            Ok(Event::default().data(snapshot.to_string()))
+        }
+    });
+
+    Sse::new(stream).keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(15)))
+}
+

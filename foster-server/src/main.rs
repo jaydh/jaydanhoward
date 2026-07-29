@@ -83,25 +83,17 @@ async fn main() {
     // (src/lighthouse.rs, real Basic-Auth-protected upload endpoint ported
     // verbatim from routes/lighthouse/post.rs) — not a live self-audit.
 
-    // Full Prometheus-backed cluster panel (10+ real panels — see
-    // cluster.rs). PROMETHEUS_URL is unset here (unreachable from this dev
-    // laptop), so every metric gracefully degrades to zero locally; live
-    // verification happens in milestone 8's in-cluster staging step. GitOps
-    // + backup Job status (kube) and network insights/spike config/Claude
-    // audit log (Postgres) are all real right now, same as before.
-    let cluster_machine = {
-        let pool_for_reducer = pg_pool.clone();
-        MachineBuilder::new("cluster", "loaded", cluster::fetch_cluster_data(&pg_pool))
-            .on("loaded", "refresh", "loaded", move |_ctx, _payload| {
-                Ok(cluster::fetch_cluster_data(&pool_for_reducer))
-            })
-            .build()
-    };
-
+    // Full Prometheus-backed "Homelab Cluster" panel (10+ real panels — see
+    // cluster.rs) is a genuine server-push live feed, not a Foster machine —
+    // Foster machines are one shared instance across every connected client,
+    // which is fine for data that really is global (like this), but here it
+    // matches the real site's actual transport (a true EventSource/SSE
+    // stream ticking once a second, GET /api/metrics/stream) rather than
+    // request/response polling through Foster's reducer model. See
+    // static/cluster.js for the client-side consumer.
     let mut machines = HashMap::new();
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
-    machines.insert("cluster".to_string(), cluster_machine);
 
     // Real conjunction screening (Hoots + SGP4 + TCA + rayon — see
     // conjunction.rs). Foster's role is deliberately tiny, same shape as
@@ -260,6 +252,10 @@ async fn main() {
         .route(
             "/api/audit/claude",
             post(cluster::ingest_claude_audit).with_state(pg_pool.clone()),
+        )
+        .route(
+            "/api/metrics/stream",
+            get(cluster::metrics_stream).with_state(pg_pool.clone()),
         )
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))
