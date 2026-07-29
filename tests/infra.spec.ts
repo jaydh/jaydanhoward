@@ -27,21 +27,16 @@ test('cache: HTML root gets max-age=0 must-revalidate', async ({ request }) => {
 // after a deploy, so this only asserts the safer fallback is in effect,
 // not the (currently inapplicable) immutable rule.
 test('cache: WASM asset does not use an unsafe immutable TTL without cache-busting', async ({ page }) => {
-  let wasmCacheControl: string | null = null;
-  let wasmUrl: string | null = null;
-
-  page.on('response', res => {
-    if (!wasmUrl && new URL(res.url()).pathname.endsWith('.wasm')) {
-      wasmUrl = res.url();
-      wasmCacheControl = res.headers()['cache-control'] ?? null;
-    }
-  });
+  const wasmResponsePromise = page.waitForResponse(
+    res => new URL(res.url()).pathname.endsWith('.wasm'),
+    { timeout: 30_000 },
+  );
 
   await page.goto('/');
-  await page.waitForTimeout(8_000);
+  const res = await wasmResponsePromise;
+  const wasmCacheControl = res.headers()['cache-control'] ?? null;
 
-  console.log(`WASM: ${wasmUrl}  →  ${wasmCacheControl}`);
-  expect(wasmUrl, '.wasm file should be requested on page load').toBeTruthy();
+  console.log(`WASM: ${res.url()}  →  ${wasmCacheControl}`);
   expect(wasmCacheControl).not.toContain('immutable');
 });
 
