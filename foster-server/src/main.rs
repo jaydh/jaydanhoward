@@ -171,7 +171,13 @@ async fn main() {
     let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
         pkg_dir.to_string()
     } else {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../../foster/pkg").to_string()
+        // CI's "Build foster-client WASM" step (general.yml) and local dev
+        // both produce this at <repo-root>/foster/pkg (also why .gitignore
+        // has a bare `pkg` entry) — one level up from foster-server, not
+        // two. Was previously off by one level, which made this fallback
+        // silently 404 every /pkg/* request in CI (never in production,
+        // which always hits the /app/pkg branch above via the Dockerfile).
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../foster/pkg").to_string()
     };
     // The compile-time CARGO_MANIFEST_DIR baked in by concat! is the
     // Docker builder stage's path (/build), which doesn't exist in the
