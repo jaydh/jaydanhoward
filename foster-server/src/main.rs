@@ -114,7 +114,7 @@ async fn main() {
     // rendering pipeline live outside Foster entirely (a shared tokio task
     // and static/satellites.js respectively), same shape as conjunction.
     let satellites_runtime = std::sync::Arc::new(satellites::SatellitesRuntime::new());
-    satellites::spawn_background_loop(satellites_runtime.clone());
+    satellites::spawn_background_loop(satellites_runtime.clone(), Some(pg_pool.clone()));
     let satellites_machine = {
         let running_for_pause = satellites_runtime.running.clone();
         let running_for_resume = satellites_runtime.running.clone();

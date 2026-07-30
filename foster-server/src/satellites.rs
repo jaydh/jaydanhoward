@@ -25,12 +25,14 @@
 //! of `satellite_renderer.rs` into `static/satellites.js` — that part needed
 //! no architectural adaptation at all, just a language change.
 
+use chrono::{DateTime, Utc};
 use rayon::prelude::*;
 use serde_json::{json, Value};
 use sgp4::{Constants, Elements};
+use sqlx::PgPool;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::sync::RwLock;
 
 const EARTH_RADIUS_KM: f64 = 6371.0;
@@ -121,8 +123,14 @@ fn fetch_active_group_blocking() -> Vec<(String, String)> {
         .collect()
 }
 
+const TLE_CACHE_GROUP: &str = "active";
+
 struct Cache {
-    fetched_at: Instant,
+    /// When these TLEs were actually fetched from CelesTrak — a real wall
+    /// clock time (not process-local), so a cache loaded from Postgres on
+    /// a fresh pod correctly inherits its true age instead of restarting
+    /// the TLE_TTL countdown from "now" every restart.
+    fetched_at: DateTime<Utc>,
     sats: Vec<RealSat>,
     /// Fixed 288-point/5-minute grid covering the trailing 24h as of the
     /// last TLE refresh — same shape as the real site's `time_points`,
@@ -130,8 +138,7 @@ struct Cache {
     time_points: Vec<f64>,
 }
 
-fn refresh_cache_blocking() -> Cache {
-    let tles = fetch_active_group_blocking();
+fn build_cache_from_tles(tles: Vec<(String, String)>, fetched_at: DateTime<Utc>) -> Cache {
     let sats: Vec<RealSat> = tles
         .par_iter()
         .filter_map(|(l1, l2)| RealSat::from_tle(l1, l2))
@@ -144,7 +151,46 @@ fn refresh_cache_blocking() -> Cache {
     let start_time = now_ms - 24.0 * 60.0 * 60.0 * 1000.0;
     let time_points: Vec<f64> = (0..STEPS).map(|i| start_time + i as f64 * STEP_MS).collect();
 
-    Cache { fetched_at: Instant::now(), sats, time_points }
+    Cache { fetched_at, sats, time_points }
+}
+
+async fn load_tle_cache(pool: &PgPool, group: &str) -> Option<(Vec<(String, String)>, DateTime<Utc>)> {
+    let row: (Value, DateTime<Utc>) = sqlx::query_as(
+        "SELECT satellites, fetched_at FROM tle_cache WHERE group_name = $1",
+    )
+    .bind(group)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()?;
+    let tles: Vec<(String, String)> = serde_json::from_value(row.0).ok()?;
+    Some((tles, row.1))
+}
+
+async fn save_tle_cache(pool: &PgPool, group: &str, tles: &[(String, String)], fetched_at: DateTime<Utc>) {
+    let json = serde_json::to_value(tles).unwrap_or(Value::Null);
+    let _ = sqlx::query(
+        "INSERT INTO tle_cache (group_name, satellites, fetched_at) VALUES ($1, $2, $3)
+         ON CONFLICT (group_name) DO UPDATE SET satellites = EXCLUDED.satellites, fetched_at = EXCLUDED.fetched_at",
+    )
+    .bind(group)
+    .bind(json)
+    .bind(fetched_at)
+    .execute(pool)
+    .await;
+}
+
+/// Live CelesTrak fetch + persist to Postgres (best-effort — the in-memory
+/// cache still works fine without a pool for local dev), so the *next*
+/// process restart can skip the ~44s CelesTrak round trip entirely by
+/// reading this back via `load_tle_cache` instead.
+async fn refresh_and_cache(pool: &Option<PgPool>) -> Cache {
+    let tles = tokio::task::spawn_blocking(fetch_active_group_blocking).await.unwrap();
+    let fetched_at = Utc::now();
+    if let Some(pool) = pool {
+        save_tle_cache(pool, TLE_CACHE_GROUP, &tles, fetched_at).await;
+    }
+    tokio::task::spawn_blocking(move || build_cache_from_tles(tles, fetched_at)).await.unwrap()
 }
 
 pub struct SatellitesRuntime {
@@ -181,17 +227,32 @@ impl Default for SatellitesRuntime {
 /// satellite's real position (rayon-parallel, same as conjunction.rs) once
 /// per tick — one computation shared by every connected client, not one per
 /// browser tab.
-pub fn spawn_background_loop(runtime: Arc<SatellitesRuntime>) {
+pub fn spawn_background_loop(runtime: Arc<SatellitesRuntime>, pool: Option<PgPool>) {
     tokio::spawn(async move {
-        let mut cache = tokio::task::spawn_blocking(refresh_cache_blocking).await.unwrap();
+        // A fresh pod otherwise blocks every /api/satellites response on an
+        // empty snapshot for as long as the live CelesTrak fetch takes
+        // (~44s observed in production) before its first real tick — real
+        // user impact, not just a cold-start curiosity (it chained straight
+        // into the page's LCP). Loading the last-known-good TLE set from
+        // Postgres first means a restart only pays that cost if genuinely
+        // nothing's cached yet or the cache has aged past TLE_TTL.
+        let mut cache = match &pool {
+            Some(p) => match load_tle_cache(p, TLE_CACHE_GROUP).await {
+                Some((tles, fetched_at)) => {
+                    tokio::task::spawn_blocking(move || build_cache_from_tles(tles, fetched_at)).await.unwrap()
+                }
+                None => refresh_and_cache(&pool).await,
+            },
+            None => refresh_and_cache(&pool).await,
+        };
         let mut index: usize = 0;
         let mut ticker = tokio::time::interval(TICK);
 
         loop {
             ticker.tick().await;
 
-            if cache.fetched_at.elapsed() > TLE_TTL {
-                cache = tokio::task::spawn_blocking(refresh_cache_blocking).await.unwrap();
+            if Utc::now().signed_duration_since(cache.fetched_at).to_std().unwrap_or(TLE_TTL) > TLE_TTL {
+                cache = refresh_and_cache(&pool).await;
                 index = 0;
             }
 
