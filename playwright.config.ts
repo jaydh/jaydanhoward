@@ -15,6 +15,13 @@ export default defineConfig({
     headless: true,
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
+    // Investigating a deterministic-in-CI, never-locally net::ERR_ABORTED
+    // on one specific asset (/pkg/foster_client.js) through the Caddy
+    // HTTP/2 front — request-level logging and Caddy's own debug logs
+    // showed nothing (Caddy logs zero errors for any request; the abort
+    // is client-side). A full trace has real wire-level timing/protocol
+    // detail neither of those approaches could capture.
+    trace: 'retain-on-failure',
     // Foster runs ~10 independent SSE connections (one per machine) plus
     // regular fetches; over plain HTTP/1.1 that blows past Chromium's
     // 6-connections-per-origin cap and POSTs (e.g. button clicks) hang
