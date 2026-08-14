@@ -5,6 +5,8 @@ extern crate rustls;
 
 mod components;
 #[cfg(feature = "ssr")]
+mod cluster_audit;
+#[cfg(feature = "ssr")]
 mod db;
 #[cfg(feature = "ssr")]
 mod middleware;

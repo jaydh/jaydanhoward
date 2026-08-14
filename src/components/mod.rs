@@ -6,6 +6,7 @@ pub mod conjunction;
 mod visitors;
 mod beliefs;
 pub mod cluster_alerts;
+pub mod cluster_audit_log;
 pub mod cluster_stats;
 mod dev;
 mod footer;
@@ -34,6 +35,7 @@ pub fn register_server_fns() {
     use leptos::server_fn::axum::register_explicit;
     register_explicit::<photography::FetchImages>();
     register_explicit::<cluster_alerts::GetClusterAlerts>();
+    register_explicit::<cluster_audit_log::GetClusterAudits>();
     register_explicit::<cluster_stats::GetClusterMetrics>();
     register_explicit::<cluster_stats::GetNodeMetrics>();
     register_explicit::<cluster_stats::GetHistoricalMetrics>();

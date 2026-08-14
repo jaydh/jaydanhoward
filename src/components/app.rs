@@ -1,5 +1,6 @@
 use crate::components::about::About;
 use crate::components::cluster_alerts::ClusterAlerts;
+use crate::components::cluster_audit_log::ClusterAuditLog;
 use crate::components::cluster_stats::ClusterStats;
 use crate::components::conjunction::ConjunctionPanel;
 use crate::components::dev::Lighthouse;
@@ -74,6 +75,10 @@ fn HomePage() -> impl IntoView {
                     <div class="flex flex-col gap-4 w-full">
                         <h2 class="text-xl font-semibold text-charcoal">"Alerts"</h2>
                         <ClusterAlerts />
+                    </div>
+                    <div class="flex flex-col gap-4 w-full">
+                        <h2 class="text-xl font-semibold text-charcoal">"Daily Audit"</h2>
+                        <ClusterAuditLog />
                     </div>
                     <ClusterStats />
                     <Visitors />

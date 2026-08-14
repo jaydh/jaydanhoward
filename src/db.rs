@@ -961,6 +961,71 @@ mod inner {
         matches!(result, Ok(r) if r.rows_affected() == 1)
     }
 
+    /// Try to atomically claim the right to run today's cluster audit. Returns
+    /// true if this pod won the race, false if another replica already claimed
+    /// today's bucket (or on DB error).
+    pub async fn try_claim_cluster_audit(pool: &PgPool) -> bool {
+        let result = sqlx::query(
+            "INSERT INTO cluster_audit_claims (bucket) \
+             VALUES (date_trunc('day', NOW())) \
+             ON CONFLICT DO NOTHING",
+        )
+        .execute(pool)
+        .await;
+
+        matches!(result, Ok(r) if r.rows_affected() == 1)
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    pub struct ClusterAuditRow {
+        pub id: i64,
+        pub occurred_at: DateTime<Utc>,
+        pub summary: String,
+        pub significance: i16,
+        pub findings: serde_json::Value,
+    }
+
+    pub async fn insert_cluster_audit(
+        pool: &PgPool,
+        summary: &str,
+        significance: i16,
+        findings: &serde_json::Value,
+    ) -> Result<i64, sqlx::Error> {
+        sqlx::query(
+            "INSERT INTO cluster_audits (summary, significance, findings)
+             VALUES ($1, $2, $3)
+             RETURNING id",
+        )
+        .bind(summary)
+        .bind(significance)
+        .bind(findings)
+        .fetch_one(pool)
+        .await
+        .and_then(|r| r.try_get(0))
+    }
+
+    pub async fn get_recent_cluster_audits(
+        pool: &PgPool,
+        limit: i64,
+    ) -> Result<Vec<ClusterAuditRow>, sqlx::Error> {
+        sqlx::query(
+            "SELECT id, occurred_at, summary, significance, findings
+             FROM cluster_audits
+             ORDER BY occurred_at DESC
+             LIMIT $1",
+        )
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+        .map(|rows| rows.into_iter().map(|r| ClusterAuditRow {
+            id: r.try_get("id").unwrap_or(0),
+            occurred_at: r.try_get("occurred_at").unwrap_or_else(|_| Utc::now()),
+            summary: r.try_get("summary").unwrap_or_default(),
+            significance: r.try_get("significance").unwrap_or(0),
+            findings: r.try_get("findings").unwrap_or(serde_json::Value::Array(vec![])),
+        }).collect())
+    }
+
     /// Load the persisted spike detector thresholds, falling back to defaults.
     pub async fn load_spike_config(pool: &PgPool) -> (f64, f64) {
         let row = sqlx::query(

@@ -261,6 +261,44 @@ pub async fn run() -> Result<(), std::io::Error> {
         });
     } // end PROMETHEUS_URL check
 
+    // Daily LLM cluster audit — second opinion on top of the Prometheus
+    // threshold alerts. Skipped when Prometheus or the Anthropic key aren't
+    // configured. Replicas race for the day's bucket via cluster_audit_claims
+    // so only one of them actually calls Claude.
+    if std::env::var("PROMETHEUS_URL").is_ok() && std::env::var("ANTHROPIC_API_KEY").is_ok() {
+        let pool_opt = pool_arc.clone();
+        tokio::spawn(async move {
+            const AUDIT_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+            // Spread pod startup across up to 10 minutes so replicas don't
+            // burst the claim race (and Anthropic) simultaneously.
+            let jitter_secs = rand::random::<u64>() % 600;
+            tokio::time::sleep(Duration::from_secs(jitter_secs)).await;
+
+            loop {
+                let claimed = if let Some(ref p) = pool_opt {
+                    crate::db::try_claim_cluster_audit(p).await
+                } else {
+                    true
+                };
+
+                if claimed {
+                    log::info!("Running daily cluster audit");
+                    match crate::cluster_audit::run_audit(pool_opt.as_deref()).await {
+                        Ok((summary, significance)) => {
+                            log::info!("Cluster audit complete (significance={significance}/10): {summary}");
+                        }
+                        Err(e) => log::warn!("Cluster audit failed: {e}"),
+                    }
+                } else {
+                    log::debug!("Cluster audit already claimed for today by another replica");
+                }
+
+                tokio::time::sleep(AUDIT_INTERVAL).await;
+            }
+        });
+    }
+
     // Pre-warm TLE cache at startup and refresh every 6 hours, regardless of DB availability.
     // Without this, the first browser request cold-fetches from CelesTrak (up to 30s hang).
     {
