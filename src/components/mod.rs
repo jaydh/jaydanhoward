@@ -5,6 +5,7 @@ mod canvas_nav;
 pub mod conjunction;
 mod visitors;
 mod beliefs;
+pub mod cluster_alerts;
 pub mod cluster_stats;
 mod dev;
 mod footer;
@@ -32,6 +33,7 @@ pub use app::App;
 pub fn register_server_fns() {
     use leptos::server_fn::axum::register_explicit;
     register_explicit::<photography::FetchImages>();
+    register_explicit::<cluster_alerts::GetClusterAlerts>();
     register_explicit::<cluster_stats::GetClusterMetrics>();
     register_explicit::<cluster_stats::GetNodeMetrics>();
     register_explicit::<cluster_stats::GetHistoricalMetrics>();

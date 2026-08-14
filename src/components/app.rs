@@ -1,4 +1,5 @@
 use crate::components::about::About;
+use crate::components::cluster_alerts::ClusterAlerts;
 use crate::components::cluster_stats::ClusterStats;
 use crate::components::conjunction::ConjunctionPanel;
 use crate::components::dev::Lighthouse;
@@ -70,6 +71,10 @@ fn HomePage() -> impl IntoView {
             <section id="cluster" class="flex flex-col py-20 border-t border-border">
                 <div class="max-w-7xl mx-auto px-8 w-full flex flex-col gap-8 items-center">
                     <h1 class="text-3xl font-bold text-charcoal">"Cluster"</h1>
+                    <div class="flex flex-col gap-4 w-full">
+                        <h2 class="text-xl font-semibold text-charcoal">"Alerts"</h2>
+                        <ClusterAlerts />
+                    </div>
                     <ClusterStats />
                     <Visitors />
                     <Lighthouse />
