@@ -486,6 +486,30 @@ async fn fetch_spike_config(pool: &PgPool) -> Value {
     }
 }
 
+/// Currently-firing Prometheus alerts (compromise-detection rules — see
+/// homelab repo's monitoring/prometheus.yaml). Ported from
+/// src/components/cluster_alerts.rs.
+async fn fetch_firing_alerts() -> Vec<Value> {
+    let data = match query_prometheus(r#"ALERTS{alertstate="firing"}"#).await {
+        Ok(d) => d,
+        Err(_) => return vec![],
+    };
+
+    data.data
+        .result
+        .into_iter()
+        .map(|m| {
+            let get = |k: &str| m.metric.get(k).cloned().unwrap_or_default();
+            json!({
+                "alertname": get("alertname"),
+                "severity": get("severity"),
+                "namespace": get("namespace"),
+                "summary": get("summary"),
+            })
+        })
+        .collect()
+}
+
 async fn fetch_claude_audit_log(pool: &PgPool) -> Vec<Value> {
     let rows = sqlx::query(
         "SELECT id, occurred_at, context, model, prompt, response, input_tokens, output_tokens, error \
@@ -604,11 +628,13 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         None => (vec![], vec![]),
     };
 
-    let (insights, spike_config, claude_log, security_audit) = tokio::join!(
+    let (insights, spike_config, claude_log, security_audit, alerts, daily_audit) = tokio::join!(
         fetch_network_insights(pool),
         fetch_spike_config(pool),
         fetch_claude_audit_log(pool),
         fetch_security_audit(pool),
+        fetch_firing_alerts(),
+        crate::cluster_audit::fetch_cluster_audits(pool),
     );
 
     json!({
@@ -624,6 +650,8 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         "spike_config": spike_config,
         "claude_log": claude_log,
         "security_audit": security_audit,
+        "alerts": alerts,
+        "daily_audit": daily_audit,
         "kube_connected": kube_client.is_some(),
     })
 }

@@ -110,6 +110,8 @@ export function initCluster() {
     const spikeConfig = snapshot.spike_config || {};
     const claudeLog = snapshot.claude_log || [];
     const sec = snapshot.security_audit || {};
+    const alerts = snapshot.alerts || [];
+    const dailyAudit = snapshot.daily_audit || [];
 
     // ── Overview ──
     document.getElementById('cluster-pod-count').textContent = cluster.pod_count ?? 0;
@@ -200,6 +202,19 @@ export function initCluster() {
       </div>`).join('') || '<p style="color:var(--text-light);font-size:0.8rem">No Flux resources found.</p>';
 
     // ── AI Audit ──
+    document.getElementById('cluster-alerts').innerHTML = alerts.length ? alerts.map((a) => `
+      <div class="cluster-audit-row cluster-audit-err">
+        <strong>${escapeHtml(a.alertname)}</strong> [${escapeHtml(a.severity)}] ${escapeHtml(a.namespace)} — ${escapeHtml(a.summary)}
+      </div>`).join('') : '<p style="color:var(--text-light);font-size:0.8rem">No alerts firing.</p>';
+
+    document.getElementById('cluster-daily-audit').innerHTML = dailyAudit.length ? dailyAudit.map((a) => {
+      const findings = (a.findings || []).map((f) => `<div class="cluster-audit-row" style="opacity:0.8">${escapeHtml(f.title)}: ${escapeHtml(f.detail)}</div>`).join('');
+      return `
+        <div class="visit-row"><span>${escapeHtml(a.occurred_at)}</span><span>${a.significance}/10</span></div>
+        <p style="font-size:0.8rem;margin:0.2rem 0">${escapeHtml(a.summary)}</p>
+        ${findings}`;
+    }).join('<hr style="border-color:var(--border);margin:0.5rem 0">') : '<p style="color:var(--text-light);font-size:0.8rem">No audit runs yet — runs daily once Prometheus and an Anthropic key are configured.</p>';
+
     document.getElementById('cluster-security-audit').innerHTML = `
       <div class="visit-row">
         <span>${escapeHtml(sec.sec_status_label ?? 'No audit report yet')}</span>

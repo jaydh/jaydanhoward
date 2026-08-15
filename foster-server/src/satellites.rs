@@ -154,6 +154,21 @@ fn build_cache_from_tles(tles: Vec<(String, String)>, fetched_at: DateTime<Utc>)
     Cache { fetched_at, sats, time_points }
 }
 
+/// Try to atomically claim the right to do the live CelesTrak refetch for
+/// this minute bucket. Returns true if this replica won the race — same
+/// INSERT ON CONFLICT DO NOTHING pattern as spike_claims/cluster_audit_claims.
+async fn try_claim_tle_refresh(pool: &PgPool) -> bool {
+    let result = sqlx::query(
+        "INSERT INTO tle_refresh_claims (bucket) \
+         VALUES (date_trunc('minute', NOW())) \
+         ON CONFLICT DO NOTHING",
+    )
+    .execute(pool)
+    .await;
+
+    matches!(result, Ok(r) if r.rows_affected() == 1)
+}
+
 async fn load_tle_cache(pool: &PgPool, group: &str) -> Option<(Vec<(String, String)>, DateTime<Utc>)> {
     let row: (Value, DateTime<Utc>) = sqlx::query_as(
         "SELECT satellites, fetched_at FROM tle_cache WHERE group_name = $1",
@@ -252,8 +267,34 @@ pub fn spawn_background_loop(runtime: Arc<SatellitesRuntime>, pool: Option<PgPoo
             ticker.tick().await;
 
             if Utc::now().signed_duration_since(cache.fetched_at).to_std().unwrap_or(TLE_TTL) > TLE_TTL {
-                cache = refresh_and_cache(&pool).await;
-                index = 0;
+                // 3 replicas share this one Postgres-backed cache with no
+                // coordination otherwise — without this claim, all 3 would
+                // independently notice the same staleness and each pay the
+                // ~44s live CelesTrak fetch, and any client polling
+                // /api/satellites during that window could land on a
+                // mid-refresh replica and see an empty response (the exact
+                // stall this cache was built to prevent in the first
+                // place — just recurring every TLE_TTL instead of every
+                // pod restart). Only the replica that wins the claim
+                // refetches; the others wait for it to land in Postgres
+                // and re-read from there instead.
+                if let Some(p) = &pool {
+                    if try_claim_tle_refresh(p).await {
+                        cache = refresh_and_cache(&pool).await;
+                        index = 0;
+                    } else {
+                        tokio::time::sleep(Duration::from_secs(5)).await;
+                        if let Some((tles, fetched_at)) = load_tle_cache(p, TLE_CACHE_GROUP).await {
+                            cache = tokio::task::spawn_blocking(move || build_cache_from_tles(tles, fetched_at))
+                                .await
+                                .unwrap();
+                            index = 0;
+                        }
+                    }
+                } else {
+                    cache = refresh_and_cache(&pool).await;
+                    index = 0;
+                }
             }
 
             if runtime.running.load(Ordering::Relaxed) && !cache.time_points.is_empty() {
