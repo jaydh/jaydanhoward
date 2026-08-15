@@ -500,11 +500,25 @@ async fn fetch_firing_alerts() -> Vec<Value> {
         .into_iter()
         .map(|m| {
             let get = |k: &str| m.metric.get(k).cloned().unwrap_or_default();
+            // "summary" is a Prometheus *annotation*, not a label — the
+            // ALERTS{} series only ever exposes labels, so it's always
+            // empty here (getting the real annotation text needs
+            // Alertmanager's API, which isn't reliably up). Build a
+            // readable line from whatever labels this specific alert
+            // actually carries instead of a permanently-blank field.
+            let skip = ["__name__", "alertname", "alertstate", "severity"];
+            let mut parts: Vec<String> = m
+                .metric
+                .iter()
+                .filter(|(k, _)| !skip.contains(&k.as_str()))
+                .map(|(k, v)| format!("{k}={v}"))
+                .collect();
+            parts.sort();
             json!({
                 "alertname": get("alertname"),
                 "severity": get("severity"),
                 "namespace": get("namespace"),
-                "summary": get("summary"),
+                "summary": parts.join(" "),
             })
         })
         .collect()
