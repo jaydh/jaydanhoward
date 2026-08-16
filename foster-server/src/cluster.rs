@@ -16,8 +16,10 @@
 
 use crate::prometheus_client::{empty_data, parse_prometheus_value, query_prometheus, query_prometheus_range};
 use axum::extract::State;
-use axum::http::StatusCode;
+use axum::http::{header::HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{IntoResponse, Response};
+use base64::Engine;
 use k8s_openapi::api::batch::v1::Job;
 use kube::api::{Api, ListParams};
 use kube::core::DynamicObject;
@@ -27,10 +29,16 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
+use subtle::ConstantTimeEq;
 
-/// Real ingest endpoint for external Claude usage tracking, ported
-/// verbatim from `src/routes/audit.rs` — no auth (matches production; this
-/// is a same-network/internal reporting channel, not user-facing).
+/// Ingest endpoint for external Claude usage tracking, ported from
+/// `src/routes/audit.rs`. Unlike the real production version this sits
+/// behind the same Basic-Auth token as `/api/lighthouse` and
+/// `/api/security-audit` — nothing actually calls it externally (the
+/// in-process daily cluster audit in `cluster_audit.rs` writes to
+/// `claude_audit_log` directly), and it was found unauthenticated and
+/// unrated on a public router, letting anyone forge entries in the
+/// publicly-displayed Claude-audit-log panel.
 #[derive(Deserialize)]
 pub struct ClaudeAuditPayload {
     pub context: String,
@@ -42,10 +50,44 @@ pub struct ClaudeAuditPayload {
     pub error: Option<String>,
 }
 
+fn basic_authentication(headers: &HeaderMap) -> Result<(), StatusCode> {
+    let header_value = headers.get("authorization").ok_or(StatusCode::UNAUTHORIZED)?;
+    let header_str = header_value.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let encoded = header_str.strip_prefix("Basic ").ok_or(StatusCode::UNAUTHORIZED)?;
+    let decoded = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|_| StatusCode::UNAUTHORIZED)?;
+    let decoded = String::from_utf8(decoded).map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    let mut parts = decoded.splitn(2, ':');
+    let username = parts.next().ok_or(StatusCode::UNAUTHORIZED)?;
+    let password = parts.next().ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let expected = std::env::var("LIGHTHOUSE_UPDATE_TOKEN").map_err(|_| StatusCode::FORBIDDEN)?;
+    let user_ok: bool = username.as_bytes().ct_eq(b"jay").into();
+    let pass_ok: bool = password.as_bytes().ct_eq(expected.as_bytes()).into();
+    if !user_ok || !pass_ok {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok(())
+}
+
 pub async fn ingest_claude_audit(
     State(pool): State<PgPool>,
+    headers: HeaderMap,
     axum::Json(payload): axum::Json<ClaudeAuditPayload>,
-) -> StatusCode {
+) -> Response {
+    if let Err(status) = basic_authentication(&headers) {
+        return (
+            status,
+            [(
+                axum::http::header::WWW_AUTHENTICATE,
+                axum::http::header::HeaderValue::from_static("Basic realm=\"audit\""),
+            )],
+        )
+            .into_response();
+    }
+
     let result = sqlx::query(
         "INSERT INTO claude_audit_log \
          (context, model, prompt, response, input_tokens, output_tokens, error) \
@@ -62,8 +104,8 @@ pub async fn ingest_claude_audit(
     .await;
 
     match result {
-        Ok(_) => StatusCode::OK,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
 

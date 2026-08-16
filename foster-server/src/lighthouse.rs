@@ -9,6 +9,7 @@ use axum::extract::Multipart;
 use axum::http::{header::HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
+use subtle::ConstantTimeEq;
 
 const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
 
@@ -39,7 +40,9 @@ fn basic_authentication(headers: &HeaderMap) -> Result<(), LighthouseError> {
 
     match std::env::var("LIGHTHOUSE_UPDATE_TOKEN") {
         Ok(val) => {
-            if username != "jay" || password != val {
+            let user_ok: bool = username.as_bytes().ct_eq(b"jay").into();
+            let pass_ok: bool = password.as_bytes().ct_eq(val.as_bytes()).into();
+            if !user_ok || !pass_ok {
                 return Err(LighthouseError::InvalidCredentials);
             }
         }

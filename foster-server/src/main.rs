@@ -267,6 +267,7 @@ async fn main() {
     let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
     let lighthouse_limiter = auth_rate_limiter.clone();
     let security_audit_limiter = auth_rate_limiter.clone();
+    let claude_audit_limiter = auth_rate_limiter.clone();
 
     let app = foster_server::router(machines)
         .merge(trace_router)
@@ -291,7 +292,12 @@ async fn main() {
         )
         .route(
             "/api/audit/claude",
-            post(cluster::ingest_claude_audit).with_state(pg_pool.clone()),
+            post(cluster::ingest_claude_audit)
+                .layer(axum::middleware::from_fn(move |req, next| {
+                    let limiter = claude_audit_limiter.clone();
+                    async move { limiter.check_middleware(req, next).await }
+                }))
+                .with_state(pg_pool.clone()),
         )
         .route(
             "/api/metrics/stream",

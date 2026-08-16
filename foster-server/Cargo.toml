@@ -20,6 +20,7 @@ chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json", "blocking"] }
 rustls = "0.23"
 base64 = "0.22"
+subtle = "2"
 thiserror = "1"
 anyhow = "1"
 kube = { version = "3.1", default-features = false, features = ["client", "rustls-tls"] }
