@@ -4,105 +4,106 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal website monorepo for jaydanhoward.com built with:
-- **Leptos** (Rust full-stack web framework with SSR and hydration)
-- **Bazel** (build system with bzlmod enabled)
-- **WASM-Bindgen** for client-side WebAssembly
-- **Actix-web** for the server runtime
-- **TailwindCSS** for styling
+Personal website monorepo for jaydanhoward.com, built on **Foster**: server-owned state
+machines with a generic WASM client that patches the DOM via `fx-*` attributes and
+server-sent events. The Foster framework itself (`foster-core`, `foster-server`,
+`foster-client`) lives in a separate repo, https://github.com/jaydh/foster, and is pulled
+in as a git dependency pinned to a specific rev in `foster-server/Cargo.toml`.
 
-The application uses Leptos's isomorphic architecture: server-side rendering (SSR) with the `ssr` feature, and client-side hydration with the `hydrate` feature. The same Rust codebase compiles to both native binary (server) and WASM (client).
+- **foster-server/**: the actual application — axum server, all routes/pages, static
+  assets, SQL migrations, Dockerfile. This is what gets built and deployed.
+- **foster/pkg/**: build output directory for the compiled `foster-client` WASM/JS
+  bundle (gitignored, produced by `wasm-pack` — see Dockerfile and CI).
+- **lighthouse/**: standalone Lighthouse CI helper image (Chromium + Node), unrelated to
+  the Foster/Rust build — plain Dockerfile, not part of the Cargo workspace.
+- **security-audit/**: standalone `cargo-audit` CronJob image, plain Dockerfile.
+
+There is no Bazel, no Leptos, and no WASM-hydration-of-Rust-components model in this
+repo anymore — that stack was fully migrated off and removed.
 
 ## Build Commands
 
 ### Development
 ```bash
-# Run local development server (localhost:8000)
-bazel run :jaydanhoward_bin
-
-# Run clippy checks
-bazel build clippy
+cd foster-server
+cargo run
 ```
 
-### Production Builds
+The server expects the `foster-client` WASM bundle at `../foster/pkg` (relative to
+`foster-server/`, i.e. repo-root `foster/pkg/`). Build it with:
 ```bash
-# Build multi-architecture OCI images
-bazel build jaydanhoward_image_amd64
-bazel build jaydanhoward_image_arm64
-
-# Push images to Harbor registry (requires authentication)
-bazel run jaydanhoward_image_amd64_push
-bazel run jaydanhoward_image_arm64_push
+# from a checkout of https://github.com/jaydh/foster, pinned to the FOSTER_REV
+# in foster-server/Dockerfile:
+cd crates/foster-client && wasm-pack build --target web --out-dir pkg
+cp -r pkg/. <this-repo>/foster/pkg/
 ```
 
-### Dependencies
+### Tests
 ```bash
-# After modifying Cargo.server.toml or Cargo.wasm.toml, repin lock files:
-# (bazel sync was removed in Bazel 9; use CARGO_BAZEL_REPIN instead)
-CARGO_BAZEL_REPIN=1 bazel fetch @server_crates//...
-CARGO_BAZEL_REPIN=1 bazel fetch @wasm_crates//...
+# Rust unit/integration tests
+cd foster-server && cargo test
+
+# Playwright end-to-end tests (against a running server, see playwright.config.ts)
+npm install
+npx playwright test
 ```
+
+### Production Build
+```bash
+# from repo root — Dockerfile builds the WASM client from the pinned foster
+# rev, then the axum server, then assembles a distroless image
+docker build -f foster-server/Dockerfile -t jaydanhoward .
+```
+
+CI (`.github/workflows/general.yml`) builds and pushes this image (amd64 + arm64) to
+Harbor via kaniko on every push to `main`, then creates a multi-arch manifest.
 
 ## Architecture
 
-### Build System Architecture
+**Entry point**: `foster-server/src/main.rs` wires up the axum router, Postgres pool,
+migrations, and all feature modules.
 
-**Dual Crate System**: The project maintains separate dependency trees for server and WASM targets:
-- `server_crates`: Native dependencies (Cargo.server.lock, Cargo.Bazel.server.lock)
-- `wasm_crates`: WASM-compatible dependencies (Cargo.wasm.lock, Cargo.Bazel.wasm.lock)
+**Feature modules** (`foster-server/src/`): each file is a largely self-contained
+feature — routes, state machine, and any background tasks:
+- `cluster.rs` / `cluster_audit.rs` — homelab k8s cluster stats panel + daily
+  Claude-reviewed audit of firing Prometheus alerts
+- `conjunction.rs` — satellite conjunction screening (SGP4/TCA)
+- `satellites.rs` — TLE-backed 3D satellite globe (WebGL2 client, TLE cache in Postgres)
+- `visitors.rs` — geo-IP visitor logging/map
+- `lighthouse.rs` — Lighthouse report ingest/display endpoint
+- `security_audit.rs` — `cargo-audit` report ingest/display
+- `photography.rs`, `request_trace.rs`, `site_middleware.rs`, `prometheus_client.rs` —
+  supporting features/middleware
 
-This separation is necessary because WASM targets have different requirements (e.g., `getrandom` needs the `js` feature for WASM).
+**Static assets**: `foster-server/static/` — HTML pages, per-feature JS (the `fx-*`
+DOM-patching client scripts), fonts, favicon. Served directly by axum
+(`tower-http::services::fs`).
 
-**Platform-Specific Tooling**: The build system selects platform-specific binaries using Bazel's `select()`:
-- TailwindCSS binaries for linux_x86_64, linux_arm64, macos_arm64
-- wasm-bindgen toolchain for each platform (defined in wasm_bindgen/BUILD)
+**Migrations**: `foster-server/migrations/` — sqlx migrations, run automatically at
+startup via `sqlx::migrate!()`.
 
-**Custom TailwindCSS Rule** (`bzl/tailwindcss.bzl`): A Bazel aspect that:
-1. Collects all source files from the target and its dependencies via `_srcs_aspect`
-2. Runs platform-specific TailwindCSS binary with minification (`-m`) on the collected sources
-3. Outputs processed CSS as a build artifact
+**Foster framework conventions** (see [[foster_client_gotchas]] in memory for gotchas):
+- Server owns state; the WASM client only patches the DOM per SSE-pushed instructions
+  and reads `fx-*`/`data-fx-*` attributes — there's no client-side component tree.
+- Wrapping `fx-for` items in extra markup breaks `data-fx-item` lookups.
+- Pages using SSE can hang Playwright's `networkidle` wait — use explicit
+  selectors/events instead.
 
-### Application Architecture
+## Deployment
 
-**Entry Points**:
-- `src/main.rs`: Server entry point, runs Actix-web server (feature `ssr`)
-- `src/lib.rs`: WASM entry point, exports `hydrate()` function (feature `hydrate`)
-
-**Structure**:
-- `src/components/`: Leptos components (app.rs is the root App component)
-- `src/routes/`: HTTP route handlers (health_check, robots, lighthouse metrics)
-- `src/startup.rs`: Server initialization and configuration
-- `src/telemtry.rs`: Tracing and logging setup
-- `src/prometheus_client.rs`: Prometheus metrics client
-
-**Asset Handling**: Static assets in `assets/` are managed through Bazel filegroups:
-- Fonts, favicons, images organized in subdirectories
-- Each asset directory has its own BUILD file
-- Assets are included in the binary via the `data` attribute in BUILD
-
-**Rust Configuration**:
-- Uses nightly Rust toolchain (configured in .bazelrc)
-- Clippy aspects run on all builds for linting
-- Custom rustc flags: `-C opt-level=3 -C codegen-units=1` for optimization
-
-## CI/CD
-
-GitHub Actions workflow (`.github/workflows/general.yml`) runs on self-hosted Kubernetes runners:
-- Clippy checks on all PRs and pushes
-- Multi-architecture image builds (x86_64 and arm64 on separate runner sets)
-- Image push to Harbor registry (harbor.home.local) only on push to main
-- Manifest creation for multi-arch support
-- Lighthouse Docker image build (separate from main Bazel build)
-
-The workflow uses custom runner images and supports both DinD and Kubernetes mode via actions-runner-controller.
+Deployed on self-hosted k8s (homelab repo at `/Users/jayhoward/repos/homelab`) via
+Flux CD. Postgres via CNPG in the `service` namespace
+(`jaydanhoward-postgres-rw:5432/jaydanhoward`). Image pulled from Harbor
+(`harbor.home.local`), tag tracked via Flux image automation.
 
 ## Development Notes
 
-**Feature Flags**: Code must be conditionally compiled based on target:
-- Use `#[cfg(feature = "ssr")]` for server-only code
-- Use `#[cfg(feature = "hydrate")]` for WASM/client code
-- Leptos components are typically shared between both
-
-**Environment Variable**: Both server and WASM builds set `SERVER_FN_OVERRIDE_KEY=bazel` to handle Leptos server functions in the Bazel build environment.
-
-**Runfiles**: The server binary expects runfiles (WASM artifacts, assets) in the `jaydanhoward_bin.runfiles` directory. OCI images set `workdir` accordingly.
+- `foster-server/Cargo.toml` pins the Foster framework rev (`foster-core`,
+  `foster-server` deps as `git = "https://github.com/jaydh/foster", rev = "..."`).
+  Bumping Foster means bumping this rev (and the matching `FOSTER_REV` build arg in
+  `foster-server/Dockerfile`, and the `FOSTER_REV` grep'd out of that Dockerfile in
+  CI's WASM build step).
+- `foster-server/rust-toolchain.toml` pins stable Rust for this crate. CI additionally
+  sets `RUSTUP_TOOLCHAIN=stable` as an env var everywhere, since some steps run outside
+  `foster-server/`'s directory and rustup would otherwise walk up to nothing (no stray
+  toolchain file at repo root anymore, but this is left in place defensively).

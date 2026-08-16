@@ -1,8 +1,7 @@
 {
   "name": "jaydanhoward",
   "version": "1.0.0",
-  "description": "- Rust  - Bazel  - WASM-Bindgen  - Leptos  - Mutli-architecture OCI images  - TailwindCSS  - CICD integrated with self-hosted mult-cpu-architecture Kubernetes cluster utilizing https://github.com/actions/actions-runner-controller with both DinD and k8s mode runners",
-  "main": "tailwind.config.js",
+  "description": "- Rust  - Foster (server-owned state machines + generic WASM client)  - Mutli-architecture OCI images  - CICD integrated with self-hosted mult-cpu-architecture Kubernetes cluster utilizing https://github.com/actions/actions-runner-controller with both DinD and k8s mode runners",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

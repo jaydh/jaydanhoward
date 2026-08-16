@@ -10,11 +10,9 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  # The repo root still has the old Bazel-era rust-toolchain.toml (pinned
-  # nightly, too old for cargo-audit's rustc >=1.88 requirement) alongside
-  # foster-server's own (stable). rustup resolves whichever toolchain file
-  # it finds walking up from cwd, which is fragile depending on each step's
-  # working-directory; pinning this everywhere sidesteps it entirely.
+  # Pin stable everywhere rather than relying on rustup finding
+  # foster-server/rust-toolchain.toml — some steps run outside that
+  # directory, and toolchain-file resolution depends on cwd.
   RUSTUP_TOOLCHAIN: stable
 jobs:
   security-audit:
