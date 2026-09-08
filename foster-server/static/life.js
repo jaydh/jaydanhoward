@@ -7,7 +7,11 @@
 // reset/zoom/settings are all per-visitor UI state, not a Foster machine,
 // same reasoning as pathfinding.js/theme.js.
 
-const GRID_SIZE = 2048;
+// Canvas maxes out at 720px; a 2048px sim grid meant the step shader ran
+// ~4M fragment invocations (8 texture samples each) per tick for no
+// visible benefit. 512 is still finer than the display can show while
+// cutting per-step GPU cost by ~16x.
+const GRID_SIZE = 512;
 
 const VERT = `#version 300 es
 in vec2 a_pos;
@@ -252,6 +256,11 @@ export function initLife() {
   let intervalMs = 16;
   let lastStep = 0;
   let hasStarted = false;
+  // Distinct from `running` (which the user's play/pause button also
+  // toggles): this tracks whether the widget is on-screen at all, so the
+  // rAF loop can skip touching the canvas entirely instead of stepping +
+  // redrawing a 512x512 WebGL sim forever in the background.
+  let visible = false;
 
   const toggleBtn = document.getElementById('life-toggle-run');
   const runLabel = toggleBtn.querySelector('.life-run-label');
@@ -310,7 +319,8 @@ export function initLife() {
   // time it becomes visible (matches real site's has_started guard).
   new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (entry.isIntersecting) {
+      visible = entry.isIntersecting;
+      if (visible) {
         if (!hasStarted) {
           hasStarted = true;
           if (renderer) renderer.randomize(aliveProbability);
@@ -324,7 +334,7 @@ export function initLife() {
   }, { threshold: 0.1 }).observe(widget);
 
   function frame(ts) {
-    if (renderer) {
+    if (renderer && visible) {
       const cw = canvas.clientWidth || 720;
       const ch = canvas.clientHeight || 720;
       if (canvas.width !== cw || canvas.height !== ch) {

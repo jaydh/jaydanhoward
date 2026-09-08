@@ -9,7 +9,11 @@
 // completion order) is local JS state, same as the real site's local
 // Leptos signals.
 
-const GRID_SIZE = 2048;
+// Panels render at ~280px; a 2048px grid meant algorithm queues (and the
+// astar/greedy re-sort) grew to millions of elements per step for no
+// visible benefit. 256 keeps per-cell detail well above what a 280px
+// canvas can show while cutting per-step CPU cost by ~64x.
+const GRID_SIZE = 256;
 const OBSTACLE_PROB = 0.2;
 const STEPS_PER_FRAME = 5;
 
@@ -364,6 +368,12 @@ export function initPathfinding() {
   let blindOrder = [];
   let informedOrder = [];
   let running = false;
+  // Re-uploading/redrawing every panel's full state texture every rAF
+  // frame forever (even once algorithms finish or the widget is
+  // off-screen) was pure waste — only do it when something actually
+  // changed.
+  let needsRedraw = true;
+  const markDirty = () => { needsRedraw = true; };
 
   const toggleBtn = document.getElementById('pf-toggle-run');
   const playLabel = toggleBtn.querySelector('.pf-play-label');
@@ -385,6 +395,7 @@ export function initPathfinding() {
   new IntersectionObserver((entries) => {
     for (const entry of entries) {
       running = entry.isIntersecting;
+      if (running) markDirty();
       syncToggleButton();
     }
   }, { threshold: 0.1 }).observe(root);
@@ -425,12 +436,14 @@ export function initPathfinding() {
             zoom = z;
             document.getElementById('pf-zoom-slider').value = String(z);
             document.getElementById('pf-zoom-label').textContent = `${z.toFixed(1)}x`;
+            markDirty();
           },
           () => p.zoomCenter,
-          (c) => { p.zoomCenter = c; },
+          (c) => { p.zoomCenter = c; markDirty(); },
         );
       }
     }
+    markDirty();
   }
 
   regenerate();
@@ -440,6 +453,7 @@ export function initPathfinding() {
   document.getElementById('pf-zoom-slider').addEventListener('input', (e) => {
     zoom = parseFloat(e.target.value);
     document.getElementById('pf-zoom-label').textContent = `${zoom.toFixed(1)}x`;
+    markDirty();
   });
 
   const followBtn = document.getElementById('pf-follow');
@@ -452,6 +466,7 @@ export function initPathfinding() {
       document.getElementById('pf-zoom-slider').value = '4';
       document.getElementById('pf-zoom-label').textContent = '4.0x';
     }
+    markDirty();
   });
 
   let lastFpsTick = performance.now();
@@ -461,13 +476,17 @@ export function initPathfinding() {
     const now = performance.now();
     const fpsWindow = now - lastFpsTick >= 1000;
 
+    const stepping = running && panels.some((p) => p.run && !p.run.done);
+
     for (const p of panels) {
       if (!p.run) continue;
 
+      let stepped = false;
       if (running && !p.run.done) {
         for (let i = 0; i < STEPS_PER_FRAME; i++) {
           if (!p.run.done) p.run.step(p.algo);
         }
+        stepped = true;
         p.frameCount += STEPS_PER_FRAME;
 
         if (p.run.done && p.run.completionSteps !== null) {
@@ -482,12 +501,16 @@ export function initPathfinding() {
 
       const cw = p.canvas.clientWidth || 280;
       const ch = p.canvas.clientHeight || 280;
-      if (p.canvas.width !== cw || p.canvas.height !== ch) {
+      const resized = p.canvas.width !== cw || p.canvas.height !== ch;
+      if (resized) {
         p.canvas.width = cw;
         p.canvas.height = ch;
       }
-      p.renderer.upload(p.run.state);
-      p.renderer.draw(cw, ch, dark, p.run.start, p.run.end, zoom, p.zoomCenter[0], p.zoomCenter[1]);
+
+      if (stepped || resized || needsRedraw) {
+        p.renderer.upload(p.run.state);
+        p.renderer.draw(cw, ch, dark, p.run.start, p.run.end, zoom, p.zoomCenter[0], p.zoomCenter[1]);
+      }
 
       if (fpsWindow) {
         p.fps = p.frameCount;
@@ -504,7 +527,16 @@ export function initPathfinding() {
     }
 
     if (fpsWindow) lastFpsTick = now;
-    requestAnimationFrame(frame);
+    // Once everything has finished and nothing is dirty, there's nothing
+    // left to actively animate, but keep a cheap low-rate redraw going so
+    // the widget still picks up theme changes or scrolling back into view.
+    if (!stepping) {
+      needsRedraw = true;
+      setTimeout(() => requestAnimationFrame(frame), 250);
+    } else {
+      needsRedraw = false;
+      requestAnimationFrame(frame);
+    }
   }
 
   requestAnimationFrame(frame);
