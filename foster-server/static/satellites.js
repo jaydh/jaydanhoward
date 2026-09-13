@@ -522,15 +522,25 @@ export function initSatellites() {
     return out;
   }
 
+  // Off-screen, this was rendering thousands of points on a WebGL globe
+  // every rAF tick forever — the largest single contributor to Lighthouse
+  // TBT on the homepage. Same visibility gating as life.js/pathfinding.js.
+  let visible = false;
+  new IntersectionObserver((entries) => {
+    for (const entry of entries) visible = entry.isIntersecting;
+  }, { threshold: 0.1 }).observe(root);
+
   function frame() {
-    const all = interpolated();
-    const filtered = all.filter((p) => {
-      if (ASTRANIS_IDS.has(p.norad_id)) return showAstranis;
-      const idx = bandIndex(p.altitude_km, p.inclination_deg);
-      return (orbitFilter >> idx) & 1;
-    });
-    renderer.updateSatellites(filtered);
-    renderer.render();
+    if (visible) {
+      const all = interpolated();
+      const filtered = all.filter((p) => {
+        if (ASTRANIS_IDS.has(p.norad_id)) return showAstranis;
+        const idx = bandIndex(p.altitude_km, p.inclination_deg);
+        return (orbitFilter >> idx) & 1;
+      });
+      renderer.updateSatellites(filtered);
+      renderer.render();
+    }
     requestAnimationFrame(frame);
   }
 
