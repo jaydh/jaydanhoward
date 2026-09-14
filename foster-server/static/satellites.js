@@ -485,6 +485,9 @@ export function initSatellites() {
   let currAt = 0;
 
   async function poll() {
+    // Off-screen, there's no point fetching + JSON-parsing a ~2MB payload
+    // every second just to feed a render loop that's already skipped.
+    if (!visible) return;
     try {
       const res = await fetch('/api/satellites');
       const data = await res.json();
