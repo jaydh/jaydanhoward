@@ -201,7 +201,7 @@
       display: flex; align-items: center; justify-content: center; background: var(--surface);
     }
     .lh-gate button {
-      background: var(--accent); color: #fff; border: none; border-radius: 0.5rem;
+      background: #2563eb; color: #fff; border: none; border-radius: 0.5rem;
       padding: 0.6rem 1.25rem; cursor: pointer; font: inherit; font-weight: 600;
     }
     .lh-iframe { width: 100%; min-height: 50vh; border: 1px solid var(--border); border-radius: 0.75rem; }
@@ -565,7 +565,7 @@
             <span id="sat-steps-raw" fx-text="steps_per_tick" style="display:none"></span>
             <button fx-on="click->speed_up">+</button>
           </div>
-          <button fx-on="click->toggle_run">
+          <button fx-on="click->toggle_run" aria-label="Pause or resume simulation">
             <span fx-show="running">Pause</span>
             <span fx-show="paused">Run</span>
           </button>
@@ -595,7 +595,7 @@
       independently (<code>static/conjunction.js</code>).
     </p>
     <div fx-machine="conjunction" class="screening-box">
-      <button id="conjunction-start" fx-on="click->start_screening">
+      <button id="conjunction-start" fx-on="click->start_screening" aria-label="Start conjunction screening">
         <span fx-show="idle">Screen</span>
         <span fx-show="started">Screen again</span>
       </button>
