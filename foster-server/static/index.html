@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jay Dan Howard</title>
+  <meta name="description" content="Jay Dan Howard's personal site, self-hosted on a homelab Kubernetes cluster: live cluster stats, satellite tracking, conjunction screening, and a few simulations.">
   <script>
     // Dark-mode FOUC prevention — real theme preference is a per-visitor
     // client-side thing (localStorage + system preference), not server
@@ -165,7 +166,7 @@
     }
     #visitors-refresh:hover { border-color: var(--accent); color: var(--accent); }
     .visitor-map { position: relative; width: 100%; max-width: 600px; margin: 1rem 0; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; background: var(--surface); }
-    .visitor-map img { display: block; width: 100%; color: var(--text-light); }
+    .visitor-map img { display: block; width: 100%; height: auto; color: var(--text-light); }
     .visitor-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 4px var(--accent); }
 
     .photo-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; margin-top: 1rem; }
@@ -492,7 +493,7 @@
         </div>
       </div>
       <div class="visitor-map">
-        <img src="/world-map.svg" alt="world map" loading="lazy" decoding="async" />
+        <img src="/world-map.svg" alt="world map" width="360" height="180" loading="lazy" decoding="async" />
         <div id="visitor-map-points"></div>
       </div>
       <div class="cluster-box" style="max-width: 32rem;">
@@ -524,7 +525,7 @@
         <button id="lh-load-report">Load Report</button>
       </div>
       <div id="lh-report" style="display:none">
-        <iframe src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
+        <iframe data-src="/lighthouse.html" title="Lighthouse Report" class="lh-iframe"></iframe>
       </div>
     </div>
   </main>
@@ -652,7 +653,7 @@
             <option value="250">~4 fps</option>
           </select>
         </div>
-        <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life" target="_blank" rel="noreferrer" class="life-learn-more">Learn More</a>
+        <a href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life" target="_blank" rel="noreferrer" class="life-learn-more">Learn more about Conway's Game of Life</a>
       </div>
       <canvas id="life-canvas"></canvas>
     </div>

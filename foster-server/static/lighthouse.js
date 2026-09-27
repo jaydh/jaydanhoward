@@ -9,7 +9,13 @@ export function initLighthouse() {
   const btn = document.getElementById('lh-load-report');
   if (!widget || !gate || !report || !btn) return;
 
+  // The iframe ships with data-src rather than src: an iframe inside a
+  // display:none wrapper still loads, so a real src would pull the
+  // ~680KB report (and its ~300ms parse task) on every page load.
+  const iframe = report.querySelector('iframe[data-src]');
+
   function loadReport() {
+    if (iframe && !iframe.src) iframe.src = iframe.dataset.src;
     gate.style.display = 'none';
     report.style.display = '';
   }
