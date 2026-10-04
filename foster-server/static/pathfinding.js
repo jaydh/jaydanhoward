@@ -374,6 +374,9 @@ export function initPathfinding() {
   // changed.
   let needsRedraw = true;
   const markDirty = () => { needsRedraw = true; };
+  // On-screen at all (vs `running`, which the play/pause button also sets).
+  let visible = false;
+  let started = false;
 
   const toggleBtn = document.getElementById('pf-toggle-run');
   const playLabel = toggleBtn.querySelector('.pf-play-label');
@@ -394,8 +397,18 @@ export function initPathfinding() {
   // same reasoning as life.js for why this isn't a Foster machine.
   new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      running = entry.isIntersecting;
-      if (running) markDirty();
+      visible = entry.isIntersecting;
+      running = visible;
+      if (visible) {
+        // First view builds the grid and the 7 WebGL panels — done lazily
+        // because at page load it was a ~160ms main-thread task for a
+        // widget far below the fold.
+        if (!started) {
+          started = true;
+          regenerate();
+        }
+        markDirty();
+      }
       syncToggleButton();
     }
   }, { threshold: 0.1 }).observe(root);
@@ -446,8 +459,6 @@ export function initPathfinding() {
     markDirty();
   }
 
-  regenerate();
-
   document.getElementById('pf-reset').addEventListener('click', regenerate);
 
   document.getElementById('pf-zoom-slider').addEventListener('input', (e) => {
@@ -472,6 +483,12 @@ export function initPathfinding() {
   let lastFpsTick = performance.now();
 
   function frame() {
+    // Off-screen: nothing to step or draw. Poll cheaply until visible again
+    // (markDirty() on re-entry forces a fresh draw).
+    if (!visible) {
+      setTimeout(() => requestAnimationFrame(frame), 250);
+      return;
+    }
     const dark = document.documentElement.classList.contains('dark');
     const now = performance.now();
     const fpsWindow = now - lastFpsTick >= 1000;
