@@ -221,10 +221,12 @@ pub fn fetch_visitor_stats(pool: &PgPool) -> Value {
             let points: Vec<Value> = point_rows
                 .iter()
                 .map(|row| {
-                    json!({
-                        "lat": row.try_get::<f64, _>("lat").unwrap_or(0.0),
-                        "lon": row.try_get::<f64, _>("lon").unwrap_or(0.0),
-                    })
+                    let lat = row.try_get::<f64, _>("lat").unwrap_or(0.0);
+                    let lon = row.try_get::<f64, _>("lon").unwrap_or(0.0);
+                    let (x, y) = map_percent(lon, lat);
+                    // x/y: CSS left/top on the world map, bound per dot via
+                    // fx-bind-attr="style.left=item:x style.top=item:y".
+                    json!({ "lat": lat, "lon": lon, "x": x, "y": y })
                 })
                 .collect();
 
@@ -256,6 +258,12 @@ const GEOJSON_URL: &str =
 
 fn project(lon: f64, lat: f64) -> (f64, f64) {
     (lon + 180.0, 90.0 - lat)
+}
+
+/// `project` as CSS percentages of the 360x180 map, e.g. `("50.00%", "25.00%")`.
+fn map_percent(lon: f64, lat: f64) -> (String, String) {
+    let (x, y) = project(lon, lat);
+    (format!("{:.2}%", x / 360.0 * 100.0), format!("{:.2}%", y / 180.0 * 100.0))
 }
 
 fn ring_to_path(coords: &[Vec<f64>]) -> String {
@@ -333,4 +341,16 @@ pub async fn fetch_world_map_svg(client: &reqwest::Client) -> String {
     format!(
         r#"<svg viewBox="0 0 360 180" xmlns="http://www.w3.org/2000/svg"><path d="{all_paths}" fill="currentColor" /></svg>"#
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::map_percent;
+
+    #[test]
+    fn map_percent_corners_and_center() {
+        assert_eq!(map_percent(0.0, 0.0), ("50.00%".into(), "50.00%".into()));
+        assert_eq!(map_percent(-180.0, 90.0), ("0.00%".into(), "0.00%".into()));
+        assert_eq!(map_percent(180.0, -90.0), ("100.00%".into(), "100.00%".into()));
+    }
 }

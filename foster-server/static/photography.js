@@ -1,50 +1,27 @@
-// Photography gallery thumbnails + lightbox. `fx-for` only binds text
-// content per item (`fx-field`), there's no declarative way to bind an
-// <img>'s `src` per list item — so thumbnails read each item's own
-// `data-fx-item` JSON (the same attribute the Satellites section reads
-// for its per-satellite data) and set `src`/`alt` by hand.
-//
-// Which photo is open in the lightbox is plain client-side state, not a
-// Foster machine: it's per-visitor (two people looking at the gallery at
-// once shouldn't see the same photo pop open in their lightbox), and
-// Foster machines are one shared instance across every connected client —
-// same reasoning as theme/life/pathfinding. The real shared data (the
-// photo list itself) stays in the "photography" Foster machine; only
-// "which one is currently open" moved out here.
+// Photography lightbox. Thumbnails are plain Foster now (fx-for +
+// fx-bind-attr="src=item:thumb_url"); what's left here is which photo is
+// open, which is per-visitor state with prev/next index arithmetic that a
+// local Foster machine (pass/merge only) can't express yet.
 
 export function initPhotography() {
-  const root = document.querySelector('[fx-machine="photography"]');
   const grid = document.querySelector('[fx-for="photos"]');
   const lightbox = document.getElementById('photo-lightbox');
   const lightboxImg = document.getElementById('photo-lightbox-img');
-  if (!root || !grid || !lightbox || !lightboxImg) return;
+  if (!grid || !lightbox || !lightboxImg) return;
 
-  let photos = [];
   let viewingIndex = -1;
 
-  function fillThumbnails() {
-    const items = [];
-    // fx-for sets data-fx-item on the immediate repeated child (the
-    // .photo-tile wrapper), not on the nested <img> itself.
-    for (const tile of grid.querySelectorAll('[data-fx-item]')) {
-      const item = JSON.parse(tile.getAttribute('data-fx-item'));
-      items.push(item);
-      const img = tile.querySelector('img');
-      if (img && !img.dataset.filled) {
-        img.src = item.thumb_url || item.medium_url;
-        img.alt = item.name;
-        img.dataset.filled = '1';
-        tile.addEventListener('click', () => open(items.indexOf(item)));
-      }
-    }
-    photos = items;
-  }
+  // fx-for re-renders the tiles on every snapshot, so read the current list
+  // from the DOM (each tile carries its item as data-fx-item) when needed.
+  const photos = () =>
+    [...grid.querySelectorAll('[data-fx-item]')].map((t) => JSON.parse(t.getAttribute('data-fx-item')));
 
   function open(index) {
-    if (index < 0 || index >= photos.length) return;
+    const list = photos();
+    if (index < 0 || index >= list.length) return;
     viewingIndex = index;
-    lightboxImg.src = photos[index].medium_url;
-    lightboxImg.alt = photos[index].name;
+    lightboxImg.src = list[index].medium_url;
+    lightboxImg.alt = list[index].name;
     // .lightbox's CSS default is display:none (so it can never get stuck
     // visible before this script runs — see index.html's fx-if comment);
     // clearing the inline style would just fall back to that same
@@ -58,17 +35,17 @@ export function initPhotography() {
   }
 
   function step(delta) {
-    if (viewingIndex < 0 || photos.length === 0) return;
-    open((viewingIndex + delta + photos.length) % photos.length);
+    const n = photos().length;
+    if (viewingIndex < 0 || n === 0) return;
+    open((viewingIndex + delta + n) % n);
   }
 
+  // Delegated, so it survives fx-for replacing the tiles.
+  grid.addEventListener('click', (e) => {
+    const tile = e.target.closest('[data-fx-item]');
+    if (tile) open([...grid.querySelectorAll('[data-fx-item]')].indexOf(tile));
+  });
   document.getElementById('photo-prev').addEventListener('click', () => step(-1));
   document.getElementById('photo-next').addEventListener('click', () => step(1));
   document.getElementById('photo-close').addEventListener('click', close);
-
-  fillThumbnails();
-  // fx-for re-renders its children whenever the snapshot changes (not just
-  // this specific list) — a MutationObserver on the grid catches that.
-  const observer = new MutationObserver(fillThumbnails);
-  observer.observe(grid, { childList: true, subtree: true });
 }
