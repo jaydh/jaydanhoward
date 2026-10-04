@@ -5,7 +5,7 @@
 // other texture via a framebuffer), and a separate draw shader maps
 // alive/dead to colors with zoom/pan. Entirely client-side — run/pause/
 // reset/zoom/settings are all per-visitor UI state, not a Foster machine,
-// same reasoning as pathfinding.js/theme.js.
+// same reasoning as pathfinding.js.
 
 // Canvas maxes out at 720px; a 2048px sim grid meant the step shader ran
 // ~4M fragment invocations (8 texture samples each) per tick for no
@@ -323,7 +323,8 @@ export function initLife() {
       if (visible) {
         if (!hasStarted) {
           hasStarted = true;
-          if (renderer) renderer.randomize(aliveProbability);
+          // initRenderer randomizes the grid itself.
+          initRenderer();
         }
         running = true;
       } else {
@@ -351,8 +352,12 @@ export function initLife() {
     requestAnimationFrame(frame);
   }
 
-  // Init renderer once canvas has real layout dimensions.
-  const initRenderer = () => {
+  // Init renderer once canvas has real layout dimensions. Deferred to the
+  // first time the widget scrolls into view (see the IntersectionObserver
+  // above): creating the WebGL2 context, compiling shaders and uploading a
+  // randomized 512x512 grid was a ~200ms+ main-thread task at page load
+  // for a widget far below the fold — Lighthouse's top TBT contributor.
+  function initRenderer() {
     if (renderer) return;
     canvas.width = canvas.clientWidth || 720;
     canvas.height = canvas.clientHeight || 720;
@@ -362,8 +367,7 @@ export function initLife() {
     } catch (e) {
       console.error('Life WebGL init:', e.message);
     }
-  };
-  initRenderer();
+  }
 
   requestAnimationFrame(frame);
 }
