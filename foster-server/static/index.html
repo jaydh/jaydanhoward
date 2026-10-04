@@ -11,12 +11,12 @@
     // loads after first paint — so pick the state here and stamp it as
     // data-fx-state, which Foster adopts as the initial state when nothing
     // is persisted yet. Order: saved choice, legacy localStorage.theme from
-    // before the machine existed, then the system preference.
+    // before the machine existed, then dark — the site's default for a
+    // first visit regardless of system preference, same as before.
     (function(){
       var h=document.documentElement,s;
       try{s=JSON.parse(localStorage.getItem('foster_local:theme')||'null');}catch(e){}
-      var st=s&&s.state||(localStorage.theme==='light'||localStorage.theme==='dark'?localStorage.theme:null)
-        ||(window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+      var st=s&&s.state||(localStorage.theme==='light'?'light':'dark');
       h.setAttribute('data-fx-state',st);
       if(st==='dark')h.classList.add('dark');
     })()
@@ -45,13 +45,18 @@
       --border: #e5e7eb;
       --text: #1e1e1e;
       --text-light: #555555;
-      --accent: #3b82f6;
+      /* Darker than the real site's #3b82f6, which is 3.67:1 on white
+         (WCAG AA needs 4.5:1). Dark mode keeps its own accent below. */
+      --accent: #1d4ed8;
     }
 
     body { font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.6; }
     .page { background: var(--bg); color: var(--text); min-height: 100vh; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
+    /* Links inside running text need more than color to stand out from the
+       gray body text (WCAG link-in-text-block). */
+    p a { text-decoration: underline; text-underline-offset: 0.15em; }
     [fx-show] { display: none; }
     /* Same reasoning as [fx-show]: fx-if only sets display:block/none once
        Foster's JS hydrates, so without a hidden-by-default rule any fx-if
@@ -214,9 +219,11 @@
     .cluster-card { background: var(--bg); border-radius: 0.75rem; padding: 1.25rem; }
     .cluster-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 0.5rem; }
     .cluster-header h1 { margin: 0; font-size: 1.15rem; }
-    .cluster-live { font-size: 0.75rem; color: #16a34a; }
+    .cluster-live { font-size: 0.75rem; color: #15803d; }
+    html.dark .cluster-live { color: #16a34a; }
     .cluster-live-time { font-size: 0.75rem; color: var(--text-light); margin-left: 0.5rem; }
-    .cluster-error { text-align: center; color: #ef4444; padding: 1rem; }
+    .cluster-error { text-align: center; color: #b91c1c; padding: 1rem; }
+    html.dark .cluster-error { color: #ef4444; }
     .cluster-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; gap: 0.25rem; flex-wrap: wrap; }
     .cluster-tab {
       background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-light);
@@ -251,7 +258,8 @@
     .flux-name { flex: 1; word-break: break-all; }
     .cluster-audit-row { font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
     .cluster-audit-row:last-child { border-bottom: none; }
-    .cluster-audit-err { color: #ef4444; }
+    .cluster-audit-err { color: #b91c1c; }
+    html.dark .cluster-audit-err { color: #ef4444; }
     .screening-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; background: var(--surface); }
     .screening-status { font-family: ui-monospace, monospace; font-size: 0.85rem; padding: 0.15rem 0.5rem; border-radius: 0.25rem; background: var(--border); }
     #conjunction-start {
