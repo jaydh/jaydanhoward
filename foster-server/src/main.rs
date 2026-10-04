@@ -51,14 +51,17 @@ async fn main() {
     // frame, which a Foster machine can't do yet (see the local theme/
     // contact/lighthouse machines below for the per-visitor UI it can).
 
-    // Which photo is open in the lightbox used to live here (view/close/
-    // next/prev reducers), but that's per-visitor UI state, not shared
-    // data — Foster machines are one shared instance across every
-    // connected client, so one visitor opening a photo would pop it open
-    // in everyone else's lightbox too. Moved entirely to static/
-    // photography.js (same reasoning as theme/life/pathfinding); this
-    // machine now only holds the real, shared photo list.
-    let photography = MachineBuilder::new("photography", "loaded", photography::fetch_photos())
+    // Gallery + lightbox, as a local (per-visitor, in-browser) machine: the
+    // photo list is fetched once at startup and never changes, so it ships
+    // embedded in the page, and which photo is open is per-visitor state.
+    // "open" merges the clicked tile's item (incl. its index) into context;
+    // prev/next step through the list; the lightbox binds ctx:medium_url.
+    let photography = MachineBuilder::new("photography", "grid", photography::fetch_photos())
+        .merge("grid", "open", "viewing")
+        .step("viewing", "next", "viewing", "photos", "index", 1)
+        .step("viewing", "prev", "viewing", "photos", "index", -1)
+        .pass("viewing", "close", "grid")
+        .local()
         .template(include_str!("../static/index.html"))
         .build();
 

@@ -60,5 +60,5 @@ fn fetch_blocking() -> Result<Vec<Value>, String> {
 /// `block_in_place` at startup, same pattern as cluster.rs/visitors.rs.
 pub fn fetch_photos() -> Value {
     let photos = tokio::task::block_in_place(fetch_blocking).unwrap_or_default();
-    json!({ "photos": photos, "viewing_index": -1 })
+    json!({ "photos": photos })
 }

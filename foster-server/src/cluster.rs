@@ -238,12 +238,8 @@ async fn fetch_node_metrics() -> Vec<Value> {
 // ── Historical (24h, 10m step) ──────────────────────────────────────────────
 
 /// Returns (full series for the sparkline widget, min/avg/max/latest
-/// summary) — the full series is nested under a top-level "series" key read
-/// by a small canvas widget via the same data-fx-item JS pattern
-/// satellites.js/photography.js already use for structured (non-scalar)
-/// list data; the summary scalars are flattened to the context root so
-/// fx-text can bind them directly (Foster's fx-* attribute lookups are a
-/// single top-level ctx[key], not a dotted path).
+/// summary). cluster_view.rs turns the series into SVG sparkline paths for
+/// the card.
 async fn fetch_historical_metrics() -> (Value, Value) {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
     let start = now - 24 * 3600;

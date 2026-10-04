@@ -844,7 +844,7 @@
     <p>Real photos served straight from the CDN.</p>
     <div fx-machine="photography">
       <div class="photo-grid" fx-for="photos">
-        <div class="photo-tile">
+        <div class="photo-tile" fx-on="click->open">
           <img class="photo-thumb" alt="" loading="lazy" decoding="async" fx-bind-attr="src=item:thumb_url alt=item:name" />
           <div class="photo-tile-overlay">
             <span><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg></span>
@@ -852,19 +852,18 @@
         </div>
       </div>
       <div fx-if='{"field":"photos","op":"eq","value":[]}' class="photo-empty">No photos returned right now.</div>
-    </div><!-- /fx-machine=photography -->
-    <!-- Which photo is open in the lightbox is per-visitor UI state, not
-         shared data, so it lives entirely outside the Foster machine above
-         (which only owns the real, shared photo list) — same reasoning as
-         theme/life/pathfinding. -->
-    <div class="lightbox" id="photo-lightbox" style="display:none">
-      <img id="photo-lightbox-img" alt="" />
-      <div class="lightbox-controls">
-        <button id="photo-prev">&#8592; Prev</button>
-        <button id="photo-close">Close</button>
-        <button id="photo-next">Next &#8594;</button>
+      <div fx-show="viewing">
+        <div class="lightbox" style="display:flex" role="dialog" aria-label="Photo viewer">
+          <img fx-bind-attr="src=ctx:medium_url alt=ctx:name" alt="" />
+          <div class="lightbox-controls">
+            <button fx-on="click->prev">&#8592; Prev</button>
+            <button fx-on="click->close">Close</button>
+            <button fx-on="click->next">Next &#8594;</button>
+          </div>
+        </div>
       </div>
-    </div>
+    </div><!-- /fx-machine=photography -->
+
   </main>
 
   <footer>
@@ -875,7 +874,6 @@
 <script type="module">
   import { initLife } from '/life.js';
   import { initPathfinding } from '/pathfinding.js';
-  import { initPhotography } from '/photography.js';
   import { initSatellites } from '/satellites.js';
   import { initScrollSpy } from '/scrollspy.js';
 
@@ -900,7 +898,6 @@
   init();
   initLife();
   initPathfinding();
-  initPhotography();
   initSatellites();
   initScrollSpy();
 </script>
