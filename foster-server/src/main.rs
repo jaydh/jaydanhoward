@@ -43,12 +43,10 @@ async fn main() {
     // Walk) simultaneously over one shared random grid — all client-side,
     // no server data dependency (same as the real src/components/
     // path_search.rs, which is entirely #[cfg(not(feature = "ssr"))]).
-    // Run/pause/reset are plain client state in static/pathfinding.js, not
-    // a Foster machine — same reasoning as life.js and theme.js: this is
-    // per-visitor UI state (auto-play-on-scroll, like the real site's own
-    // local signal), and a Foster machine is one shared instance across
-    // every connected client, which would make one visitor's scroll
-    // position control play/pause for everyone.
+    // Run/pause/reset are plain client state in static/pathfinding.js —
+    // per-visitor UI state (auto-play-on-scroll) driving a WebGL sim every
+    // frame, which a Foster machine can't do yet (see the local theme/
+    // contact/lighthouse machines below for the per-visitor UI it can).
 
     // Which photo is open in the lightbox used to live here (view/close/
     // next/prev reducers), but that's per-visitor UI state, not shared
@@ -76,11 +74,8 @@ async fn main() {
             .build()
     };
 
-    // Lighthouse "Load Report" gate: whether it's open is per-visitor UI
-    // state, not shared data, so it's plain client-side state in
-    // static/lighthouse.js rather than a Foster machine (same reasoning as
-    // theme/life/pathfinding/photography's lightbox). The report content
-    // itself comes from an external CI job POSTing to /api/lighthouse
+    // Lighthouse "Load Report" gate: the local "lighthouse" machine below.
+    // The report content itself comes from an external CI job POSTing to /api/lighthouse
     // (src/lighthouse.rs, real Basic-Auth-protected upload endpoint ported
     // verbatim from routes/lighthouse/post.rs) — not a live self-audit.
 
@@ -95,6 +90,38 @@ async fn main() {
     let mut machines = HashMap::new();
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
+
+    // Per-visitor UI state — `.local()` machines run in the browser (Foster
+    // embeds their definitions in the page), so one visitor's toggle never
+    // reaches anyone else and costs no round trip.
+    //
+    // theme: on <html>, `fx-class="dark:dark"`. `.persist()` keeps the choice
+    // in localStorage; on a first visit the <head> script picks light/dark
+    // from prefers-color-scheme and stamps data-fx-state before first paint.
+    let theme = MachineBuilder::new("theme", "light", serde_json::json!({}))
+        .pass("light", "toggle", "dark")
+        .pass("dark", "toggle", "light")
+        .persist()
+        .build();
+    machines.insert("theme".to_string(), theme);
+    // contact: the nav dropdown; `click@outside` closes it.
+    let contact = MachineBuilder::new("contact", "closed", serde_json::json!({}))
+        .pass("closed", "toggle", "open")
+        .pass("open", "toggle", "closed")
+        .pass("open", "close", "closed")
+        .local()
+        .build();
+    machines.insert("contact".to_string(), contact);
+    // lighthouse: the iframe ships without a src (an iframe inside a
+    // display:none wrapper still loads, so a real src would pull the ~680KB
+    // report on every page load). "load" — from the button, or `visible`
+    // once scrolled to — merges `report_src` into context, which
+    // fx-bind-attr copies onto the iframe.
+    let lighthouse = MachineBuilder::new("lighthouse", "gate", serde_json::json!({}))
+        .merge("gate", "load", "loaded")
+        .local()
+        .build();
+    machines.insert("lighthouse".to_string(), lighthouse);
 
     // Real conjunction screening (Hoots + SGP4 + TCA + rayon — see
     // conjunction.rs). Foster's role is deliberately tiny, same shape as
