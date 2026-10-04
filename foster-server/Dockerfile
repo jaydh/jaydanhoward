@@ -4,7 +4,7 @@
 # exactly (port 8000, GET /health_check, same env vars) so cutover is just
 # "ship a new image under the same Harbor tag," no homelab manifest changes.
 
-ARG FOSTER_REV=6df9048
+ARG FOSTER_REV=fae5803
 
 # WASM/JS output is architecture-independent bytecode + glue code, but
 # wasm-bindgen embeds a per-build content hash in that glue code's internal

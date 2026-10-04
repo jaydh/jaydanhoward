@@ -8,8 +8,8 @@ name = "jaydanhoward"
 path = "src/main.rs"
 
 [dependencies]
-foster-core = { git = "https://github.com/jaydh/foster", rev = "6df9048" }
-foster-server = { git = "https://github.com/jaydh/foster", rev = "6df9048" }
+foster-core = { git = "https://github.com/jaydh/foster", rev = "fae5803" }
+foster-server = { git = "https://github.com/jaydh/foster", rev = "fae5803" }
 axum = { version = "0.7", features = ["multipart"] }
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.5", features = ["fs", "compression-full"] }
