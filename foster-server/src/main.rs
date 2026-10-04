@@ -46,6 +46,47 @@ async fn main() {
     // no server data: Rust crates in ../widgets, built to WASM and
     // lazy-loaded by Foster's `fx-widget` when they scroll into view.
 
+    let pkg_dir = "/app/pkg";
+    let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
+        pkg_dir.to_string()
+    } else {
+        // CI's "Build foster-client WASM" step (general.yml) and local dev
+        // both produce this at <repo-root>/foster/pkg (also why .gitignore
+        // has a bare `pkg` entry) — one level up from foster-server, not
+        // two. Was previously off by one level, which made this fallback
+        // silently 404 every /pkg/* request in CI (never in production,
+        // which always hits the /app/pkg branch above via the Dockerfile).
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../foster/pkg").to_string()
+    };
+    // The compile-time CARGO_MANIFEST_DIR baked in by concat! is the
+    // Docker builder stage's path (/build), which doesn't exist in the
+    // final distroless runtime image — only /app/static does (see
+    // Dockerfile's final COPY). Same fallback shape as pkg_dir above; a
+    // real deploy silently 404s on every JS asset without this (only
+    // caught by an actual in-cluster deploy, not local `cargo run`, since
+    // CARGO_MANIFEST_DIR happens to still be a valid path there).
+    let static_dir = "/app/static";
+    let static_dir = if std::path::Path::new(static_dir).exists() {
+        static_dir.to_string()
+    } else {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
+    };
+
+
+    // Content versions of the WASM bundles, stamped into the page's asset
+    // URLs (`?v=…`). Cloudflare and browsers cache JS; without versioned URLs
+    // a deploy could pair a stale cached foster_client.js with the new .wasm
+    // and Foster fails to start (LinkError) until the cache expires.
+    let pkg_v = site_middleware::content_version(&[
+        format!("{pkg_dir}/foster_client.js"),
+        format!("{pkg_dir}/foster_client_bg.wasm"),
+    ]);
+    let widgets_v = site_middleware::content_version(&site_middleware::files_under(&format!("{static_dir}/widgets")));
+    site_middleware::set_asset_versions(pkg_v.clone(), widgets_v.clone());
+    let page = include_str!("../static/index.html")
+        .replace("__PKG_V__", &pkg_v)
+        .replace("__WIDGETS_V__", &widgets_v);
+
     // Gallery + lightbox, as a local (per-visitor, in-browser) machine: the
     // photo list is fetched once at startup and never changes, so it ships
     // embedded in the page, and which photo is open is per-visitor state.
@@ -57,7 +98,7 @@ async fn main() {
         .step("viewing", "prev", "viewing", "photos", "index", -1)
         .pass("viewing", "close", "grid")
         .local()
-        .template(include_str!("../static/index.html"))
+        .template(page)
         .build();
 
     let database_url = std::env::var("DATABASE_URL")
@@ -273,32 +314,6 @@ async fn main() {
         .build()
     };
     machines.insert("satellites".to_string(), satellites_machine);
-
-    let pkg_dir = "/app/pkg";
-    let pkg_dir = if std::path::Path::new(pkg_dir).exists() {
-        pkg_dir.to_string()
-    } else {
-        // CI's "Build foster-client WASM" step (general.yml) and local dev
-        // both produce this at <repo-root>/foster/pkg (also why .gitignore
-        // has a bare `pkg` entry) — one level up from foster-server, not
-        // two. Was previously off by one level, which made this fallback
-        // silently 404 every /pkg/* request in CI (never in production,
-        // which always hits the /app/pkg branch above via the Dockerfile).
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../foster/pkg").to_string()
-    };
-    // The compile-time CARGO_MANIFEST_DIR baked in by concat! is the
-    // Docker builder stage's path (/build), which doesn't exist in the
-    // final distroless runtime image — only /app/static does (see
-    // Dockerfile's final COPY). Same fallback shape as pkg_dir above; a
-    // real deploy silently 404s on every JS asset without this (only
-    // caught by an actual in-cluster deploy, not local `cargo run`, since
-    // CARGO_MANIFEST_DIR happens to still be a valid path there).
-    let static_dir = "/app/static";
-    let static_dir = if std::path::Path::new(static_dir).exists() {
-        static_dir.to_string()
-    } else {
-        concat!(env!("CARGO_MANIFEST_DIR"), "/static").to_string()
-    };
 
     let http_client = reqwest::Client::new();
     let world_map_svg = std::sync::Arc::new(visitors::fetch_world_map_svg(&http_client).await);

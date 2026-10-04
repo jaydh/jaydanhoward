@@ -681,7 +681,7 @@
       interpolates smoothly between real snapshots.
     </p>
     <div fx-machine="satellites" class="sat-box">
-      <div class="sat-canvas-wrap" fx-widget="/widgets/satellites/satellites_widget.js">
+      <div class="sat-canvas-wrap" fx-widget="/widgets/satellites/satellites_widget.js?v=__WIDGETS_V__">
         <canvas id="sat-canvas" width="1200" height="600">Your browser does not support canvas</canvas>
         <div class="sat-controls sat-controls-zoom">
           <button id="sat-zoom-in">+</button>
@@ -749,7 +749,7 @@
       view and pauses when scrolled away; zoom/pan and the settings panel
       are all plain per-visitor client state, not shared server state.
     </p>
-    <div id="life-widget" class="life-box" fx-widget="/widgets/life/life_widget.js">
+    <div id="life-widget" class="life-box" fx-widget="/widgets/life/life_widget.js?v=__WIDGETS_V__">
       <div class="life-controls">
         <button id="life-toggle-run" class="life-icon-btn" aria-label="Play/Pause">
           <span class="life-run-label">&#9654;</span>
@@ -804,7 +804,7 @@
       machine — this is the same per-visitor UI state Foster's shared
       server model isn't the right fit for, same as Life and theme.
     </p>
-    <div id="pathfinding-widget" class="pf-box" fx-widget="/widgets/pathfinding/pathfinding_widget.js">
+    <div id="pathfinding-widget" class="pf-box" fx-widget="/widgets/pathfinding/pathfinding_widget.js?v=__WIDGETS_V__">
       <div class="pf-controls">
         <button id="pf-toggle-run">
           <span class="pf-play-label">&#9654; Play</span>
@@ -882,7 +882,7 @@
   async function loadFosterClient(attempts = 3) {
     for (let i = 0; i < attempts; i++) {
       try {
-        return (await import('/pkg/foster_client.js')).default;
+        return (await import('/pkg/foster_client.js?v=__PKG_V__')).default;
       } catch (err) {
         if (i === attempts - 1) throw err;
         await new Promise(r => setTimeout(r, 500 * (i + 1)));
@@ -890,7 +890,10 @@
     }
   }
   const init = await loadFosterClient();
-  init();
+  // Versioned like the import above (the server stamps __PKG_V__ with the
+  // bundle's content hash), so a deploy never pairs a cached old glue file
+  // with the new .wasm.
+  init({ module_or_path: '/pkg/foster_client_bg.wasm?v=__PKG_V__' });
 </script>
 </body>
 </html>

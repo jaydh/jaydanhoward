@@ -20,13 +20,11 @@ test('cache: HTML root gets max-age=0 must-revalidate', async ({ request }) => {
   expect(cc).toContain('must-revalidate');
 });
 
-// Foster's /pkg (wasm-pack output) has no content-hash versioning yet,
-// unlike the real Leptos site's ?v={hash} query-string scheme — see
-// site_middleware.rs::cache_control's doc comment. Caching it immutably
-// without a busting mechanism would pin browsers to a stale WASM/JS pair
-// after a deploy, so this only asserts the safer fallback is in effect,
-// not the (currently inapplicable) immutable rule.
-test('cache: WASM asset does not use an unsafe immutable TTL without cache-busting', async ({ page }) => {
+// /pkg and /widgets are versioned by content hash (?v=…, stamped into the
+// page at startup — see site_middleware.rs::bundle_cache_policy). A stale
+// cached glue file paired with a new .wasm breaks Foster entirely (a
+// production LinkError after a deploy is what motivated this).
+test('cache: WASM bundle is versioned and only immutable with the current version', async ({ page }) => {
   // This test has failed on every CI run since the Foster migration
   // (never reproduces locally, in isolation or under the full suite) —
   // the failure mode is a bare 30s timeout with zero '.wasm' response
@@ -66,7 +64,17 @@ test('cache: WASM asset does not use an unsafe immutable TTL without cache-busti
   const wasmCacheControl = res.headers()['cache-control'] ?? null;
 
   console.log(`WASM: ${res.url()}  →  ${wasmCacheControl}`);
-  expect(wasmCacheControl).not.toContain('immutable');
+  // The page stamps the bundle's content hash into its URL (?v=…), and the
+  // server only marks it immutable when that version matches what it serves.
+  // An unversioned bundle URL must never be immutable.
+  const version = new URL(res.url()).searchParams.get('v');
+  expect(version, 'foster_client_bg.wasm is requested with ?v=<content hash>').toBeTruthy();
+  expect(wasmCacheControl).toContain('immutable');
+
+  const unversioned = await page.request.get(new URL(res.url()).pathname);
+  expect(unversioned.headers()['cache-control'] ?? '').not.toContain('immutable');
+  const stale = await page.request.get(`${new URL(res.url()).pathname}?v=not-this-build`);
+  expect(stale.headers()['cache-control']).toBe('no-store');
 });
 
 test('cache: hashed JS gets immutable 1-year TTL', async ({ page }) => {

@@ -13,30 +13,87 @@ use axum::middleware::Next;
 use axum::response::Response;
 use axum::{http::StatusCode, response::IntoResponse};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::hash::{Hash, Hasher};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
+
+/// Short content hash of `files` (missing files hash as empty), for `?v=`
+/// cache-busting. Same binary + same files ⇒ same value on every replica.
+pub fn content_version(files: &[String]) -> String {
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for f in files {
+        f.hash(&mut h);
+        std::fs::read(f).unwrap_or_default().hash(&mut h);
+    }
+    format!("{:016x}", h.finish())
+}
+
+/// Every file under `dir`, recursively, sorted (for [`content_version`]).
+pub fn files_under(dir: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut stack = vec![std::path::PathBuf::from(dir)];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else {
+                out.push(p.to_string_lossy().into_owned());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// (`/pkg` version, `/widgets` version) this replica serves, set at startup.
+static ASSET_VERSIONS: OnceLock<(String, String)> = OnceLock::new();
+
+pub fn set_asset_versions(pkg: String, widgets: String) {
+    let _ = ASSET_VERSIONS.set((pkg, widgets));
+}
+
+/// Cache policy for the WASM bundles under `/pkg` and `/widgets`.
+/// - `?v=<this replica's version>`: immutable — the URL changes on every
+///   deploy, since the page (never cached) stamps the current version in.
+/// - `?v=<anything else>`: `no-store`. Mid-rollout, a new page's request can
+///   land on an old replica; caching its old bytes under the new URL would
+///   pin a mismatched pair at the edge for a year.
+/// - no `v` (the glue's own relative loads, e.g. a widget's .wasm or a
+///   wasm-bindgen snippet): `no-cache`, i.e. always revalidate.
+fn bundle_cache_policy(path: &str, query: Option<&str>) -> Option<&'static str> {
+    let expected = match ASSET_VERSIONS.get() {
+        Some((pkg, _)) if path.starts_with("/pkg/") => pkg,
+        Some((_, widgets)) if path.starts_with("/widgets/") => widgets,
+        _ if path.starts_with("/pkg/") || path.starts_with("/widgets/") => return Some("no-cache"),
+        _ => return None,
+    };
+    let v = query.and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("v=")));
+    Some(match v {
+        Some(v) if v == expected => "public, max-age=31536000, immutable",
+        Some(_) => "no-store",
+        None => "no-cache",
+    })
+}
 
 fn has_hash_segment(path: &str) -> bool {
     path.split('/').any(|seg| seg.len() >= 8 && seg.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
-/// Same extension-based policy as the real site, with one adaptation: the
-/// real `/jaydanhoward_wasm/?v={hash}` cache-busting scheme relies on
-/// Leptos's build embedding a content hash in the query string. Foster's
-/// `/pkg` (wasm-pack output) has no such versioning yet, so treating it as
-/// immutable would leave browsers pinned to a stale WASM/JS pair after a
-/// deploy. Until `/pkg` gets a real cache-busting mechanism, it deliberately
-/// falls through to the same short-lived default every uncategorized route
-/// gets, rather than copying the immutable rule to something unsafe.
+/// Same extension-based policy as the real site, plus versioned caching for
+/// the WASM bundles (`/pkg`, `/widgets`) — see [`bundle_cache_policy`].
 pub async fn cache_control(req: Request, next: Next) -> Response {
     let path = req.uri().path().to_string();
+    let query = req.uri().query().map(str::to_string);
     let mut response = next.run(req).await;
 
     if response.headers().contains_key(CACHE_CONTROL) {
         return response;
     }
 
-    let cache_header = if path.ends_with(".js") && has_hash_segment(&path) {
+    let cache_header = if let Some(policy) = bundle_cache_policy(&path, query.as_deref()) {
+        policy
+    } else if path.ends_with(".js") && has_hash_segment(&path) {
         "public, max-age=31536000, immutable"
     } else if path.ends_with(".js") {
         "public, max-age=3600"
@@ -164,5 +221,21 @@ impl RateLimiter {
         }
 
         next.run(req).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bundle_policy() {
+        set_asset_versions("p1".into(), "w1".into());
+        assert_eq!(bundle_cache_policy("/pkg/foster_client.js", Some("v=p1")), Some("public, max-age=31536000, immutable"));
+        assert_eq!(bundle_cache_policy("/pkg/foster_client.js", Some("v=old")), Some("no-store"));
+        assert_eq!(bundle_cache_policy("/pkg/snippets/x/inline0.js", None), Some("no-cache"));
+        assert_eq!(bundle_cache_policy("/widgets/life/life_widget.js", Some("v=w1")), Some("public, max-age=31536000, immutable"));
+        assert_eq!(bundle_cache_policy("/widgets/life/life_widget_bg.wasm", None), Some("no-cache"));
+        assert_eq!(bundle_cache_policy("/favicon.ico", Some("v=p1")), None);
     }
 }
