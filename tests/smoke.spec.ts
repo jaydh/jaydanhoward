@@ -32,7 +32,7 @@ test('API routes return non-500 on initial load', async ({ page }) => {
 
   const ciSkip = [
     // Requires CelesTrak network access (blocks the CI runner's IP with 403)
-    '/api/conjunction', '/api/satellites',
+    '/api/satellites',
   ];
 
   page.on('response', res => {

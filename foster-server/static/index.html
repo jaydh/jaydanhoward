@@ -142,6 +142,7 @@
     }
     .life-learn-more { font-size: 0.85rem; color: var(--accent); }
 
+    .trace-wrap { display: flex; flex-direction: column; align-items: center; width: 100%; }
     #request-trace-container { display: flex; flex-direction: column; align-items: center; max-width: 32rem; margin: 0 auto; }
     .trace-loading, .trace-error { color: var(--text-light); font-size: 0.85rem; padding: 2rem 0; font-family: ui-monospace, monospace; }
     .trace-card { width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
@@ -222,24 +223,38 @@
     .cluster-live { font-size: 0.75rem; color: #15803d; }
     html.dark .cluster-live { color: #16a34a; }
     .cluster-live-time { font-size: 0.75rem; color: var(--text-light); margin-left: 0.5rem; }
-    .cluster-error { text-align: center; color: #b91c1c; padding: 1rem; }
-    html.dark .cluster-error { color: #ef4444; }
     .cluster-tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 1rem; gap: 0.25rem; flex-wrap: wrap; }
     .cluster-tab {
-      background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-light);
+      display: inline-block; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-light);
       padding: 0.5rem 0.9rem; font: inherit; font-size: 0.85rem; cursor: pointer;
     }
-    .cluster-tab.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
     .cluster-tab:hover { color: var(--text); }
+    .cluster-tabs input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .cluster-tabs input:focus-visible + .cluster-tab { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .cluster-tabs input:checked + .cluster-tab { border-bottom-color: var(--accent); color: var(--text); font-weight: 600; }
     .cluster-tabpanel { display: none; }
-    .cluster-tabpanel.active { display: block; }
+    #cluster-widget:has(#ct-overview:checked) #cluster-tab-overview,
+    #cluster-widget:has(#ct-storage:checked) #cluster-tab-storage,
+    #cluster-widget:has(#ct-network:checked) #cluster-tab-network,
+    #cluster-widget:has(#ct-gitops:checked) #cluster-tab-gitops,
+    #cluster-widget:has(#ct-audit:checked) #cluster-tab-audit { display: block; }
+    .cluster-empty { color: var(--text-light); font-size: 0.8rem; }
+    .cluster-grid-row { display: grid; grid-template-columns: 1fr 5rem 5rem; gap: 0.5rem; font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.2rem 0; border-top: 1px solid var(--border); }
+    .cluster-grid-head { color: var(--text-light); border-top: none; }
+    .cluster-grid-row .num { text-align: right; }
+    .cluster-audit-summary { font-size: 0.8rem; margin: 0.2rem 0; }
+    .cluster-audit-findings { font-size: 0.78rem; font-family: ui-monospace, monospace; white-space: pre-line; opacity: 0.8; }
+    .cluster-audit-entry + .cluster-audit-entry { border-top: 1px solid var(--border); margin-top: 0.5rem; padding-top: 0.5rem; }
+    .cluster-audit-warn { opacity: 0.7; }
     .cluster-summary { display: flex; gap: 1.5rem; margin: 0 0 1rem; flex-wrap: wrap; font-size: 0.85rem; }
     .cluster-summary strong { font-size: 1.4rem; color: var(--accent); margin-right: 0.35rem; }
     .cluster-sparks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
     @media (max-width: 640px) { .cluster-sparks { grid-template-columns: 1fr; } }
     .cluster-spark { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.6rem; background: var(--surface); }
     .cluster-spark-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 0.3rem; }
-    .cluster-spark canvas { display: block; width: 100%; height: 50px; }
+    .cluster-spark svg { display: block; width: 100%; height: 50px; }
+    .cluster-spark svg.spark-tall { height: 70px; }
+    .spark-line { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
     .cluster-nodes { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.75rem; margin-top: 1rem; }
     .cluster-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; background: var(--surface); max-height: 22rem; overflow-y: auto; margin-bottom: 1rem; }
     .cluster-box h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); margin-bottom: 0.6rem; }
@@ -376,8 +391,48 @@
     <div class="narrow" style="display:flex;flex-direction:column;align-items:center;text-align:center;">
       <h1>How You Got Here</h1>
       <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
-      <button id="request-trace-refresh">&#8635; Refresh</button>
-      <div id="request-trace-container"></div>
+      <div fx-machine="request_trace" class="trace-wrap">
+        <button id="request-trace-refresh" fx-on="click->trace">&#8635; Refresh</button>
+        <div class="trace-loading" fx-show="pending">tracing your request…</div>
+        <div fx-show="traced" style="width:100%">
+        <div id="request-trace-container">
+          <div class="trace-card">
+            <p class="trace-label">You</p>
+            <div class="trace-rows">
+              <div class="trace-row" fx-if="ip"><span class="trace-key">ip</span><span class="trace-val" fx-text="ip"></span></div>
+              <div class="trace-row" fx-if="location"><span class="trace-key">location</span><span class="trace-val" fx-text="location"></span></div>
+              <div class="trace-row" fx-if="isp"><span class="trace-key">isp</span><span class="trace-val" fx-text="isp"></span></div>
+              <div class="trace-row" fx-if="client"><span class="trace-key">client</span><span class="trace-val" fx-text="client"></span></div>
+            </div>
+          </div>
+          <div class="trace-hop"><div class="trace-hop-line"></div><span class="trace-hop-label" fx-text="protocol"></span><div class="trace-hop-line"></div></div>
+          <div class="trace-card">
+            <p class="trace-label">Cloudflare</p>
+            <div class="trace-rows">
+              <div class="trace-row" fx-if="pop"><span class="trace-key">pop</span><span class="trace-val" fx-text="pop"></span></div>
+              <div class="trace-row" fx-if="ray"><span class="trace-key">ray</span><span class="trace-val" fx-text="ray"></span></div>
+            </div>
+          </div>
+          <div class="trace-hop"><div class="trace-hop-line"></div><span class="trace-hop-label">Zero Trust Tunnel (cloudflared)</span><div class="trace-hop-line"></div></div>
+          <div class="trace-card">
+            <p class="trace-label">Homelab / local dev</p>
+            <div class="trace-rows">
+              <div class="trace-row" fx-if="namespace"><span class="trace-key">namespace</span><span class="trace-val" fx-text="namespace"></span></div>
+              <div class="trace-row"><span class="trace-key">service</span><span class="trace-val">jaydanhoward (Foster port)</span></div>
+            </div>
+          </div>
+          <div class="trace-hop"><div class="trace-hop-line"></div><span class="trace-hop-label">kube-proxy → Pod</span><div class="trace-hop-line"></div></div>
+          <div class="trace-card">
+            <p class="trace-label">This process</p>
+            <div class="trace-rows">
+              <div class="trace-row" fx-if="pod"><span class="trace-key">pod</span><span class="trace-val" fx-text="pod"></span></div>
+              <div class="trace-row" fx-if="node"><span class="trace-key">node</span><span class="trace-val" fx-text="node"></span></div>
+              <div class="trace-row"><span class="trace-key">runtime</span><span class="trace-val">Rust · Foster · Axum</span></div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -388,103 +443,172 @@
       disk/pod/node metrics, historical 24h series, Ceph health, network
       insights, GitOps status, backup Job status, cloudflared tunnel stats,
       and the Claude audit log, all ported from the real
-      <code>src/components/cluster_stats.rs</code>. This is a genuine
-      <code>EventSource</code> stream (<code>/api/metrics/stream</code>),
-      not a Foster machine — the data really is global (one homelab, not
-      per-visitor), and this matches the real site's actual transport.
+      <code>src/components/cluster_stats.rs</code>. A shared Foster machine
+      fed by the server once a second (only while someone's watching): one
+      homelab, so one instance for every visitor, pushed over SSE.
     </p>
-    <div id="cluster-widget" class="cluster-card">
+    <div id="cluster-widget" class="cluster-card" fx-machine="cluster">
       <div class="cluster-header">
         <h1 style="font-size:1.15rem;margin:0;">Homelab Cluster</h1>
         <div>
           <span class="cluster-live">&#9679; Live</span>
-          <span id="cluster-last-refresh" class="cluster-live-time"></span>
+          <span class="cluster-live-time" fx-text="updated_at"></span>
         </div>
       </div>
-      <div id="cluster-error" class="cluster-error" style="display:none"></div>
 
+      <!-- Tabs are per-visitor UI: plain CSS radio tabs (see the
+           #cluster-widget:has(...) rules), no script. -->
       <div class="cluster-tabs">
-        <button class="cluster-tab active" data-tab="overview">Overview</button>
-        <button class="cluster-tab" data-tab="storage">Storage</button>
-        <button class="cluster-tab" data-tab="network">Network</button>
-        <button class="cluster-tab" data-tab="gitops">GitOps</button>
-        <button class="cluster-tab" data-tab="audit">AI Audit</button>
+        <input type="radio" name="cluster-tab" id="ct-overview" checked><label class="cluster-tab" for="ct-overview">Overview</label>
+        <input type="radio" name="cluster-tab" id="ct-storage"><label class="cluster-tab" for="ct-storage">Storage</label>
+        <input type="radio" name="cluster-tab" id="ct-network"><label class="cluster-tab" for="ct-network">Network</label>
+        <input type="radio" name="cluster-tab" id="ct-gitops"><label class="cluster-tab" for="ct-gitops">GitOps</label>
+        <input type="radio" name="cluster-tab" id="ct-audit"><label class="cluster-tab" for="ct-audit">AI Audit</label>
       </div>
 
-      <div id="cluster-tab-overview" class="cluster-tabpanel active">
+      <div id="cluster-tab-overview" class="cluster-tabpanel">
         <div class="cluster-summary">
-          <div><strong id="cluster-pod-count">0</strong>pods</div>
-          <div><strong id="cluster-node-count">0/0</strong>nodes ready</div>
+          <div><strong fx-text="pod_count">0</strong>pods</div>
+          <div><strong fx-text="node_ready">0/0</strong>nodes ready</div>
         </div>
         <div class="cluster-sparks">
-          <div class="cluster-spark"><div class="cluster-spark-title">CPU Usage</div><canvas id="cluster-spark-cpu"></canvas></div>
-          <div class="cluster-spark"><div class="cluster-spark-title">Memory Usage</div><canvas id="cluster-spark-memory"></canvas></div>
-          <div class="cluster-spark"><div class="cluster-spark-title">Storage Usage</div><canvas id="cluster-spark-disk"></canvas></div>
+          <div class="cluster-spark"><div class="cluster-spark-title">CPU Usage</div>
+            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#ef4444" fx-bind-attr="d=ctx:spark_cpu"/></svg></div>
+          <div class="cluster-spark"><div class="cluster-spark-title">Memory Usage</div>
+            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#3b82f6" fx-bind-attr="d=ctx:spark_memory"/></svg></div>
+          <div class="cluster-spark"><div class="cluster-spark-title">Storage Usage</div>
+            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#8b5cf6" fx-bind-attr="d=ctx:spark_disk"/></svg></div>
         </div>
-        <div class="cluster-spark"><div class="cluster-spark-title">Network (RX/TX Mbps)</div><canvas id="cluster-spark-network" style="height:70px"></canvas></div>
-        <div id="cluster-nodes" class="cluster-nodes"></div>
+        <div class="cluster-spark"><div class="cluster-spark-title">Network (RX/TX Mbps)</div>
+          <svg class="spark-tall" viewBox="0 0 260 70" preserveAspectRatio="none" aria-hidden="true">
+            <path class="spark-line" stroke="#3b82f6" fx-bind-attr="d=ctx:spark_rx"/>
+            <path class="spark-line" stroke="#f59e0b" fx-bind-attr="d=ctx:spark_tx"/>
+          </svg></div>
+        <div class="cluster-nodes" fx-for="nodes">
+          <div class="cluster-box" style="max-height:none;display:none">
+            <h3 fx-field="name"></h3>
+            <div class="cluster-bar-row"><span class="cluster-bar-label">CPU</span>
+              <div class="cluster-bar-track"><div class="cluster-bar-fill" fx-bind-attr="style.width=item:cpu_width"></div></div>
+              <span class="cluster-bar-val" fx-field="cpu_label"></span></div>
+            <div class="cluster-bar-row"><span class="cluster-bar-label">Mem</span>
+              <div class="cluster-bar-track"><div class="cluster-bar-fill" fx-bind-attr="style.width=item:mem_width"></div></div>
+              <span class="cluster-bar-val" fx-field="mem_label"></span></div>
+          </div>
+        </div>
       </div>
 
       <div id="cluster-tab-storage" class="cluster-tabpanel">
         <div class="cluster-box">
           <h3>Persistent Volumes</h3>
-          <div id="cluster-pvcs"></div>
+          <div fx-for="pvcs">
+            <div class="cluster-bar-row" style="display:none">
+              <span class="cluster-bar-label" fx-field="label" fx-bind-attr="title=item:label"></span>
+              <div class="cluster-bar-track"><div class="cluster-bar-fill" fx-bind-attr="style.width=item:width"></div></div>
+              <span class="cluster-bar-val" fx-field="value"></span>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"pvcs","op":"eq","value":[]}'>No PVC data yet.</p>
         </div>
         <div class="cluster-box">
           <h3>Ceph</h3>
-          <div id="cluster-ceph"></div>
+          <div class="visit-row"><span>health</span><span fx-text="ceph_health"></span></div>
+          <div class="visit-row"><span>mon quorum</span><span fx-text="ceph_mon"></span></div>
+          <div class="visit-row"><span>mgr</span><span fx-text="ceph_mgr"></span></div>
+          <div class="visit-row"><span>osd</span><span fx-text="ceph_osd"></span></div>
+          <div class="visit-row"><span>pg clean</span><span fx-text="ceph_pg"></span></div>
+          <div class="visit-row"><span>pools</span><span fx-text="ceph_pools"></span></div>
+          <div class="visit-row"><span>data used</span><span fx-text="ceph_data"></span></div>
+          <div class="visit-row"><span>read/write</span><span fx-text="ceph_rw"></span></div>
         </div>
         <div class="cluster-box">
           <h3>Backup Jobs</h3>
-          <div id="cluster-backups"></div>
+          <div fx-for="backups">
+            <div class="backup-row" style="display:none"><span fx-field="icon"></span><span class="flux-name" fx-field="name"></span><span class="flux-kind" fx-field="label"></span></div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"backups","op":"eq","value":[]}'>No backup Job data.</p>
         </div>
       </div>
 
       <div id="cluster-tab-network" class="cluster-tabpanel">
         <div class="cluster-box">
           <h3>Cloudflare Tunnel</h3>
-          <div id="cluster-cloudflared"></div>
+          <div class="visit-row"><span>status</span><span fx-text="cf_status"></span></div>
+          <div class="visit-row"><span>req/s (5m avg)</span><span fx-text="cf_rps"></span></div>
+          <div class="visit-row"><span>error rate</span><span fx-text="cf_errors"></span></div>
+          <div fx-for="cf_by_status">
+            <div class="visit-row" style="display:none"><span fx-field="code"></span><span fx-field="rate"></span></div>
+          </div>
         </div>
         <div class="cluster-box">
           <h3>Top Pods by Traffic (5m avg)</h3>
-          <div id="cluster-top-pods"></div>
+          <div class="cluster-grid" fx-if="top_pods">
+            <div class="cluster-grid-row cluster-grid-head"><span>pod</span><span class="num">tx Mbps</span><span class="num">rx Mbps</span></div>
+            <div fx-for="top_pods">
+              <div class="cluster-grid-row" style="display:none"><span fx-field="pod"></span><span class="num" fx-field="tx"></span><span class="num" fx-field="rx"></span></div>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"top_pods","op":"eq","value":[]}'>No pod traffic data.</p>
         </div>
         <div class="cluster-box">
           <h3>Spike Detector</h3>
-          <div id="cluster-spike-config"></div>
+          <div class="visit-row"><span>threshold</span><span fx-text="spike_threshold"></span></div>
+          <div class="visit-row"><span>floor</span><span fx-text="spike_floor"></span></div>
         </div>
         <div class="cluster-box">
           <h3>Network Insights</h3>
-          <div id="cluster-insights"></div>
+          <div fx-for="insights">
+            <div class="visit-row" style="display:none"><span fx-field="when"></span><span fx-field="text"></span></div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"insights","op":"eq","value":[]}'>No spikes recorded.</p>
         </div>
       </div>
 
       <div id="cluster-tab-gitops" class="cluster-tabpanel">
         <div class="cluster-box">
           <h3>Flux Resources</h3>
-          <div id="cluster-gitops"></div>
+          <div fx-for="gitops">
+            <div class="flux-row" style="display:none"><span class="flux-kind" fx-field="kind"></span><span class="flux-name" fx-field="name"></span><span fx-field="icon"></span></div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"gitops","op":"eq","value":[]}'>No Flux resources found.</p>
         </div>
       </div>
 
       <div id="cluster-tab-audit" class="cluster-tabpanel">
         <div class="cluster-box">
           <h3>Alerts</h3>
-          <div id="cluster-alerts"></div>
+          <div fx-for="alerts">
+            <div class="cluster-audit-row cluster-audit-err" style="display:none"><strong fx-field="name"></strong> <span fx-field="detail"></span></div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"alerts","op":"eq","value":[]}'>No alerts firing.</p>
         </div>
         <div class="cluster-box">
           <h3>Daily Audit</h3>
-          <div id="cluster-daily-audit"></div>
+          <div fx-for="daily_audit">
+            <div class="cluster-audit-entry" style="display:none">
+              <div class="visit-row"><span fx-field="when"></span><span fx-field="significance"></span></div>
+              <p class="cluster-audit-summary" fx-field="summary"></p>
+              <div class="cluster-audit-findings" fx-field="findings"></div>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"daily_audit","op":"eq","value":[]}'>No audit runs yet — runs daily once Prometheus and an Anthropic key are configured.</p>
         </div>
         <div class="cluster-box">
           <h3>Security Audit</h3>
-          <div id="cluster-security-audit"></div>
+          <div class="visit-row"><span fx-text="sec_status"></span><span fx-text="sec_deps"></span><span fx-text="sec_advisories"></span></div>
+          <div class="visit-row"><span>last scan</span><span fx-text="sec_scanned_at"></span></div>
+          <div fx-for="sec_findings">
+            <div class="cluster-audit-row" style="display:none" fx-field="text" fx-bind-attr="class=item:cls"></div>
+          </div>
         </div>
         <div class="cluster-box">
           <h3>Claude Audit Log</h3>
-          <div id="cluster-claude-log"></div>
+          <div fx-for="claude_log">
+            <div class="cluster-audit-row" style="display:none" fx-field="text" fx-bind-attr="class=item:cls"></div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"claude_log","op":"eq","value":[]}'>No Claude API calls recorded yet.</p>
         </div>
       </div>
-    </div><!-- /cluster-widget -->
+    </div><!-- /fx-machine=cluster -->
 
     <h2>Visitors</h2>
     <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>
@@ -604,18 +728,15 @@
       ternary-search TCA refinement, rayon-parallelized pair scanning —
       ported from the real <code>src/components/conjunction.rs</code>.
       Persisted to the real <code>conjunction_screenings</code>/
-      <code>conjunction_events</code> tables. Foster only owns the button's
-      idle/started label; the real pass is a background job polled
-      independently (<code>static/conjunction.js</code>).
+      <code>conjunction_events</code> tables. The pass runs as a background
+      job; its status reaches the page through a shared Foster machine the
+      server updates while you watch.
     </p>
     <div fx-machine="conjunction" class="screening-box">
-      <button id="conjunction-start" fx-on="click->start_screening" aria-label="Start conjunction screening">
-        <span fx-show="idle">Screen</span>
-        <span fx-show="started">Screen again</span>
-      </button>
-      <div>Status: <span id="conjunction-status" class="screening-status">idle</span></div>
-      <div id="conjunction-stats" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);"></div>
-      <ul id="conjunction-events"></ul>
+      <button id="conjunction-start" fx-on="click->start" fx-bind-attr="disabled=ctx:busy">Screen</button>
+      <div>Status: <span class="screening-status" fx-text="status">idle</span></div>
+      <div style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);" fx-text="stats"></div>
+      <ul fx-for="events"><li style="display:none" fx-field="text"></li></ul>
     </div><!-- /fx-machine=conjunction -->
   </main>
 
@@ -754,10 +875,7 @@
 <script type="module">
   import { initLife } from '/life.js';
   import { initPathfinding } from '/pathfinding.js';
-  import { initRequestTrace } from '/request_trace.js';
   import { initPhotography } from '/photography.js';
-  import { initCluster } from '/cluster.js';
-  import { initConjunction } from '/conjunction.js';
   import { initSatellites } from '/satellites.js';
   import { initScrollSpy } from '/scrollspy.js';
 
@@ -782,10 +900,7 @@
   init();
   initLife();
   initPathfinding();
-  initRequestTrace();
   initPhotography();
-  initCluster();
-  initConjunction();
   initSatellites();
   initScrollSpy();
 </script>

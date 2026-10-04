@@ -7,6 +7,7 @@
 
 mod cluster;
 mod cluster_audit;
+mod cluster_view;
 mod conjunction;
 mod lighthouse;
 mod photography;
@@ -22,7 +23,9 @@ use axum::{http::StatusCode, Router};
 use foster_core::MachineBuilder;
 use site_middleware::RateLimiter;
 use std::collections::HashMap;
+use futures_util::StreamExt;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
@@ -129,12 +132,43 @@ async fn main() {
     // screening pass and its results are a background job persisted to
     // the real conjunction_screenings/conjunction_events tables, polled
     // independently of Foster's own SSE for this machine.
-    let conjunction_machine = MachineBuilder::new("conjunction", "idle", serde_json::json!({}))
-        .state("started")
-        .pass("idle", "start_screening", "started")
-        .pass("started", "start_screening", "started")
-        .build();
+    //
+    // Shared: there's one screening job for everyone, so every viewer sees
+    // the same status. "start" kicks off the background job; a feed (below)
+    // pushes its status every 2s while someone is watching.
+    let conjunction_state = conjunction::ConjunctionAppState {
+        screening: conjunction::initial_state(),
+        pool: pg_pool.clone(),
+    };
+    let conjunction_last = Arc::new(conjunction::latest_from_db(&pg_pool).await);
+    let conjunction_machine = {
+        let state = conjunction_state.clone();
+        MachineBuilder::new("conjunction", "live", conjunction::screening_view(&conjunction_last))
+            .on("live", "status", "live", |_, view| Ok(view))
+            .on("live", "start", "live", move |_, _| {
+                conjunction::start(&state);
+                Ok(conjunction::screening_view(&serde_json::json!({ "status": "running" })))
+            })
+            .shared()
+            .build()
+    };
     machines.insert("conjunction".to_string(), conjunction_machine);
+
+    // Homelab cluster card: shared, fed once a second (while watched) by the
+    // cluster feed below. Each tick replaces the whole display model.
+    let cluster_machine = MachineBuilder::new("cluster", "live", cluster_view::cluster_view(&serde_json::json!({}), ""))
+        .on("live", "tick", "live", |_, view| Ok(view))
+        .shared()
+        .build();
+    machines.insert("cluster".to_string(), cluster_machine);
+
+    // "How You Got Here": per-visitor, filled by the request_event below on
+    // every page load and Refresh click.
+    let request_trace_machine = MachineBuilder::new("request_trace", "pending", serde_json::json!({}))
+        .on("pending", "trace", "traced", |_, view| Ok(view))
+        .on("traced", "trace", "traced", |_, view| Ok(view))
+        .build();
+    machines.insert("request_trace".to_string(), request_trace_machine);
 
     // Real 3D satellite tracking — see satellites.rs for the full rationale.
     // Foster only owns the run/pause + playback-speed labels (small,
@@ -257,17 +291,6 @@ async fn main() {
     let http_client = reqwest::Client::new();
     let world_map_svg = std::sync::Arc::new(visitors::fetch_world_map_svg(&http_client).await);
 
-    let trace_router: Router = Router::new()
-        .route("/api/request-trace", get(request_trace::get_request_trace));
-
-    let conjunction_router = Router::new()
-        .route("/api/conjunction", get(conjunction::get_screening))
-        .route("/api/conjunction/start", post(conjunction::start_screening))
-        .with_state(conjunction::ConjunctionAppState {
-            screening: conjunction::initial_state(),
-            pool: pg_pool.clone(),
-        });
-
     let satellites_router = Router::new()
         .route("/api/satellites", get(satellites::get_positions))
         .with_state(satellites_runtime);
@@ -296,10 +319,39 @@ async fn main() {
     let security_audit_limiter = auth_rate_limiter.clone();
     let claude_audit_limiter = auth_rate_limiter.clone();
 
-    let app = foster_server::router(machines)
-        .merge(trace_router)
+    // Feeds only poll while someone has the machine's live stream open.
+    let every = |secs: u64| {
+        let mut interval = tokio::time::interval(Duration::from_secs(secs));
+        // After an idle stretch (no viewers), resume on the next tick rather
+        // than bursting through every missed one.
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        tokio_stream::wrappers::IntervalStream::new(interval)
+    };
+    let cluster_feed = {
+        let pool = pg_pool.clone();
+        every(1).then(move |_| {
+            let pool = pool.clone();
+            async move {
+                let snapshot = cluster::fetch_cluster_snapshot(&pool).await;
+                let updated = chrono::Utc::now().format("%H:%M:%S UTC").to_string();
+                cluster_view::cluster_view(&snapshot, &updated)
+            }
+        })
+    };
+    let conjunction_feed = every(2).then(move |_| {
+        let state = conjunction_state.clone();
+        let last = conjunction_last.clone();
+        async move { conjunction::screening_view(&conjunction::current(&state, &last).await) }
+    });
+
+    let app = foster_server::Foster::new(machines)
+        .feed("cluster", "tick", cluster_feed)
+        .feed("conjunction", "status", conjunction_feed)
+        .request_event("request_trace", "trace", |req: foster_server::RequestInfo| async move {
+            request_trace::trace_view(&request_trace::trace(&req.headers, req.remote_addr).await)
+        })
+        .router()
         .merge(world_map_router)
-        .merge(conjunction_router)
         .merge(satellites_router)
         .route(
             "/api/lighthouse",
@@ -325,10 +377,6 @@ async fn main() {
                     async move { limiter.check_middleware(req, next).await }
                 }))
                 .with_state(pg_pool.clone()),
-        )
-        .route(
-            "/api/metrics/stream",
-            get(cluster::metrics_stream).with_state(pg_pool.clone()),
         )
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))

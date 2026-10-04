@@ -274,33 +274,69 @@ fn run_screening_blocking(pool: PgPool) -> Screening {
     Screening::Complete { total_pairs, pairs_after_hoots, events_found: events.len(), elapsed_ms, events }
 }
 
-pub async fn get_screening(state: axum::extract::State<ConjunctionAppState>) -> axum::Json<Value> {
-    let current = state.0.screening.lock().await.clone();
-    // On a fresh process (nothing screened yet this run), fall back to the
-    // last real completed screening from the DB rather than always
-    // reporting "idle" until someone clicks the button again.
-    if matches!(current, Screening::Idle) {
-        let from_db = latest_from_db(&state.0.pool).await;
-        if from_db["status"] == "complete" {
-            return axum::Json(from_db);
+/// Kick off a screening pass in the background, unless one is already
+/// running. Called from the "conjunction" machine's `start` reducer.
+pub fn start(state: &ConjunctionAppState) {
+    let screening = state.screening.clone();
+    let pool = state.pool.clone();
+    tokio::spawn(async move {
+        {
+            let mut s = screening.lock().await;
+            if matches!(*s, Screening::Running) {
+                return;
+            }
+            *s = Screening::Running;
         }
-    }
-    axum::Json(serde_json::to_value(current).unwrap_or(serde_json::json!({"status":"idle"})))
+        let result = tokio::task::spawn_blocking(move || run_screening_blocking(pool))
+            .await
+            .unwrap_or_else(|e| Screening::Failed { error: e.to_string() });
+        *screening.lock().await = result;
+    });
 }
 
-pub async fn start_screening(state: axum::extract::State<ConjunctionAppState>) -> axum::http::StatusCode {
-    {
-        let mut s = state.0.screening.lock().await;
-        *s = Screening::Running;
+/// Current screening as JSON (`{"status": …}`). Before anything has run in
+/// this process, `last_from_db` (the latest completed screening, loaded at
+/// startup) stands in for "idle".
+pub async fn current(state: &ConjunctionAppState, last_from_db: &Value) -> Value {
+    let current = state.screening.lock().await.clone();
+    if matches!(current, Screening::Idle) && last_from_db["status"] == "complete" {
+        return last_from_db.clone();
     }
-    let screening = state.0.screening.clone();
-    let pool = state.0.pool.clone();
-    tokio::spawn(async move {
-        let result = tokio::task::spawn_blocking(move || run_screening_blocking(pool)).await.unwrap_or_else(|e| Screening::Failed { error: e.to_string() });
-        let mut s = screening.lock().await;
-        *s = result;
-    });
-    axum::http::StatusCode::ACCEPTED
+    serde_json::to_value(current).unwrap_or_else(|_| serde_json::json!({ "status": "idle" }))
+}
+
+/// Display model for the conjunction card (whole context — the machine's
+/// reducers replace it, so `busy` is present only while running, which is
+/// what `fx-bind-attr="disabled=ctx:busy"` keys off).
+pub fn screening_view(v: &Value) -> Value {
+    let status = v["status"].as_str().unwrap_or("idle");
+    let stats = match status {
+        "complete" => format!(
+            "{} events found across {} pairs (of {} total) in {}ms",
+            v["events_found"], v["pairs_after_hoots"], v["total_pairs"], v["elapsed_ms"],
+        ),
+        "failed" => v["error"].as_str().unwrap_or("failed").to_string(),
+        _ => String::new(),
+    };
+    let events: Vec<Value> = v["events"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+        .iter()
+        .map(|e| serde_json::json!({
+            "text": format!(
+                "{} vs {} — {:.1} km",
+                e["sat_a"].as_str().unwrap_or(""),
+                e["sat_b"].as_str().unwrap_or(""),
+                e["miss_distance_km"].as_f64().unwrap_or(0.0),
+            ),
+        }))
+        .collect();
+    let mut view = serde_json::json!({ "status": status, "stats": stats, "events": events });
+    if status == "running" {
+        view["busy"] = Value::String(String::new());
+    }
+    view
 }
 
 /// Real, previously-completed screenings from the DB (for initial page load

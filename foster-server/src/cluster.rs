@@ -17,7 +17,6 @@
 use crate::prometheus_client::{empty_data, parse_prometheus_value, query_prometheus, query_prometheus_range};
 use axum::extract::State;
 use axum::http::{header::HeaderMap, StatusCode};
-use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use k8s_openapi::api::batch::v1::Job;
@@ -710,27 +709,5 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         "daily_audit": daily_audit,
         "kube_connected": kube_client.is_some(),
     })
-}
-
-/// GET /api/metrics/stream — real server-push live feed for the tabbed
-/// "Homelab Cluster" card (see static/cluster.js), ported from the real
-/// site's routes/metrics_stream.rs: one tick per second, each tick re-fetches
-/// every panel and pushes the whole snapshot as a single SSE event.
-pub async fn metrics_stream(
-    State(pool): State<PgPool>,
-) -> Sse<impl futures_util::Stream<Item = Result<Event, std::convert::Infallible>>> {
-    use futures_util::StreamExt;
-    use tokio_stream::wrappers::IntervalStream;
-
-    let interval = tokio::time::interval(std::time::Duration::from_secs(1));
-    let stream = IntervalStream::new(interval).then(move |_| {
-        let pool = pool.clone();
-        async move {
-            let snapshot = fetch_cluster_snapshot(&pool).await;
-            Ok(Event::default().data(snapshot.to_string()))
-        }
-    });
-
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(15)))
 }
 

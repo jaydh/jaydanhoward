@@ -6,17 +6,6 @@ test('conjunction events do not flash after loading completes', async ({ page })
     if (msg.type() === 'error') consoleErrors.push(msg.text());
   });
 
-  // Track /api/conjunction poll responses to detect if screening ever starts.
-  let screeningActive = false;
-  page.on('response', async res => {
-    if (res.url().includes('/api/conjunction')) {
-      try {
-        const body = await res.text();
-        if (body.includes('"running"') || body.includes('"complete"')) screeningActive = true;
-      } catch {}
-    }
-  });
-
   await page.goto('/');
   // Conjunction screening is nested inside the Satellites section (matching
   // the real site's src/components/app.rs layout), not its own top-level id.
@@ -26,12 +15,20 @@ test('conjunction events do not flash after loading completes', async ({ page })
   // Give the server 15 s to start a screening. If CelesTrak is unreachable (CI with
   // no egress to external hosts), screening never completes — skip rather than
   // fail, since there is nothing to flash-test in that case.
-  await page.waitForTimeout(15_000);
+  // Status comes from the shared "conjunction" Foster machine (fx-text="status").
+  const status = page.locator('[fx-machine="conjunction"] [fx-text="status"]');
+  let screeningActive = false;
+  const startDeadline = Date.now() + 15_000;
+  while (Date.now() < startDeadline && !screeningActive) {
+    await page.waitForTimeout(500);
+    screeningActive = /running|complete/.test((await status.textContent()) ?? '');
+  }
   if (!screeningActive) {
     test.skip(true, 'Conjunction screening did not start — CelesTrak unreachable in this environment');
   }
 
-  const events = page.locator('#conjunction-events li');
+  // Rendered fx-for rows carry data-fx-item (the hidden template <li> doesn't).
+  const events = page.locator('[fx-machine="conjunction"] li[data-fx-item]');
   await expect(async () => {
     expect(await events.count()).toBeGreaterThan(0);
   }).toPass({ timeout: 30_000 });

@@ -646,7 +646,7 @@ dependencies = [
 [[package]]
 name = "foster-core"
 version = "0.1.0"
-source = "git+https://github.com/jaydh/foster?rev=a3d5169#a3d51694dbc3571994ddb838cfa70de5c25b9433"
+source = "git+https://github.com/jaydh/foster?rev=1e366b3#1e366b3583a4d5f3ff3b799df5bd18cfea7271e5"
 dependencies = [
  "foster-macros",
  "serde",
@@ -657,7 +657,7 @@ dependencies = [
 [[package]]
 name = "foster-macros"
 version = "0.1.0"
-source = "git+https://github.com/jaydh/foster?rev=a3d5169#a3d51694dbc3571994ddb838cfa70de5c25b9433"
+source = "git+https://github.com/jaydh/foster?rev=1e366b3#1e366b3583a4d5f3ff3b799df5bd18cfea7271e5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -666,7 +666,7 @@ dependencies = [
 [[package]]
 name = "foster-server"
 version = "0.1.0"
-source = "git+https://github.com/jaydh/foster?rev=a3d5169#a3d51694dbc3571994ddb838cfa70de5c25b9433"
+source = "git+https://github.com/jaydh/foster?rev=1e366b3#1e366b3583a4d5f3ff3b799df5bd18cfea7271e5"
 dependencies = [
  "axum",
  "foster-core",
