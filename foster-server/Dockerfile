@@ -4,7 +4,7 @@
 # exactly (port 8000, GET /health_check, same env vars) so cutover is just
 # "ship a new image under the same Harbor tag," no homelab manifest changes.
 
-ARG FOSTER_REV=b3c20f2
+ARG FOSTER_REV=6df9048
 
 # WASM/JS output is architecture-independent bytecode + glue code, but
 # wasm-bindgen embeds a per-build content hash in that glue code's internal
@@ -26,6 +26,10 @@ RUN git clone https://github.com/jaydh/foster /foster-src \
     && git checkout ${FOSTER_REV}
 RUN cd /foster-src/crates/foster-client \
     && wasm-pack build --target web --out-dir pkg
+# This site's own browser widgets (Rust → WASM, lazy-loaded via fx-widget).
+# Same stage, so they're byte-identical across architectures too.
+COPY widgets /widgets
+RUN WIDGETS_OUT=/widgets-out /widgets/build.sh
 
 FROM docker.io/library/rust:1-bookworm AS builder
 WORKDIR /build
@@ -40,6 +44,7 @@ WORKDIR /app
 COPY --from=builder /build/target/release/jaydanhoward /app/jaydanhoward
 COPY --from=wasm-builder /foster-src/crates/foster-client/pkg /app/pkg
 COPY --from=builder /build/static /app/static
+COPY --from=wasm-builder /widgets-out /app/static/widgets
 
 EXPOSE 8000
 ENTRYPOINT ["/app/jaydanhoward"]

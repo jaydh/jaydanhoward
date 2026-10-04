@@ -1,0 +1,23 @@
+[package]
+name = "satellites-widget"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+wasm-bindgen-futures = "0.4"
+js-sys = { workspace = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+widget-common = { workspace = true }
+
+[dependencies.web-sys]
+workspace = true
+features = [
+    "console", "DomStringMap", "DomTokenList", "Element", "HtmlCanvasElement", "HtmlElement",
+    "MouseEvent", "NodeList", "Performance", "Response", "WebGl2RenderingContext", "WebGlBuffer",
+    "WebGlProgram", "WebGlUniformLocation", "Window",
+]

@@ -338,20 +338,20 @@
 </head>
 <body>
 
-<div class="page">
+<div class="page" fx-machine="spy">
   <nav>
     <div class="nav-inner">
       <a href="#about" class="logo">Jay Dan Howard</a>
       <div class="nav-links" id="scroll-spy-links">
-        <a href="#about" data-spy="about">About</a>
-        <a href="#trace" data-spy="trace">Request Trace</a>
-        <a href="#cluster" data-spy="cluster">Cluster</a>
-        <a href="#satellites" data-spy="satellites">Satellites</a>
-        <a href="#life" data-spy="life">Game of Life</a>
-        <a href="#path" data-spy="path">Pathfinding</a>
-        <a href="#photography" data-spy="photography">Photography</a>
+        <a href="#about" fx-class="about:active">About</a>
+        <a href="#trace" fx-class="trace:active">Request Trace</a>
+        <a href="#cluster" fx-class="cluster:active">Cluster</a>
+        <a href="#satellites" fx-class="satellites:active">Satellites</a>
+        <a href="#life" fx-class="life:active">Game of Life</a>
+        <a href="#path" fx-class="path:active">Pathfinding</a>
+        <a href="#photography" fx-class="photography:active">Photography</a>
 
-        <button class="icon-btn" id="theme-toggle" fx-on="click->toggle" aria-label="Toggle dark mode">
+        <button class="icon-btn" id="theme-toggle" fx-on="click->theme:toggle" aria-label="Toggle dark mode">
           <span class="theme-icon-moon">&#9789;</span>
           <span class="theme-icon-sun">&#9788;</span>
         </button>
@@ -368,7 +368,7 @@
     </div>
   </nav>
 
-  <main id="about">
+  <main id="about" fx-on="enter->about">
     <div class="narrow">
       <h1>About</h1>
       <p>
@@ -387,7 +387,7 @@
     </div>
   </main>
 
-  <main id="trace">
+  <main id="trace" fx-on="enter->trace">
     <div class="narrow" style="display:flex;flex-direction:column;align-items:center;text-align:center;">
       <h1>How You Got Here</h1>
       <p>Real per-request data — client IP, geo lookup, User-Agent, pod identity.</p>
@@ -436,7 +436,7 @@
     </div>
   </main>
 
-  <main id="cluster">
+  <main id="cluster" fx-on="enter->cluster">
     <h1>Cluster</h1>
     <p>
       A real, live server-push feed of this site's own homelab — CPU/mem/
@@ -667,7 +667,7 @@
     </div>
   </main>
 
-  <main id="satellites">
+  <main id="satellites" fx-on="enter->satellites">
     <h1>Satellites</h1>
     <p>
       Real 3D orbital mechanics: the actual CelesTrak "active" TLE group
@@ -681,7 +681,7 @@
       interpolates smoothly between real snapshots.
     </p>
     <div fx-machine="satellites" class="sat-box">
-      <div class="sat-canvas-wrap">
+      <div class="sat-canvas-wrap" fx-widget="/widgets/satellites/satellites_widget.js">
         <canvas id="sat-canvas" width="1200" height="600">Your browser does not support canvas</canvas>
         <div class="sat-controls sat-controls-zoom">
           <button id="sat-zoom-in">+</button>
@@ -699,8 +699,7 @@
           <div class="sat-hud-speed">
             <span>Speed:</span>
             <button fx-on="click->speed_down">&minus;</button>
-            <span id="sat-speed-label"></span>
-            <span id="sat-steps-raw" fx-text="steps_per_tick" style="display:none"></span>
+            <span fx-text="speed_label"></span>
             <button fx-on="click->speed_up">+</button>
           </div>
           <button fx-on="click->toggle_run" aria-label="Pause or resume simulation">
@@ -740,7 +739,7 @@
     </div><!-- /fx-machine=conjunction -->
   </main>
 
-  <main id="life">
+  <main id="life" fx-on="enter->life">
     <h1>Conway's Game of Life</h1>
     <p>
       A real GPU ping-pong shader simulation — 512&times;512 cells, stepped
@@ -750,7 +749,7 @@
       view and pauses when scrolled away; zoom/pan and the settings panel
       are all plain per-visitor client state, not shared server state.
     </p>
-    <div id="life-widget" class="life-box">
+    <div id="life-widget" class="life-box" fx-widget="/widgets/life/life_widget.js">
       <div class="life-controls">
         <button id="life-toggle-run" class="life-icon-btn" aria-label="Play/Pause">
           <span class="life-run-label">&#9654;</span>
@@ -793,7 +792,7 @@
     </div>
   </main>
 
-  <main id="path">
+  <main id="path" fx-on="enter->path">
     <h1>Pathfinding Algorithms</h1>
     <p>
       Seven algorithms racing from start (green) to end (amber) on the same
@@ -805,7 +804,7 @@
       machine — this is the same per-visitor UI state Foster's shared
       server model isn't the right fit for, same as Life and theme.
     </p>
-    <div id="pathfinding-widget" class="pf-box">
+    <div id="pathfinding-widget" class="pf-box" fx-widget="/widgets/pathfinding/pathfinding_widget.js">
       <div class="pf-controls">
         <button id="pf-toggle-run">
           <span class="pf-play-label">&#9654; Play</span>
@@ -839,7 +838,7 @@
     </div>
   </main>
 
-  <main id="photography">
+  <main id="photography" fx-on="enter->photography">
     <h1>Photography</h1>
     <p>Real photos served straight from the CDN.</p>
     <div fx-machine="photography">
@@ -872,10 +871,6 @@
 </div><!-- /fx-machine=theme -->
 
 <script type="module">
-  import { initLife } from '/life.js';
-  import { initPathfinding } from '/pathfinding.js';
-  import { initSatellites } from '/satellites.js';
-  import { initScrollSpy } from '/scrollspy.js';
 
   // Dynamic (not static) import so a dropped request can be retried: a
   // failed static `import init from '/pkg/foster_client.js'` kills the
@@ -896,10 +891,6 @@
   }
   const init = await loadFosterClient();
   init();
-  initLife();
-  initPathfinding();
-  initSatellites();
-  initScrollSpy();
 </script>
 </body>
 </html>

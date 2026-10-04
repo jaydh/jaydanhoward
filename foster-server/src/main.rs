@@ -42,14 +42,9 @@ async fn main() {
         .install_default()
         .expect("Failed to install rustls crypto provider");
 
-    // Real site races 7 algorithms (BFS/DFS/A*/Greedy/Corner/Wall/Random
-    // Walk) simultaneously over one shared random grid — all client-side,
-    // no server data dependency (same as the real src/components/
-    // path_search.rs, which is entirely #[cfg(not(feature = "ssr"))]).
-    // Run/pause/reset are plain client state in static/pathfinding.js —
-    // per-visitor UI state (auto-play-on-scroll) driving a WebGL sim every
-    // frame, which a Foster machine can't do yet (see the local theme/
-    // contact/lighthouse machines below for the per-visitor UI it can).
+    // Game of Life and Pathfinding are entirely client-side WebGL sims with
+    // no server data: Rust crates in ../widgets, built to WASM and
+    // lazy-loaded by Foster's `fx-widget` when they scroll into view.
 
     // Gallery + lightbox, as a local (per-visitor, in-browser) machine: the
     // photo list is fetched once at startup and never changes, so it ships
@@ -85,14 +80,6 @@ async fn main() {
     // (src/lighthouse.rs, real Basic-Auth-protected upload endpoint ported
     // verbatim from routes/lighthouse/post.rs) — not a live self-audit.
 
-    // Full Prometheus-backed "Homelab Cluster" panel (10+ real panels — see
-    // cluster.rs) is a genuine server-push live feed, not a Foster machine —
-    // Foster machines are one shared instance across every connected client,
-    // which is fine for data that really is global (like this), but here it
-    // matches the real site's actual transport (a true EventSource/SSE
-    // stream ticking once a second, GET /api/metrics/stream) rather than
-    // request/response polling through Foster's reducer model. See
-    // static/cluster.js for the client-side consumer.
     let mut machines = HashMap::new();
     machines.insert("photography".to_string(), photography);
     machines.insert("visitors".to_string(), visitors_machine);
@@ -128,6 +115,21 @@ async fn main() {
         .local()
         .build();
     machines.insert("lighthouse".to_string(), lighthouse);
+    // spy: which section the nav highlights. Each <main> fires its own id
+    // via fx-on="enter->…" as it crosses the reading line; links use
+    // fx-class="<id>:active". On .page, so the nav's theme toggle addresses
+    // its machine explicitly (fx-on="click->theme:toggle").
+    let spy = {
+        const SECTIONS: [&str; 7] = ["about", "trace", "cluster", "satellites", "life", "path", "photography"];
+        let mut b = MachineBuilder::new("spy", "about", serde_json::json!({}));
+        for from in SECTIONS {
+            for to in SECTIONS {
+                b = b.pass(from, to, to);
+            }
+        }
+        b.local().build()
+    };
+    machines.insert("spy".to_string(), spy);
 
     // Real conjunction screening (Hoots + SGP4 + TCA + rayon — see
     // conjunction.rs). Foster's role is deliberately tiny, same shape as
@@ -174,10 +176,9 @@ async fn main() {
     machines.insert("request_trace".to_string(), request_trace_machine);
 
     // Real 3D satellite tracking — see satellites.rs for the full rationale.
-    // Foster only owns the run/pause + playback-speed labels (small,
-    // discrete state); the background propagation loop and the WebGL2
-    // rendering pipeline live outside Foster entirely (a shared tokio task
-    // and static/satellites.js respectively), same shape as conjunction.
+    // The shared "satellites" machine owns run/pause + playback speed; the
+    // propagation loop is a shared tokio task, and the globe is the Rust
+    // WebGL widget in ../widgets/satellites.
     let satellites_runtime = std::sync::Arc::new(satellites::SatellitesRuntime::new());
     satellites::spawn_background_loop(satellites_runtime.clone(), Some(pg_pool.clone()));
 
@@ -221,15 +222,22 @@ async fn main() {
         let steps_down_running = satellites_runtime.steps_per_tick.clone();
         let steps_down_paused = satellites_runtime.steps_per_tick.clone();
 
+        /// Context for a sim speed: each tick advances `steps` 5-minute steps,
+        /// labeled as sim time per real second.
         fn steps_ctx(steps: u32) -> serde_json::Value {
-            serde_json::json!({ "steps_per_tick": steps })
+            let sim_min_per_sec = steps as f64 * 5.0;
+            let label = if sim_min_per_sec < 60.0 {
+                format!("{sim_min_per_sec:.0}m/s")
+            } else {
+                format!("{:.1}h/s", sim_min_per_sec / 60.0)
+            };
+            serde_json::json!({ "steps_per_tick": steps, "speed_label": label })
         }
 
-        MachineBuilder::new(
-            "satellites",
-            "running",
-            serde_json::json!({ "steps_per_tick": 12 }),
-        )
+        // Shared: it drives the one server-side simulation (running flag +
+        // speed are process-wide atomics), so every visitor sees the same
+        // run/pause state and speed.
+        MachineBuilder::new("satellites", "running", steps_ctx(12))
         .state("paused")
         .on("running", "toggle_run", "paused", move |ctx, _| {
             running_for_pause.store(false, std::sync::atomic::Ordering::Relaxed);
@@ -261,6 +269,7 @@ async fn main() {
             steps_down_paused.store(next, std::sync::atomic::Ordering::Relaxed);
             Ok(steps_ctx(next))
         })
+        .shared()
         .build()
     };
     machines.insert("satellites".to_string(), satellites_machine);

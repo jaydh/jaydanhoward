@@ -1,0 +1,20 @@
+[package]
+name = "life-widget"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+widget-common = { workspace = true }
+
+[dependencies.web-sys]
+workspace = true
+features = [
+    "console", "CssStyleDeclaration", "Element", "HtmlCanvasElement", "HtmlElement", "HtmlInputElement",
+    "HtmlSelectElement", "WebGl2RenderingContext", "WebGlFramebuffer", "WebGlProgram",
+    "WebGlTexture", "WebGlUniformLocation", "WebGlVertexArrayObject",
+]

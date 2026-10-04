@@ -11,6 +11,23 @@ test('all section IDs present in DOM', async ({ page }) => {
   }
 });
 
+// Life/Pathfinding/Satellites are Rust WASM widgets Foster lazy-loads via
+// fx-widget (widgets/*): nothing should be fetched until the section nears the
+// viewport, then the module + its .wasm must load.
+test('Life widget is lazy-loaded on scroll', async ({ page }) => {
+  const widgetResponses: { url: string; status: number }[] = [];
+  page.on('response', res => {
+    if (res.url().includes('/widgets/life/')) widgetResponses.push({ url: res.url(), status: res.status() });
+  });
+  await page.goto('/');
+  await page.waitForTimeout(3_000);
+  expect(widgetResponses, 'no widget fetch before scrolling').toHaveLength(0);
+
+  await page.locator('#life').scrollIntoViewIfNeeded();
+  await expect.poll(() => widgetResponses.filter(r => r.url.endsWith('.wasm')).length, { timeout: 15_000 }).toBe(1);
+  for (const r of widgetResponses) expect(r.status, r.url).toBe(200);
+});
+
 test('Game of Life canvas has non-zero dimensions', async ({ page }) => {
   await page.goto('/');
   await page.locator('#life').scrollIntoViewIfNeeded();

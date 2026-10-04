@@ -1,0 +1,17 @@
+[package]
+name = "widget-common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+
+[dependencies.web-sys]
+workspace = true
+features = [
+    "AddEventListenerOptions", "Document", "DomRect", "DomTokenList", "Element", "Event", "EventTarget", "HtmlCanvasElement",
+    "HtmlElement", "IntersectionObserver", "IntersectionObserverEntry", "IntersectionObserverInit",
+    "MouseEvent", "PointerEvent", "WebGl2RenderingContext", "WebGlBuffer", "WebGlProgram",
+    "WebGlShader", "WebGlVertexArrayObject", "WheelEvent", "Window",
+]

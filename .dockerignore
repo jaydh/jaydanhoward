@@ -4,3 +4,5 @@ end2end/
 target
 package-lock.json
 Cargo.lock
+**/target
+foster-server/static/widgets

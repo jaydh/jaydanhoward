@@ -14,6 +14,11 @@ in as a git dependency pinned to a specific rev in `foster-server/Cargo.toml`.
   assets, SQL migrations, Dockerfile. This is what gets built and deployed.
 - **foster/pkg/**: build output directory for the compiled `foster-client` WASM/JS
   bundle (gitignored, produced by `wasm-pack` — see Dockerfile and CI).
+- **widgets/**: Cargo workspace of browser widgets in Rust (Game of Life,
+  pathfinding, satellite globe — WebGL2), each built by `widgets/build.sh`
+  with `wasm-pack --target web` into `foster-server/static/widgets/<name>/`
+  (gitignored) and lazy-loaded by Foster's `fx-widget` attribute when it nears
+  the viewport. `widgets/common` holds shared GL/DOM/canvas-nav helpers.
 - **lighthouse/**: standalone Lighthouse CI helper image (Chromium + Node), unrelated to
   the Foster/Rust build — plain Dockerfile, not part of the Cargo workspace.
 - **security-audit/**: standalone `cargo-audit` CronJob image, plain Dockerfile.
@@ -30,7 +35,8 @@ cargo run
 ```
 
 The server expects the `foster-client` WASM bundle at `../foster/pkg` (relative to
-`foster-server/`, i.e. repo-root `foster/pkg/`). Build it with:
+`foster-server/`, i.e. repo-root `foster/pkg/`), and the widget bundles at
+`foster-server/static/widgets/` (`./widgets/build.sh`). Build the client with:
 ```bash
 # from a checkout of https://github.com/jaydh/foster, pinned to the FOSTER_REV
 # in foster-server/Dockerfile:
@@ -75,16 +81,24 @@ feature — routes, state machine, and any background tasks:
 - `photography.rs`, `request_trace.rs`, `site_middleware.rs`, `prometheus_client.rs` —
   supporting features/middleware
 
-**Static assets**: `foster-server/static/` — HTML pages, per-feature JS (the `fx-*`
-DOM-patching client scripts), fonts, favicon. Served directly by axum
-(`tower-http::services::fs`).
+**Static assets**: `foster-server/static/` — `index.html` (the Foster template for
+every section; no per-feature JS — UI is `fx-*` markup plus Rust widgets), fonts,
+favicon. Served directly by axum (`tower-http::services::fs`).
+
+**Where UI state lives**: per-visitor UI (theme, dropdown, lightbox, tabs,
+scroll-spy) is `.local()` Foster machines that run in the browser; global data
+(cluster stats, conjunction job, satellite sim controls) is `.shared()` machines
+fed from the server via `Foster::feed`; per-request data (request trace) uses
+`Foster::request_event`. WebGL sims are `widgets/` crates mounted via `fx-widget`.
 
 **Migrations**: `foster-server/migrations/` — sqlx migrations, run automatically at
 startup via `sqlx::migrate!()`.
 
 **Foster framework conventions** (see [[foster_client_gotchas]] in memory for gotchas):
-- Server owns state; the WASM client only patches the DOM per SSE-pushed instructions
-  and reads `fx-*`/`data-fx-*` attributes — there's no client-side component tree.
+- The server owns state for server and `.shared()` machines (pushed over one
+  multiplexed SSE stream); `.local()` machines run in the WASM client. Either way
+  the client only patches the DOM from `fx-*`/`data-fx-*` attributes — there's no
+  client-side component tree.
 - Wrapping `fx-for` items in extra markup breaks `data-fx-item` lookups.
 - Pages using SSE can hang Playwright's `networkidle` wait — use explicit
   selectors/events instead.

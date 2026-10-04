@@ -7,23 +7,13 @@
 //!
 //! One necessary architectural adaptation: the real site runs `sgp4`
 //! *inside the browser* (compiled to WASM), re-propagating every satellite
-//! on every `requestAnimationFrame`. Foster has no custom per-app WASM —
-//! only its own fixed `foster-client` runtime ships to the browser — so
-//! that can't be reused directly. Instead this module runs the exact same
+//! on every `requestAnimationFrame`. This module instead runs the same
 //! `sgp4` crate and math *once per server tick* (shared across every
 //! connected client, not per-tab), caches the resulting position snapshot,
-//! and serves it from a plain polled route
-//! (`static/satellites.js`, same "poll a hand-rolled axum route
-//! independently of Foster's SSE" shape as `conjunction.js`). The client
-//! interpolates between the two most recent real snapshots for smooth
-//! motion instead of recomputing SGP4 itself. Real data, real orbital
-//! mechanics, real time grid — only *where* the propagation loop runs
-//! changed, forced by the framework, not a fidelity cut.
-//!
-//! The actual WebGL2 rendering pipeline (shaders, sphere/equator/pole
-//! geometry, camera matrices, draw calls) is a faithful line-for-line port
-//! of `satellite_renderer.rs` into `static/satellites.js` — that part needed
-//! no architectural adaptation at all, just a language change.
+//! and serves it from `GET /api/satellites`. The browser side — the Rust
+//! WebGL widget in `widgets/satellites` (lazy-loaded via Foster's
+//! `fx-widget`) — polls it and interpolates between the two most recent
+//! snapshots for smooth motion instead of recomputing SGP4 every frame.
 
 use chrono::{DateTime, Utc};
 use rayon::prelude::*;
@@ -45,7 +35,7 @@ const TICK: Duration = Duration::from_millis(1000);
 
 // Astranis satellite pinning/highlighting (same NORAD IDs and rationale as
 // the real satellite_renderer.rs/satellite_tracker.rs) is applied entirely
-// client-side in static/satellites.js, since it only affects rendering
+// client-side in widgets/satellites, since it only affects rendering
 // (color + orbit-filter bypass), not the real position data this module
 // computes and serves.
 

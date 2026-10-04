@@ -1,0 +1,20 @@
+[package]
+name = "pathfinding-widget"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = { workspace = true }
+js-sys = { workspace = true }
+widget-common = { workspace = true }
+
+[dependencies.web-sys]
+workspace = true
+features = [
+    "console", "CssStyleDeclaration", "DomTokenList", "Element", "HtmlCanvasElement", "HtmlElement",
+    "HtmlInputElement", "NodeList", "Performance", "WebGl2RenderingContext", "WebGlProgram",
+    "WebGlTexture", "WebGlUniformLocation", "WebGlVertexArrayObject", "Window",
+]
