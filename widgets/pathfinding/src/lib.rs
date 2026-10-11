@@ -19,6 +19,11 @@ use widget_common::*;
 const GRID: usize = 256;
 const OBSTACLE_PROB: f64 = 0.2;
 const STEPS_PER_FRAME: usize = 5;
+// Follow mode runs slower and eases the camera toward the expanding cell, so
+// the zoomed-in view tracks the search instead of teleporting each frame
+// (BFS/A* pop cells from all over the frontier).
+const FOLLOW_STEPS_PER_FRAME: usize = 1;
+const FOLLOW_EASE_MS: f64 = 180.0;
 
 const OBSTACLE: u8 = 0;
 const UNVISITED: u8 = 1;
@@ -340,6 +345,7 @@ struct State {
     blind_order: Vec<Algo>,
     informed_order: Vec<Algo>,
     last_fps_tick: f64,
+    last_frame: f64,
 }
 
 fn rank_label(pos: usize) -> String {
@@ -407,7 +413,7 @@ pub fn mount(root: Element) {
     };
     let st = Rc::new(RefCell::new(State {
         panels, running: false, visible: false, started: false, following: false, dirty: true,
-        blind_order: Vec::new(), informed_order: Vec::new(), last_fps_tick: 0.0,
+        blind_order: Vec::new(), informed_order: Vec::new(), last_fps_tick: 0.0, last_frame: 0.0,
     }));
     // One zoom level shared by all panels (each keeps its own center).
     let zoom = Rc::new(Cell::new(1.0));
@@ -529,17 +535,22 @@ pub fn mount(root: Element) {
         let stepping = running && s.panels.iter().any(|p| p.run.as_ref().is_some_and(|r| !r.done));
         let dirty = s.dirty;
         let z = zoom.get();
+        let steps_per_frame = if following { FOLLOW_STEPS_PER_FRAME } else { STEPS_PER_FRAME };
+        // Fraction of the remaining distance the camera covers this frame;
+        // frame-rate independent, and a long gap (tab hidden) just snaps.
+        let ease = 1.0 - (-(now - s.last_frame).max(0.0) / FOLLOW_EASE_MS).exp();
+        s.last_frame = now;
 
         let State { panels, blind_order, informed_order, .. } = &mut *s;
         for p in panels.iter_mut() {
             let (Some(run), Some(renderer)) = (p.run.as_mut(), p.renderer.as_ref()) else { continue };
             let mut stepped = false;
             if running && !run.done {
-                for _ in 0..STEPS_PER_FRAME {
+                for _ in 0..steps_per_frame {
                     run.step(p.algo);
                 }
                 stepped = true;
-                p.frame_count += STEPS_PER_FRAME;
+                p.frame_count += steps_per_frame;
                 if run.done && run.completion_steps.is_some() {
                     let order = if p.algo.informed() { &mut *informed_order } else { &mut *blind_order };
                     if !order.contains(&p.algo) {
@@ -548,7 +559,9 @@ pub fn mount(root: Element) {
                 }
                 if following && !run.done {
                     let g = GRID as f64;
-                    p.center.set((run.current.0 as f64 / g, run.current.1 as f64 / g));
+                    let (tx, ty) = (run.current.0 as f64 / g, run.current.1 as f64 / g);
+                    let (cx, cy) = p.center.get();
+                    p.center.set((cx + (tx - cx) * ease, cy + (ty - cy) * ease));
                 }
             }
 
@@ -571,7 +584,8 @@ pub fn mount(root: Element) {
             let rank = order.iter().position(|a| *a == p.algo).map(|i| format!(r#"<span class="pf-rank">{}</span>"#, rank_label(i)));
             let steps = match run.completion_steps {
                 Some(n) => format!("{n} steps"),
-                None if running && p.fps > 0 => format!("{} steps/s", p.fps),
+                None if running && p.fps > 0 => format!("{} steps &middot; {}/s", run.steps, p.fps),
+                None if run.steps > 0 => format!("{} steps", run.steps),
                 None => String::new(),
             };
             let sep = if rank.is_some() && !steps.is_empty() { " &middot; " } else { "" };

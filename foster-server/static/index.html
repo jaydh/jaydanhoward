@@ -331,8 +331,11 @@
     .pf-zoom span:last-child { font-family: ui-monospace, monospace; width: 3rem; }
     .pf-zoom input[type="range"] { accent-color: var(--accent); }
     .pf-group-desc { font-size: 0.85rem; margin-top: -0.5rem; }
-    .pf-grid { display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; margin-bottom: 1rem; }
-    .pf-panel { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: min(280px, 100%); }
+    .pf-groups { display: flex; flex-wrap: wrap; gap: 2rem; align-items: flex-start; }
+    .pf-group { flex: 3 1 420px; min-width: 0; }
+    .pf-group.informed { flex: 2 1 300px; }
+    .pf-grid { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; margin: 1rem 0; }
+    .pf-panel { display: flex; flex-direction: column; align-items: center; gap: 0.35rem; width: min(210px, 100%); }
     .pf-panel h3 { font-size: 0.9rem; display: flex; align-items: center; gap: 0.4rem; }
     .pf-panel canvas { width: 100%; aspect-ratio: 1; border: 1px solid var(--border); cursor: grab; touch-action: none; }
     .pf-panel canvas:active { cursor: grabbing; }
@@ -896,21 +899,27 @@
         <button id="pf-follow">Follow</button>
       </div>
 
-      <h2>Blind Search</h2>
-      <p class="pf-group-desc">Explores without knowing the destination location.</p>
-      <div class="pf-grid" id="pf-blind">
-        <div class="pf-panel" data-algo="bfs"><h3>BFS</h3><canvas></canvas><div class="pf-meta"></div></div>
-        <div class="pf-panel" data-algo="dfs"><h3>DFS</h3><canvas></canvas><div class="pf-meta"></div></div>
-        <div class="pf-panel" data-algo="corner"><h3>Corner</h3><canvas></canvas><div class="pf-meta"></div></div>
-        <div class="pf-panel" data-algo="wall"><h3>Wall</h3><canvas></canvas><div class="pf-meta"></div></div>
-        <div class="pf-panel" data-algo="randomwalk"><h3>Random Walk</h3><canvas></canvas><div class="pf-meta"></div></div>
-      </div>
+      <div class="pf-groups">
+        <div class="pf-group">
+          <h2>Blind Search</h2>
+          <p class="pf-group-desc">Explores without knowing the destination location.</p>
+          <div class="pf-grid" id="pf-blind">
+            <div class="pf-panel" data-algo="bfs"><h3>BFS</h3><canvas></canvas><div class="pf-meta"></div></div>
+            <div class="pf-panel" data-algo="dfs"><h3>DFS</h3><canvas></canvas><div class="pf-meta"></div></div>
+            <div class="pf-panel" data-algo="corner"><h3>Corner</h3><canvas></canvas><div class="pf-meta"></div></div>
+            <div class="pf-panel" data-algo="wall"><h3>Wall</h3><canvas></canvas><div class="pf-meta"></div></div>
+            <div class="pf-panel" data-algo="randomwalk"><h3>Random Walk</h3><canvas></canvas><div class="pf-meta"></div></div>
+          </div>
+        </div>
 
-      <h2>Informed Search</h2>
-      <p class="pf-group-desc">Uses heuristics toward the destination to guide exploration.</p>
-      <div class="pf-grid" id="pf-informed">
-        <div class="pf-panel" data-algo="astar"><h3>A*</h3><canvas></canvas><div class="pf-meta"></div></div>
-        <div class="pf-panel" data-algo="greedy"><h3>Greedy Best-First</h3><canvas></canvas><div class="pf-meta"></div></div>
+        <div class="pf-group informed">
+          <h2>Informed Search</h2>
+          <p class="pf-group-desc">Uses heuristics toward the destination to guide exploration.</p>
+          <div class="pf-grid" id="pf-informed">
+            <div class="pf-panel" data-algo="astar"><h3>A*</h3><canvas></canvas><div class="pf-meta"></div></div>
+            <div class="pf-panel" data-algo="greedy"><h3>Greedy Best-First</h3><canvas></canvas><div class="pf-meta"></div></div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
