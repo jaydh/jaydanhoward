@@ -409,7 +409,7 @@ async fn main() {
         .nest_service("/pkg", ServeDir::new(pkg_dir))
         .fallback_service(ServeDir::new(static_dir))
         .layer(axum::middleware::from_fn_with_state(
-            pg_pool,
+            visitors::VisitorLog::spawn(pg_pool),
             visitors::visitor_logger,
         ))
         .layer(axum::middleware::from_fn(site_middleware::cache_control))

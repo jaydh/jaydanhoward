@@ -175,6 +175,10 @@
       border-radius: 0.375rem; padding: 0.4rem 0.9rem; cursor: pointer; font: inherit; font-size: 0.8rem;
     }
     #visitors-refresh:hover { border-color: var(--accent); color: var(--accent); }
+    .visitor-boxes { display: grid; grid-template-columns: 1fr; gap: 1rem; margin: 1rem 0; }
+    @media (min-width: 768px) { .visitor-boxes { grid-template-columns: 1fr 1fr; } }
+    .visitor-subhead { font-size: 0.9rem; margin-top: 1.5rem; }
+    .visit-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .visitor-map { position: relative; width: 100%; max-width: 600px; margin: 1rem 0; border: 1px solid var(--border); border-radius: 0.5rem; overflow: hidden; background: var(--surface); }
     .visitor-map img { display: block; width: 100%; height: auto; color: var(--text-light); }
     .visitor-dot { position: absolute; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); transform: translate(-50%, -50%); box-shadow: 0 0 4px var(--accent); }
@@ -611,20 +615,24 @@
     </div><!-- /fx-machine=cluster -->
 
     <h2>Visitors</h2>
-    <p>Real Postgres-backed visitor analytics — every request to this site is logged here.</p>
+    <p>
+      Real Postgres-backed visitor analytics. Page views and probes are logged
+      (not the site's own API traffic) and classified as people or bots by
+      user agent, response status, and whether the IP belongs to a datacenter.
+    </p>
     <div fx-machine="visitors">
       <button id="visitors-refresh" fx-on="click->refresh">&#8635; Refresh</button>
       <div class="visitor-stats">
         <div class="visitor-stat">
-          <div class="visitor-stat-value" fx-text="total_visits">0</div>
-          <div class="visitor-stat-label">total visits (30d)</div>
+          <div class="visitor-stat-value" fx-text="people">0</div>
+          <div class="visitor-stat-label">people (30d)</div>
         </div>
         <div class="visitor-stat">
-          <div class="visitor-stat-value" fx-text="unique_ips">0</div>
-          <div class="visitor-stat-label">unique IPs</div>
+          <div class="visitor-stat-value" fx-text="visits">0</div>
+          <div class="visitor-stat-label">visits (30d)</div>
         </div>
         <div class="visitor-stat">
-          <div class="visitor-stat-value" fx-text="unique_countries">0</div>
+          <div class="visitor-stat-value" fx-text="countries">0</div>
           <div class="visitor-stat-label">countries</div>
         </div>
       </div>
@@ -634,14 +642,83 @@
           <div class="visitor-dot" style="display:none" fx-bind-attr="style.left=item:x style.top=item:y"></div>
         </div>
       </div>
-      <div class="cluster-box" style="max-width: 32rem;">
-        <h3>Recent visits</h3>
-        <div fx-for="recent_visits">
-          <div class="visit-row">
-            <span class="visit-path" fx-field="path"></span>
-            <span fx-field="location"></span>
-            <span class="visit-when" fx-field="minutes_ago"></span>
+      <div class="visitor-boxes">
+        <div class="cluster-box">
+          <h3>Recent visits</h3>
+          <div fx-for="recent_visits">
+            <div class="visit-row">
+              <span class="visit-path" fx-field="path"></span>
+              <span fx-field="location"></span>
+              <span class="visit-when" fx-field="minutes_ago"></span>
+            </div>
           </div>
+          <p class="cluster-empty" fx-if='{"field":"recent_visits","op":"eq","value":[]}'>No visits from people yet.</p>
+        </div>
+        <div class="cluster-box">
+          <h3>Top countries (30d)</h3>
+          <div class="cluster-grid-row cluster-grid-head"><span>country</span><span class="num">requests</span><span class="num">IPs</span></div>
+          <div fx-for="top_countries">
+            <div class="cluster-grid-row">
+              <span class="visit-label" fx-field="label"></span>
+              <span class="num" fx-field="reqs"></span>
+              <span class="num" fx-field="ips"></span>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"top_countries","op":"eq","value":[]}'>No visits from people yet.</p>
+        </div>
+        <div class="cluster-box">
+          <h3>Referrers (30d)</h3>
+          <div class="cluster-grid-row cluster-grid-head"><span>referrer</span><span class="num">requests</span><span class="num">IPs</span></div>
+          <div fx-for="referrers">
+            <div class="cluster-grid-row">
+              <span class="visit-label" fx-field="label"></span>
+              <span class="num" fx-field="reqs"></span>
+              <span class="num" fx-field="ips"></span>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"referrers","op":"eq","value":[]}'>No external referrers yet.</p>
+        </div>
+      </div>
+
+      <h3 class="visitor-subhead">Bots &amp; abuse (7d)</h3>
+      <div class="visitor-stats">
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="bot_requests">0</div>
+          <div class="visitor-stat-label">bot requests</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="bot_share">0</div>
+          <div class="visitor-stat-label">of all traffic</div>
+        </div>
+        <div class="visitor-stat">
+          <div class="visitor-stat-value" fx-text="probes">0</div>
+          <div class="visitor-stat-label">probes (404s)</div>
+        </div>
+      </div>
+      <div class="visitor-boxes">
+        <div class="cluster-box">
+          <h3>Most-probed paths</h3>
+          <div class="cluster-grid-row cluster-grid-head"><span>path</span><span class="num">requests</span><span class="num">IPs</span></div>
+          <div fx-for="top_probes">
+            <div class="cluster-grid-row">
+              <span class="visit-label" fx-field="label"></span>
+              <span class="num" fx-field="reqs"></span>
+              <span class="num" fx-field="ips"></span>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"top_probes","op":"eq","value":[]}'>No probes logged.</p>
+        </div>
+        <div class="cluster-box">
+          <h3>Bot networks</h3>
+          <div class="cluster-grid-row cluster-grid-head"><span>network</span><span class="num">requests</span><span class="num">IPs</span></div>
+          <div fx-for="bot_networks">
+            <div class="cluster-grid-row">
+              <span class="visit-label" fx-field="label"></span>
+              <span class="num" fx-field="reqs"></span>
+              <span class="num" fx-field="ips"></span>
+            </div>
+          </div>
+          <p class="cluster-empty" fx-if='{"field":"bot_networks","op":"eq","value":[]}'>No bot traffic logged.</p>
         </div>
       </div>
     </div><!-- /fx-machine=visitors -->
