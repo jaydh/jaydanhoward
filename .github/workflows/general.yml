@@ -15,35 +15,78 @@ env:
   # directory, and toolchain-file resolution depends on cwd.
   RUSTUP_TOOLCHAIN: stable
 jobs:
-  security-audit:
-    name: Security Audit
+  ci-image:
+    # Job container for the jobs below, with their toolchains (stable Rust +
+    # clippy + wasm32, wasm-pack, cargo-audit, Node, Caddy, Playwright's
+    # Chromium) baked in — see ci/Dockerfile. Tagged by a hash of its inputs
+    # plus the month; built and pushed only when that tag isn't in Harbor.
+    name: CI Image
     runs-on: arc-runner-set-k8s
-    container: rust:1-bookworm
+    container: ${{ vars.RUNNER_IMAGE_URL }}
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+      - name: Compute tag
+        id: tag
+        run: |
+          TAG="$(cat ci/Dockerfile package-lock.json | sha256sum | cut -c1-12)-$(date -u +%Y%m)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Check Harbor for tag
+        id: exists
+        # Any failure here (auth, network) just means "build it".
+        run: |
+          if curl -sf -o /dev/null -u '${{ secrets.HARBOR_USER }}:${{ secrets.HARBOR_TOKEN }}' \
+              -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "https://${{ vars.HARBOR_HOST }}/v2/library/jaydanhoward-ci/manifests/${{ steps.tag.outputs.tag }}"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Write Harbor auth config
+        if: steps.exists.outputs.found != 'true'
+        run: |
+          mkdir -p .kaniko-auth
+          printf '{"auths":{"%s":{"auth":"%s"}}}' \
+            "${{ vars.HARBOR_HOST }}" \
+            "$(printf '%s:%s' '${{ secrets.HARBOR_USER }}' '${{ secrets.HARBOR_TOKEN }}' | base64 -w0)" \
+            > .kaniko-auth/config.json
+      - name: Build and push with kaniko
+        if: steps.exists.outputs.found != 'true'
+        uses: docker://gcr.io/kaniko-project/executor:v1.23.2
+        env:
+          DOCKER_CONFIG: /github/workspace/.kaniko-auth
+        with:
+          args: >-
+            --dockerfile=ci/Dockerfile
+            --context=dir:///github/workspace
+            --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward-ci:${{ steps.tag.outputs.tag }}
+  security-audit:
+    name: Security Audit
+    runs-on: arc-runner-set-k8s
+    needs: [ci-image]
+    container: ${{ vars.HARBOR_HOST }}/library/jaydanhoward-ci:${{ needs.ci-image.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Run security audit
         working-directory: foster-server
         run: cargo audit --ignore RUSTSEC-2023-0071
   clippy:
     name: Clippy
     runs-on: arc-runner-set-k8s
-    container: rust:1-bookworm
+    needs: [ci-image]
+    container: ${{ vars.HARBOR_HOST }}/library/jaydanhoward-ci:${{ needs.ci-image.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install clippy component
-        run: rustup component add clippy
       - name: Clippy
         working-directory: foster-server
         run: cargo clippy --all-targets
   integration-test:
     name: Integration Test
     runs-on: arc-runner-set-k8s
-    container: rust:1-bookworm
-    needs: [clippy]
+    container: ${{ vars.HARBOR_HOST }}/library/jaydanhoward-ci:${{ needs.ci-image.outputs.tag }}
+    needs: [ci-image, clippy]
     services:
       postgres:
         image: postgres:16-alpine
@@ -60,10 +103,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-      - name: Install wasm-pack + wasm32 target
-        run: |
-          rustup target add wasm32-unknown-unknown
-          cargo install wasm-pack --locked
       - name: Build foster-client WASM
         # foster-client (the WASM runtime) isn't published — it's a path-dependency
         # workspace member in the foster repo, so check out the same rev
@@ -116,10 +155,6 @@ jobs:
         # /transition). Caddy multiplexes everything over one HTTP/2
         # connection — see playwright.config.ts's ignoreHTTPSErrors comment.
         run: |
-          apt-get update && apt-get install -y --no-install-recommends debian-keyring debian-archive-keyring apt-transport-https curl gnupg
-          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-          curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-          apt-get update && apt-get install -y caddy
           # `caddy reverse-proxy` (the ad-hoc CLI helper) doesn't accept
           # --debug; a real Caddyfile with the `debug` global option is
           # needed to get debug-level reverse_proxy logs (investigating
@@ -137,18 +172,13 @@ jobs:
           caddy run --config /tmp/Caddyfile --adapter caddyfile > /tmp/caddy.log 2>&1 &
           echo $! > /tmp/caddy.pid
           sleep 2
-      - name: Set up Node.js
-        uses: actions/setup-node@v7.0.0
-        with:
-          node-version: '22'
-          cache: 'npm'
       - name: Install dependencies
         run: npm ci
-      - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
       - name: Run Playwright tests
         env:
           BASE_URL: https://127.0.0.1:8443
+          # Chromium is preinstalled here by ci/Dockerfile.
+          PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
         run: npx playwright test --reporter=github,html
       - name: Upload test report
         if: always()
