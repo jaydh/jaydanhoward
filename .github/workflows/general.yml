@@ -253,6 +253,7 @@ jobs:
             --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64
             --cache=true
             --cache-repo=${{ vars.HARBOR_HOST }}/library/jaydanhoward-cache
+            --build-arg=GIT_SHA=${{ github.sha }}
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [clippy, security-audit, integration-test]
@@ -284,6 +285,7 @@ jobs:
             --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
             --cache=true
             --cache-repo=${{ vars.HARBOR_HOST }}/library/jaydanhoward-cache
+            --build-arg=GIT_SHA=${{ github.sha }}
   security-audit-image-push:
     # Image for the weekly jdh-security-audit CronJob. Only rebuilt when
     # security-audit/ changes: tagged by a hash of that directory, and
