@@ -285,6 +285,11 @@ jobs:
             --cache=true
             --cache-repo=${{ vars.HARBOR_HOST }}/library/jaydanhoward-cache
   security-audit-image-push:
+    # Image for the weekly jdh-security-audit CronJob. Only rebuilt when
+    # security-audit/ changes: tagged by a hash of that directory, and
+    # skipped when Harbor already has the tag. (A content hash rather than
+    # "did this push touch it", since a newer push cancels in-flight runs.)
+    # Flux deploys the :latest tag, which is pushed alongside.
     if: github.event_name == 'push'
     name: Push Security Audit Image
     runs-on: arc-runner-set-k8s
@@ -293,7 +298,22 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Compute tag
+        id: tag
+        run: |
+          TAG="$(find security-audit -type f | sort | xargs cat | sha256sum | cut -c1-12)"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Check Harbor for tag
+        id: exists
+        # Any failure here (auth, network) just means "build it".
+        run: |
+          if curl -sf -o /dev/null -u '${{ secrets.HARBOR_USER }}:${{ secrets.HARBOR_TOKEN }}' \
+              -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "https://${{ vars.HARBOR_HOST }}/v2/library/security-audit/manifests/${{ steps.tag.outputs.tag }}"; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Write Harbor auth config
+        if: steps.exists.outputs.found != 'true'
         run: |
           mkdir -p .kaniko-auth
           printf '{"auths":{"%s":{"auth":"%s"}}}' \
@@ -303,6 +323,7 @@ jobs:
       - name: Build and push with kaniko
         # amd64 only — the real CronJob (homelab/service/security-audit.yaml)
         # pins nodeSelector kubernetes.io/arch: amd64.
+        if: steps.exists.outputs.found != 'true'
         uses: docker://gcr.io/kaniko-project/executor:v1.23.2
         env:
           DOCKER_CONFIG: /github/workspace/.kaniko-auth
@@ -310,9 +331,8 @@ jobs:
           args: >-
             --dockerfile=security-audit/Dockerfile
             --context=dir:///github/workspace
+            --destination=${{ vars.HARBOR_HOST }}/library/security-audit:${{ steps.tag.outputs.tag }}
             --destination=${{ vars.HARBOR_HOST }}/library/security-audit:latest
-            --cache=true
-            --cache-repo=${{ vars.HARBOR_HOST }}/library/security-audit-cache
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest
