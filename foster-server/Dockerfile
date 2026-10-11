@@ -1,50 +1,48 @@
-# Multi-stage build replacing the old Bazel/distroless_cc pipeline — see
-# .claude/plans/iridescent-skipping-wall.md (milestone 1/7) for the full
-# migration plan. Container contract must match the current Leptos image
-# exactly (port 8000, GET /health_check, same env vars) so cutover is just
-# "ship a new image under the same Harbor tag," no homelab manifest changes.
+# Multi-stage build replacing the old Bazel/distroless_cc pipeline. Container
+# contract: port 8000, GET /health_check, same env vars as the homelab
+# manifests expect.
+#
+# The browser-side WASM is NOT built here: foster/pkg (the foster-client
+# bundle) and foster-server/static/widgets must already exist in the build
+# context. wasm-bindgen embeds a per-build hash in its JS glue's internal
+# names, so building it inside each per-arch image build gave the amd64 and
+# arm64 images different, non-interchangeable JS/WASM pairs — and with
+# replicas on both arches and no session affinity, a browser could load the
+# JS from one pod and the WASM from another and break hydration. (A
+# `FROM --platform=linux/amd64` stage was supposed to prevent that, but
+# kaniko ignores FROM --platform.) CI builds the bundle once, in the
+# integration-test job, and hands the same files to both image builds as a
+# workflow artifact. Locally, build them first — see CLAUDE.md.
 
-ARG FOSTER_REV=7ff902c
-
-# WASM/JS output is architecture-independent bytecode + glue code, but
-# wasm-bindgen embeds a per-build content hash in that glue code's internal
-# function names. Building it separately per target architecture (the old
-# single-stage version did, inheriting --platform from the top-level build)
-# meant the amd64 and arm64 images shipped two different, non-interchangeable
-# JS/WASM pairs — invisible with one replica, but with production's 3
-# replicas and no session affinity, a browser's requests could land on pods
-# serving mismatched pairs mid-session and throw a binding error, breaking
-# hydration entirely. Pinning this stage to one fixed platform regardless of
-# the final image's target guarantees every replica of every architecture
-# ships byte-identical /pkg contents.
-FROM --platform=linux/amd64 docker.io/library/rust:1-bookworm AS wasm-builder
-ARG FOSTER_REV
-RUN rustup target add wasm32-unknown-unknown \
-    && cargo install wasm-pack --locked
-RUN git clone https://github.com/jaydh/foster /foster-src \
-    && cd /foster-src \
-    && git checkout ${FOSTER_REV}
-RUN cd /foster-src/crates/foster-client \
-    && wasm-pack build --target web --out-dir pkg
-# This site's own browser widgets (Rust → WASM, lazy-loaded via fx-widget).
-# Same stage, so they're byte-identical across architectures too.
-COPY widgets /widgets
-RUN WIDGETS_OUT=/widgets-out /widgets/build.sh
-
-FROM docker.io/library/rust:1-bookworm AS builder
+# cargo-chef splits dependency compilation into its own layer, keyed only on
+# recipe.json (Cargo.toml + Cargo.lock, not our source), so CI's kaniko layer
+# cache (--cache-repo in .github/workflows/general.yml) skips rebuilding the
+# whole dependency tree unless dependencies actually change.
+FROM docker.io/library/rust:1-bookworm AS chef
+RUN cargo install cargo-chef --locked
 WORKDIR /build
-COPY foster-server/Cargo.toml Cargo.toml
+
+FROM chef AS planner
+COPY foster-server/Cargo.toml foster-server/Cargo.lock ./
 COPY foster-server/src src
-COPY foster-server/static static
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /build/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY foster-server/Cargo.toml foster-server/Cargo.lock ./
+COPY foster-server/src src
+# Only index.html is compiled in (include_str!); the rest of static/ goes
+# straight to the final stage, so widget changes don't rebuild the server.
+COPY foster-server/static/index.html static/index.html
 COPY foster-server/migrations migrations
 RUN cargo build --release
 
 FROM gcr.io/distroless/cc-debian13
 WORKDIR /app
 COPY --from=builder /build/target/release/jaydanhoward /app/jaydanhoward
-COPY --from=wasm-builder /foster-src/crates/foster-client/pkg /app/pkg
-COPY --from=builder /build/static /app/static
-COPY --from=wasm-builder /widgets-out /app/static/widgets
+COPY foster/pkg /app/pkg
+COPY foster-server/static /app/static
 
 EXPOSE 8000
 ENTRYPOINT ["/app/jaydanhoward"]

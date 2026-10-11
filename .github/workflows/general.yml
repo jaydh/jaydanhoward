@@ -106,11 +106,12 @@ jobs:
       - name: Build foster-client WASM
         # foster-client (the WASM runtime) isn't published — it's a path-dependency
         # workspace member in the foster repo, so check out the same rev
-        # foster-server/Cargo.toml git-depends on and build it with wasm-pack,
-        # same as foster/scripts/build-wasm.sh does locally and the Dockerfile
-        # does for the production image.
+        # foster-server/Cargo.toml git-depends on and build it with wasm-pack.
+        # This build is also what ships: it's uploaded below and copied into
+        # both arch images.
         run: |
-          FOSTER_REV=$(grep '^ARG FOSTER_REV=' foster-server/Dockerfile | cut -d= -f2)
+          FOSTER_REV=$(grep -m1 -oP 'jaydh/foster", rev = "\K[0-9a-f]+' foster-server/Cargo.toml)
+          test -n "$FOSTER_REV"
           git clone https://github.com/jaydh/foster /tmp/foster-src
           git -C /tmp/foster-src checkout "$FOSTER_REV"
           (cd /tmp/foster-src/crates/foster-client && wasm-pack build --target web --out-dir pkg)
@@ -118,9 +119,21 @@ jobs:
           cp -r /tmp/foster-src/crates/foster-client/pkg/. foster/pkg/
       - name: Build widgets
         # The site's Rust WebGL widgets (widgets/*), lazy-loaded via
-        # fx-widget from foster-server/static/widgets — same script the
-        # Dockerfile runs.
+        # fx-widget from foster-server/static/widgets.
         run: ./widgets/build.sh
+      - name: Upload WASM bundle for image builds
+        # Both arch image jobs copy these exact files in (see the comment at
+        # the top of foster-server/Dockerfile): every replica on every arch
+        # must serve a byte-identical JS/WASM pair.
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: wasm-bundle
+          path: |
+            foster/pkg/
+            foster-server/static/widgets/
+          if-no-files-found: error
+          retention-days: 1
       - name: Build server binary
         working-directory: foster-server
         run: cargo build --release
@@ -209,6 +222,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Download WASM bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wasm-bundle
       - name: Write Harbor auth config
         # arc-runner-set-k8s (this repo's dedicated runner set, unlike
         # arc-runner-set-k8s-homelab) has no Docker-in-Docker sidecar and no
@@ -234,6 +251,8 @@ jobs:
             --dockerfile=foster-server/Dockerfile
             --context=dir:///github/workspace
             --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-amd64
+            --cache=true
+            --cache-repo=${{ vars.HARBOR_HOST }}/library/jaydanhoward-cache
   harbor-image-arm64-push:
     if: github.event_name == 'push'
     needs: [clippy, security-audit, integration-test]
@@ -243,6 +262,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Download WASM bundle
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: wasm-bundle
       - name: Write Harbor auth config
         run: |
           mkdir -p .kaniko-auth
@@ -259,6 +282,8 @@ jobs:
             --dockerfile=foster-server/Dockerfile
             --context=dir:///github/workspace
             --destination=${{ vars.HARBOR_HOST }}/library/jaydanhoward:latest-arm64
+            --cache=true
+            --cache-repo=${{ vars.HARBOR_HOST }}/library/jaydanhoward-cache
   security-audit-image-push:
     if: github.event_name == 'push'
     name: Push Security Audit Image
@@ -286,6 +311,8 @@ jobs:
             --dockerfile=security-audit/Dockerfile
             --context=dir:///github/workspace
             --destination=${{ vars.HARBOR_HOST }}/library/security-audit:latest
+            --cache=true
+            --cache-repo=${{ vars.HARBOR_HOST }}/library/security-audit-cache
   harbor-manifest:
     if: github.event_name == 'push'
     name: Push Multi-Arch Manifest

@@ -38,8 +38,8 @@ The server expects the `foster-client` WASM bundle at `../foster/pkg` (relative 
 `foster-server/`, i.e. repo-root `foster/pkg/`), and the widget bundles at
 `foster-server/static/widgets/` (`./widgets/build.sh`). Build the client with:
 ```bash
-# from a checkout of https://github.com/jaydh/foster, pinned to the FOSTER_REV
-# in foster-server/Dockerfile:
+# from a checkout of https://github.com/jaydh/foster, at the rev pinned in
+# foster-server/Cargo.toml:
 cd crates/foster-client && wasm-pack build --target web --out-dir pkg
 cp -r pkg/. <this-repo>/foster/pkg/
 ```
@@ -56,13 +56,22 @@ npx playwright test
 
 ### Production Build
 ```bash
-# from repo root — Dockerfile builds the WASM client from the pinned foster
-# rev, then the axum server, then assembles a distroless image
+# from repo root — the Dockerfile does NOT build any WASM: foster/pkg and
+# foster-server/static/widgets must already be built (see above)
 docker build -f foster-server/Dockerfile -t jaydanhoward .
 ```
 
+The WASM is kept out of the per-arch image builds on purpose: wasm-bindgen
+output differs per build, and amd64/arm64 replicas serving different JS/WASM
+pairs breaks hydration. CI builds it once (integration-test job) and passes
+the same files to both image jobs as the `wasm-bundle` artifact.
+
 CI (`.github/workflows/general.yml`) builds and pushes this image (amd64 + arm64) to
 Harbor via kaniko on every push to `main`, then creates a multi-arch manifest.
+Kaniko (the runners have no Docker daemon or privileged mode) builds natively only
+— the arm64 image builds on an arm64 runner — and ignores `FROM --platform`. Its
+layer cache lives in Harbor (`--cache-repo`); the Dockerfile uses cargo-chef so
+the dependency layer survives source changes.
 
 ## Architecture
 
@@ -114,9 +123,8 @@ Flux CD. Postgres via CNPG in the `service` namespace
 
 - `foster-server/Cargo.toml` pins the Foster framework rev (`foster-core`,
   `foster-server` deps as `git = "https://github.com/jaydh/foster", rev = "..."`).
-  Bumping Foster means bumping this rev (and the matching `FOSTER_REV` build arg in
-  `foster-server/Dockerfile`, and the `FOSTER_REV` grep'd out of that Dockerfile in
-  CI's WASM build step).
+  Bumping Foster means bumping this rev — it's the single source of truth; CI greps
+  it out of `Cargo.toml` to build the matching `foster-client`.
 - `foster-server/rust-toolchain.toml` pins stable Rust for this crate. CI additionally
   sets `RUSTUP_TOOLCHAIN=stable` as an env var everywhere, since some steps run outside
   `foster-server/`'s directory and rustup would otherwise walk up to nothing (no stray
