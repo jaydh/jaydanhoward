@@ -1,11 +1,12 @@
 //! Real photo gallery — points straight at the real, live production CDN
-//! (`caddy.jaydanhoward.com`, a Cloudflare-tunneled Caddy file server on the
-//! author's actual homelab, confirmed publicly reachable right now) rather
-//! than standing up an equivalent. Same JSON directory-listing + filename
+//! ([`PHOTO_ORIGIN`], the homelab's Cloudflare-tunneled `files-public`
+//! server, formerly Caddy) rather than standing up an equivalent. Same JSON directory-listing + filename
 //! convention as the real site's `photography.rs`.
 
 use serde::Deserialize;
 use serde_json::{json, Value};
+
+const PHOTO_ORIGIN: &str = "https://files.jaydanhoward.com";
 
 #[derive(Deserialize)]
 struct FileItem {
@@ -20,7 +21,7 @@ fn fetch_blocking() -> Result<Vec<Value>, String> {
         .map_err(|e| e.to_string())?;
 
     let body = client
-        .get("https://caddy.jaydanhoward.com")
+        .get(PHOTO_ORIGIN)
         .header("Accept", "application/json")
         .send()
         .map_err(|e| e.to_string())?
@@ -48,9 +49,9 @@ fn fetch_blocking() -> Result<Vec<Value>, String> {
         photos.push(json!({
             "index": index,
             "name": base,
-            "thumb_url": format!("https://caddy.jaydanhoward.com/{base}-thumb.webp"),
-            "medium_url": format!("https://caddy.jaydanhoward.com/{base}-medium.webp"),
-            "full_url": format!("https://caddy.jaydanhoward.com/{base}-full.webp"),
+            "thumb_url": format!("{PHOTO_ORIGIN}/{base}-thumb.webp"),
+            "medium_url": format!("{PHOTO_ORIGIN}/{base}-medium.webp"),
+            "full_url": format!("{PHOTO_ORIGIN}/{base}-full.webp"),
         }));
     }
     Ok(photos)
