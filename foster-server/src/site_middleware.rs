@@ -208,9 +208,13 @@ impl RateLimiter {
     }
 
     pub async fn check_middleware(&self, req: Request, next: Next) -> Response {
+        // cf-connecting-ip first: Cloudflare sets it to the real client IP,
+        // whereas the first X-Forwarded-For entry is whatever the client
+        // sent, so keying on it would let anyone dodge the limit.
         let ip = req
             .headers()
-            .get("x-real-ip")
+            .get("cf-connecting-ip")
+            .or_else(|| req.headers().get("x-real-ip"))
             .or_else(|| req.headers().get("x-forwarded-for"))
             .and_then(|v| v.to_str().ok())
             .map(|s| s.split(',').next().unwrap_or(s).trim().to_string())
