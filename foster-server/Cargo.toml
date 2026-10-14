@@ -8,11 +8,11 @@ name = "jaydanhoward"
 path = "src/main.rs"
 
 [dependencies]
-foster-core = { git = "https://github.com/jaydh/foster", rev = "7ff902c" }
-foster-server = { git = "https://github.com/jaydh/foster", rev = "7ff902c" }
-axum = { version = "0.7", features = ["multipart"] }
+foster-core = { git = "https://github.com/jaydh/foster", rev = "ec7ff5d" }
+foster-server = { git = "https://github.com/jaydh/foster", rev = "ec7ff5d" }
+axum = { version = "0.8", features = ["multipart"] }
 tokio = { version = "1", features = ["full"] }
-tower-http = { version = "0.5", features = ["fs", "compression-full"] }
+tower-http = { version = "0.6", features = ["fs", "compression-full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "chrono", "migrate"] }
