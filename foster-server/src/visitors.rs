@@ -335,8 +335,12 @@ async fn prune_old_visits(pool: PgPool) {
 }
 
 // ── Stats ────────────────────────────────────────────────────────────────
-// "People" are rows with is_bot = false; rows logged before classification
-// existed (is_bot NULL) count as neither.
+// Every panel is shown twice, once per class: "people" are rows with
+// is_bot = false, bots are is_bot = true. Rows logged before classification
+// existed (is_bot NULL) count as neither. Both use the same window so the
+// two tabs compare like for like.
+
+const WINDOW: &str = "visited_at > NOW() - INTERVAL '30 days'";
 
 async fn scalar(pool: &PgPool, sql: &str) -> i64 {
     sqlx::query_scalar(sql).fetch_one(pool).await.unwrap_or(0)
@@ -359,86 +363,106 @@ async fn ranked(pool: &PgPool, sql: &str) -> Vec<Value> {
         .collect()
 }
 
+/// `label` grouped over one class's rows (`class` is a SQL predicate),
+/// ordered by `order` (`ips` or `reqs`).
+async fn ranked_by(pool: &PgPool, class: &str, label: &str, extra: &str, order: &str) -> Vec<Value> {
+    ranked(
+        pool,
+        &format!(
+            "SELECT {label} AS label, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips
+             FROM visitors WHERE {class} AND {WINDOW} {extra}
+             GROUP BY 1 ORDER BY {order} DESC LIMIT 8"
+        ),
+    )
+    .await
+}
+
+/// Map dots for one class, rounded to 0.1° so nearby visits share a dot.
+async fn map_points(pool: &PgPool, class: &str) -> Vec<Value> {
+    sqlx::query(&format!(
+        "SELECT ROUND(lat::numeric, 1)::float8 as lat, ROUND(lon::numeric, 1)::float8 as lon
+         FROM visitors
+         WHERE {class} AND {WINDOW} AND lat IS NOT NULL AND lon IS NOT NULL
+         GROUP BY ROUND(lat::numeric, 1), ROUND(lon::numeric, 1) LIMIT 500"
+    ))
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .iter()
+    .map(|row| {
+        let lat = row.try_get::<f64, _>("lat").unwrap_or(0.0);
+        let lon = row.try_get::<f64, _>("lon").unwrap_or(0.0);
+        let (x, y) = map_percent(lon, lat);
+        // x/y: CSS left/top on the world map, bound per dot via
+        // fx-bind-attr="style.left=item:x style.top=item:y".
+        json!({ "lat": lat, "lon": lon, "x": x, "y": y })
+    })
+    .collect()
+}
+
+const PEOPLE: &str = "is_bot = false";
+const BOTS: &str = "is_bot";
+
 pub fn fetch_visitor_stats(pool: &PgPool) -> Value {
     let result: Result<Value, sqlx::Error> = tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(async {
             // Fail fast (→ "connected": false) if the DB is unreachable.
             sqlx::query("SELECT 1").execute(pool).await?;
 
-            let people = scalar(
-                pool,
-                "SELECT COUNT(DISTINCT ip) FROM visitors WHERE is_bot = false AND visited_at > NOW() - INTERVAL '30 days'",
-            )
-            .await;
+            let ips = |class| format!("SELECT COUNT(DISTINCT ip) FROM visitors WHERE {class} AND {WINDOW}");
+            let countries = |class| {
+                format!(
+                    "SELECT COUNT(DISTINCT country_code) FROM visitors
+                     WHERE {class} AND country_code IS NOT NULL AND {WINDOW}"
+                )
+            };
+            let requests = |class| format!("SELECT COUNT(*) FROM visitors WHERE {class} AND {WINDOW}");
+
+            let people = scalar(pool, &ips(PEOPLE)).await;
             let visits = scalar(
                 pool,
-                "SELECT COUNT(*) FROM (SELECT DISTINCT ip, visited_at::date FROM visitors
-                  WHERE is_bot = false AND visited_at > NOW() - INTERVAL '30 days') sub",
+                &format!(
+                    "SELECT COUNT(*) FROM (SELECT DISTINCT ip, visited_at::date FROM visitors
+                      WHERE {PEOPLE} AND {WINDOW}) sub"
+                ),
             )
             .await;
-            let countries = scalar(
-                pool,
-                "SELECT COUNT(DISTINCT country_code) FROM visitors
-                 WHERE is_bot = false AND country_code IS NOT NULL AND visited_at > NOW() - INTERVAL '30 days'",
-            )
-            .await;
-            let bot_requests = scalar(
-                pool,
-                "SELECT COUNT(*) FROM visitors WHERE is_bot AND visited_at > NOW() - INTERVAL '7 days'",
-            )
-            .await;
-            let human_requests = scalar(
-                pool,
-                "SELECT COUNT(*) FROM visitors WHERE is_bot = false AND visited_at > NOW() - INTERVAL '7 days'",
-            )
-            .await;
-            let probes = scalar(
-                pool,
-                "SELECT COUNT(*) FROM visitors WHERE status = 404 AND visited_at > NOW() - INTERVAL '7 days'",
-            )
-            .await;
+            let human_countries = scalar(pool, &countries(PEOPLE)).await;
+            let human_requests = scalar(pool, &requests(PEOPLE)).await;
+
+            let bot_ips = scalar(pool, &ips(BOTS)).await;
+            let bot_countries = scalar(pool, &countries(BOTS)).await;
+            let bot_requests = scalar(pool, &requests(BOTS)).await;
+            let probes = scalar(pool, &format!("SELECT COUNT(*) FROM visitors WHERE status = 404 AND {WINDOW}")).await;
             let bot_share = match bot_requests + human_requests {
                 0 => "–".to_string(),
                 total => format!("{}%", bot_requests * 100 / total),
             };
 
-            let top_countries = ranked(
+            let country = "COALESCE(country, 'Unknown')";
+            let isp = "COALESCE(isp, 'Unknown')";
+            let top_countries = ranked_by(pool, PEOPLE, country, "", "ips").await;
+            let top_pages = ranked_by(pool, PEOPLE, "path", "", "ips").await;
+            let human_networks = ranked_by(pool, PEOPLE, isp, "", "ips").await;
+            let referrers = ranked_by(
                 pool,
-                "SELECT COALESCE(country, 'Unknown') AS label, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips
-                 FROM visitors WHERE is_bot = false AND visited_at > NOW() - INTERVAL '30 days'
-                 GROUP BY 1 ORDER BY ips DESC LIMIT 8",
+                PEOPLE,
+                "referer",
+                "AND referer IS NOT NULL AND referer NOT LIKE '%jaydanhoward.com%'",
+                "ips",
             )
             .await;
-            let referrers = ranked(
-                pool,
-                "SELECT referer AS label, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips
-                 FROM visitors WHERE is_bot = false AND visited_at > NOW() - INTERVAL '30 days'
-                   AND referer IS NOT NULL AND referer NOT LIKE '%jaydanhoward.com%'
-                 GROUP BY 1 ORDER BY ips DESC LIMIT 8",
-            )
-            .await;
-            let top_probes = ranked(
-                pool,
-                "SELECT path AS label, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips
-                 FROM visitors WHERE status = 404 AND visited_at > NOW() - INTERVAL '7 days'
-                 GROUP BY 1 ORDER BY reqs DESC LIMIT 8",
-            )
-            .await;
-            let bot_networks = ranked(
-                pool,
-                "SELECT COALESCE(isp, 'Unknown') AS label, COUNT(*) AS reqs, COUNT(DISTINCT ip) AS ips
-                 FROM visitors WHERE is_bot AND visited_at > NOW() - INTERVAL '7 days'
-                 GROUP BY 1 ORDER BY reqs DESC LIMIT 8",
-            )
-            .await;
+            let bot_top_countries = ranked_by(pool, BOTS, country, "", "reqs").await;
+            let top_probes = ranked_by(pool, "status = 404", "path", "", "reqs").await;
+            let bot_networks = ranked_by(pool, BOTS, isp, "", "reqs").await;
 
-            let recent_rows = sqlx::query(
-                r#"SELECT country, city, path, visited_at FROM (
-                       SELECT DISTINCT ON (ip) country, city, path, visited_at
-                       FROM visitors WHERE is_bot = false AND visited_at > NOW() - INTERVAL '30 days'
-                       ORDER BY ip, visited_at DESC
-                   ) deduped ORDER BY visited_at DESC LIMIT 20"#,
-            )
+            let recent_rows = sqlx::query(&format!(
+                "SELECT country, city, path, visited_at FROM (
+                     SELECT DISTINCT ON (ip) country, city, path, visited_at
+                     FROM visitors WHERE {PEOPLE} AND {WINDOW}
+                     ORDER BY ip, visited_at DESC
+                 ) deduped ORDER BY visited_at DESC LIMIT 20"
+            ))
             .fetch_all(pool)
             .await
             .unwrap_or_default();
@@ -465,51 +489,36 @@ pub fn fetch_visitor_stats(pool: &PgPool) -> Value {
                 })
                 .collect();
 
-            let point_rows = sqlx::query(
-                r#"SELECT ROUND(lat::numeric, 1)::float8 as lat, ROUND(lon::numeric, 1)::float8 as lon
-                   FROM visitors
-                   WHERE is_bot = false AND visited_at > NOW() - INTERVAL '30 days'
-                     AND lat IS NOT NULL AND lon IS NOT NULL
-                   GROUP BY ROUND(lat::numeric, 1), ROUND(lon::numeric, 1) LIMIT 500"#,
-            )
-            .fetch_all(pool)
-            .await
-            .unwrap_or_default();
-
-            let points: Vec<Value> = point_rows
-                .iter()
-                .map(|row| {
-                    let lat = row.try_get::<f64, _>("lat").unwrap_or(0.0);
-                    let lon = row.try_get::<f64, _>("lon").unwrap_or(0.0);
-                    let (x, y) = map_percent(lon, lat);
-                    // x/y: CSS left/top on the world map, bound per dot via
-                    // fx-bind-attr="style.left=item:x style.top=item:y".
-                    json!({ "lat": lat, "lon": lon, "x": x, "y": y })
-                })
-                .collect();
-
             Ok(json!({
                 "connected": true,
                 "people": people,
                 "visits": visits,
-                "countries": countries,
+                "countries": human_countries,
+                "top_countries": top_countries,
+                "top_pages": top_pages,
+                "human_networks": human_networks,
+                "referrers": referrers,
+                "recent_visits": recent_visits,
+                "points": map_points(pool, PEOPLE).await,
                 "bot_requests": bot_requests,
+                "bot_ips": bot_ips,
+                "bot_countries": bot_countries,
                 "probes": probes,
                 "bot_share": bot_share,
-                "top_countries": top_countries,
-                "referrers": referrers,
+                "bot_top_countries": bot_top_countries,
                 "top_probes": top_probes,
                 "bot_networks": bot_networks,
-                "recent_visits": recent_visits,
-                "points": points,
+                "bot_points": map_points(pool, BOTS).await,
             }))
         })
     });
 
     result.unwrap_or_else(|e| {
         json!({ "connected": false, "error": e.to_string(), "people": 0, "visits": 0, "countries": 0,
-                "bot_requests": 0, "probes": 0, "bot_share": "–", "top_countries": [], "referrers": [],
-                "top_probes": [], "bot_networks": [], "recent_visits": [], "points": [] })
+                "top_countries": [], "top_pages": [], "human_networks": [], "referrers": [],
+                "recent_visits": [], "points": [], "bot_requests": 0, "bot_ips": 0, "bot_countries": 0,
+                "probes": 0, "bot_share": "–", "bot_top_countries": [], "top_probes": [],
+                "bot_networks": [], "bot_points": [] })
     })
 }
 
