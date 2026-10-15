@@ -30,6 +30,7 @@ struct FileItem {
 
 fn fetch_blocking(origin: &str) -> Result<Vec<Value>, String> {
     let client = reqwest::blocking::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(3))
         .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;
@@ -75,9 +76,9 @@ fn fetch_blocking(origin: &str) -> Result<Vec<Value>, String> {
 /// `block_in_place` at startup, same pattern as cluster.rs/visitors.rs. The
 /// list is baked into the page, so a failure here means an empty gallery
 /// until the next restart — retry a few times and log rather than silently
-/// shipping `[]`.
+/// shipping `[]`. Kept short (worst case ~15s): startup blocks on it.
 pub fn fetch_photos() -> Value {
-    const ATTEMPTS: u32 = 5;
+    const ATTEMPTS: u32 = 3;
     let origin = photo_origin();
     let photos = tokio::task::block_in_place(|| {
         for attempt in 1..=ATTEMPTS {
@@ -86,7 +87,7 @@ pub fn fetch_photos() -> Value {
                 Err(e) => {
                     eprintln!("photography: listing fetch {attempt}/{ATTEMPTS} failed: {e}");
                     if attempt < ATTEMPTS {
-                        std::thread::sleep(std::time::Duration::from_secs(2 * attempt as u64));
+                        std::thread::sleep(std::time::Duration::from_secs(attempt as u64));
                     }
                 }
             }

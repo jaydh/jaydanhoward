@@ -151,6 +151,10 @@ jobs:
           # errors caught it instead).
           DATABASE_URL: postgres://postgres:foster@localhost:5432/jaydanhoward
           LIGHTHOUSE_UPDATE_TOKEN: ci-test-token
+          # The runner can't reach files-public (Cilium only admits the
+          # jaydanhoward pods); a closed port fails the listing fetch fast
+          # instead of stalling startup on connect timeouts.
+          PHOTO_ORIGIN: http://127.0.0.1:9
         run: |
           ./foster-server/target/release/jaydanhoward > /tmp/app.log 2>&1 &
           echo $! > /tmp/app.pid
