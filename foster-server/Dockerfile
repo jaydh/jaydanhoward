@@ -36,7 +36,9 @@ COPY foster-server/migrations migrations
 RUN cargo build --release --locked
 # Keeps this stage from ever being fully cached: kaniko doesn't hand a
 # fully cached stage's files to a later COPY --from (see above). CI passes
-# the commit SHA; this layer is the only one it invalidates.
+# the commit SHA plus the run attempt — a re-run of a build that got this
+# far would otherwise find the layer cached; this is the only layer it
+# invalidates.
 ARG GIT_SHA=local
 RUN echo "$GIT_SHA" > /build/.rev
 
