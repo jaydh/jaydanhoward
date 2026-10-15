@@ -380,6 +380,7 @@ async fn main() {
         .router()
         .merge(world_map_router)
         .merge(satellites_router)
+        .merge(photography::router())
         .route(
             "/api/lighthouse",
             post(lighthouse::upload_lighthouse_report).layer(axum::middleware::from_fn(move |req, next| {

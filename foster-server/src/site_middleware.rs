@@ -134,8 +134,8 @@ pub async fn security_headers(req: Request, next: Next) -> Response {
             "default-src 'self'; \
              script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://static.cloudflareinsights.com; \
              style-src 'self' 'unsafe-inline'; \
-             img-src 'self' https://files.jaydanhoward.com data:; \
-             media-src 'self' https://files.jaydanhoward.com; \
+             img-src 'self' data:; \
+             media-src 'self'; \
              font-src 'self'; \
              connect-src 'self' https://cloudflareinsights.com; \
              frame-src 'self'; \
