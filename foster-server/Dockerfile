@@ -38,13 +38,16 @@ RUN cargo build --release --locked
 # fully cached stage's files to a later COPY --from (see above). CI passes
 # the commit SHA plus the run attempt — a re-run of a build that got this
 # far would otherwise find the layer cached; this is the only layer it
-# invalidates.
+# invalidates. The binary is copied out in this same, always-fresh step:
+# when `cargo build` above came from the cache, kaniko didn't carry
+# target/release/jaydanhoward over to the final stage's COPY --from
+# ("failed to get fileinfo for /kaniko/0/build/target/release/jaydanhoward").
 ARG GIT_SHA=local
-RUN echo "$GIT_SHA" > /build/.rev
+RUN echo "$GIT_SHA" > /build/.rev && cp target/release/jaydanhoward /build/jaydanhoward-bin
 
 FROM gcr.io/distroless/cc-debian13
 WORKDIR /app
-COPY --from=builder /build/target/release/jaydanhoward /app/jaydanhoward
+COPY --from=builder /build/jaydanhoward-bin /app/jaydanhoward
 COPY foster/pkg /app/pkg
 COPY foster-server/static /app/static
 
