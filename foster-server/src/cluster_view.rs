@@ -60,6 +60,15 @@ fn fmt_bytes(bytes: f64) -> String {
     }
 }
 
+/// GB with a TB switch, e.g. "412 GB", "3.6 TB".
+fn fmt_gb(gb: f64) -> String {
+    if gb >= 1000.0 { format!("{:.1} TB", gb / 1000.0) } else { format!("{gb:.0} GB") }
+}
+
+fn peak(points: &[f64]) -> f64 {
+    points.iter().cloned().fold(0.0, f64::max)
+}
+
 fn pct(used: f64, total: f64) -> f64 {
     if total > 0.0 { (used / total * 100.0).min(100.0) } else { 0.0 }
 }
@@ -84,8 +93,16 @@ pub fn spark_path(points: &[f64], max: f64, w: f64, h: f64) -> String {
         .join(" ")
 }
 
-fn spark(points: &[f64]) -> String {
-    spark_path(points, points.iter().cloned().fold(0.0, f64::max), SPARK_W, SPARK_H)
+/// Percentage series on a fixed 0–100 scale, so the line's height means
+/// something (auto-scaling made a 5% blip look like a spike and a steady
+/// series a flat line pinned to the top).
+fn spark_pct(points: &[f64]) -> String {
+    spark_path(points, 100.0, SPARK_W, SPARK_H)
+}
+
+/// `cluster-chip ok|warn|err` for the overview health strip.
+fn chip(level: &str) -> String {
+    format!("cluster-chip {level}")
 }
 
 /// Build the card's display model from a `fetch_cluster_snapshot` value
@@ -101,6 +118,18 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
     let rx = series(&hist["network_rx"]);
     let tx = series(&hist["network_tx"]);
     let net_max = rx.iter().chain(&tx).cloned().fold(0.0, f64::max);
+    let (cpu_h, mem_h, disk_h) = (series(&hist["cpu"]), series(&hist["memory"]), series(&hist["disk"]));
+
+    let cpu_pct = f(&cluster["cpu_usage_percent"]);
+    let cores = f(&cluster["cpu_total_cores"]);
+    let (mem_used, mem_total) = (f(&cluster["memory_usage_gb"]), f(&cluster["memory_total_gb"]));
+    let (disk_used, disk_total) = (f(&cluster["disk_usage_gb"]), f(&cluster["disk_total_gb"]));
+    // Storage moves slowly; how much it grew over the window says more than
+    // its peak.
+    let disk_growth = match (disk_h.first(), disk_h.last()) {
+        (Some(a), Some(b)) => (b - a) / 100.0 * disk_total,
+        _ => 0.0,
+    };
 
     let nodes: Vec<Value> = arr(&snap["nodes"])
         .iter()
@@ -111,7 +140,7 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
                 "name": s(&n["name"]),
                 "cpu_label": format!("{cpu:.1}%"),
                 "cpu_width": format!("{cpu:.1}%"),
-                "mem_label": format!("{:.1}G", f(&n["memory_usage_gb"])),
+                "mem_label": format!("{:.1}/{:.0}G", f(&n["memory_usage_gb"]), f(&n["memory_total_gb"])),
                 "mem_width": format!("{mem_pct:.1}%"),
             })
         })
@@ -136,16 +165,42 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
 
     let ha = i(&cf["ha_connections"]);
     let ha_label = if ha >= EXPECTED_HA_CONNS { "healthy" } else if ha > 0 { "degraded" } else { "down" };
+    let alert_count = arr(&snap["alerts"]).len();
 
     let list = |key: &str, row: &dyn Fn(&Value) -> Value| -> Vec<Value> { arr(&snap[key]).iter().map(row).collect() };
 
-    json!({
+    // Overview headline numbers + health strip — a separate object only
+    // because one json! literal this size exceeds the macro recursion limit.
+    let overview = json!({
+        "cpu_now": format!("{cpu_pct:.0}%"),
+        "cpu_detail": format!("{:.1} of {cores:.0} cores · 24h peak {:.0}%", cpu_pct / 100.0 * cores, peak(&cpu_h)),
+        "mem_now": format!("{:.0}%", pct(mem_used, mem_total)),
+        "mem_detail": format!("{mem_used:.0} of {mem_total:.0} GB · 24h peak {:.0}%", peak(&mem_h)),
+        "disk_now": format!("{:.0}%", pct(disk_used, disk_total)),
+        "disk_detail": format!("{} of {} · {}{} in 24h", fmt_gb(disk_used), fmt_gb(disk_total),
+            if disk_growth < 0.0 { "−" } else { "+" }, fmt_gb(disk_growth.abs())),
+        "rx_now": format!("{:.1}", f(&cluster["network_rx_mbps"])),
+        "tx_now": format!("{:.1}", f(&cluster["network_tx_mbps"])),
+        "net_peak": format!("24h peak {net_max:.0} Mbps"),
+        "alerts_label": match alert_count {
+            0 => "No alerts firing".to_string(),
+            1 => "1 alert firing".to_string(),
+            n => format!("{n} alerts firing"),
+        },
+        "alerts_cls": chip(if alert_count == 0 { "ok" } else { "warn" }),
+        "ceph_chip": format!("Ceph {ceph_health}"),
+        "ceph_cls": chip(match ceph_health { "OK" => "ok", "WARN" => "warn", _ => "err" }),
+        "cf_chip": format!("Tunnel {ha_label}"),
+        "cf_cls": chip(match ha_label { "healthy" => "ok", "degraded" => "warn", _ => "err" }),
+    });
+
+    let mut view = json!({
         "updated_at": updated_at,
         "pod_count": i(&cluster["pod_count"]),
         "node_ready": format!("{}/{}", i(&cluster["healthy_node_count"]), i(&cluster["node_count"])),
-        "spark_cpu": spark(&series(&hist["cpu"])),
-        "spark_memory": spark(&series(&hist["memory"])),
-        "spark_disk": spark(&series(&hist["disk"])),
+        "spark_cpu": spark_pct(&cpu_h),
+        "spark_memory": spark_pct(&mem_h),
+        "spark_disk": spark_pct(&disk_h),
         "spark_rx": spark_path(&rx, net_max, SPARK_W, NET_H),
         "spark_tx": spark_path(&tx, net_max, SPARK_W, NET_H),
         "nodes": nodes,
@@ -219,7 +274,11 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
                 "cls": if err { "cluster-audit-row cluster-audit-err" } else { "cluster-audit-row" },
             })
         }),
-    })
+    });
+    if let (Some(v), Value::Object(o)) = (view.as_object_mut(), overview) {
+        v.extend(o);
+    }
+    view
 }
 
 #[cfg(test)]
@@ -261,5 +320,34 @@ mod tests {
         assert_eq!(v["cf_status"], "healthy (12/12 HA conns)");
         assert_eq!(v["cf_by_status"][0], json!({ "code": "200", "rate": "1.23/s" }));
         assert_eq!(v["claude_log"][0]["text"], "t — m — c (error)");
+    }
+
+    #[test]
+    fn overview_headlines_and_health_strip() {
+        let v = cluster_view(&json!({
+            "cluster": { "cpu_usage_percent": 12.5, "cpu_total_cores": 24.0,
+                         "memory_usage_gb": 30.0, "memory_total_gb": 120.0,
+                         "disk_usage_gb": 900.0, "disk_total_gb": 3600.0,
+                         "network_rx_mbps": 1.25, "network_tx_mbps": 0.5 },
+            "historical": { "series": { "cpu": [5.0, 40.0, 12.0], "memory": [20.0, 25.0],
+                                        "disk": [24.0, 25.0], "network_rx": [1.0, 80.0], "network_tx": [2.0] } },
+            "ceph": { "health": 0 },
+            "cloudflared": { "ha_connections": 3 },
+            "alerts": [{ "alertname": "A" }, { "alertname": "B" }],
+        }), "");
+        assert_eq!(v["cpu_now"], "12%");
+        assert_eq!(v["cpu_detail"], "3.0 of 24 cores · 24h peak 40%");
+        assert_eq!(v["mem_now"], "25%");
+        assert_eq!(v["mem_detail"], "30 of 120 GB · 24h peak 25%");
+        assert_eq!(v["disk_detail"], "900 GB of 3.6 TB · +36 GB in 24h");
+        assert_eq!(v["rx_now"], "1.2");
+        assert_eq!(v["net_peak"], "24h peak 80 Mbps");
+        assert_eq!(v["alerts_label"], "2 alerts firing");
+        assert_eq!(v["alerts_cls"], "cluster-chip warn");
+        assert_eq!(v["ceph_cls"], "cluster-chip ok");
+        assert_eq!(v["cf_chip"], "Tunnel degraded");
+        assert_eq!(v["cf_cls"], "cluster-chip warn");
+        // Percent series are on a fixed 0–100 scale: 50% sits mid-box.
+        assert_eq!(spark_pct(&[50.0, 50.0]), "M0.0,25.0 L260.0,25.0");
     }
 }

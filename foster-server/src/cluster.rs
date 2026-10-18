@@ -179,23 +179,23 @@ async fn fetch_cluster_metrics() -> Value {
 // ── Per-node metrics ────────────────────────────────────────────────────────
 
 async fn fetch_node_metrics() -> Vec<Value> {
-    let cpu_data = query_prometheus("sum by (node) (rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))").await;
-    let memory_data = query_prometheus("sum by (node) (container_memory_working_set_bytes{container!=\"\"}) / 1024 / 1024 / 1024").await;
-    let memory_total_data = query_prometheus("sum by (node) (machine_memory_bytes) / 1024 / 1024 / 1024").await;
-    let cpu_capacity_data = query_prometheus("sum by (node) (machine_cpu_cores)").await;
+    let cpu_data = query_prometheus("sum by (instance) (rate(container_cpu_usage_seconds_total{container!=\"\"}[5m]))").await;
+    let memory_data = query_prometheus("sum by (instance) (container_memory_working_set_bytes{container!=\"\"}) / 1024 / 1024 / 1024").await;
+    let memory_total_data = query_prometheus("sum by (instance) (machine_memory_bytes) / 1024 / 1024 / 1024").await;
+    let cpu_capacity_data = query_prometheus("sum by (instance) (machine_cpu_cores)").await;
 
     let mut nodes: HashMap<String, (f64, f64, f64)> = HashMap::new(); // cpu_used, mem_used, mem_total
 
     if let Ok(d) = &cpu_data {
         for m in &d.data.result {
-            if let Some(node) = m.metric.get("node") {
+            if let Some(node) = m.metric.get("instance") {
                 nodes.entry(node.clone()).or_insert((0.0, 0.0, 0.0)).0 = m.value.1.parse().unwrap_or(0.0);
             }
         }
     }
     if let Ok(d) = &memory_data {
         for m in &d.data.result {
-            if let Some(node) = m.metric.get("node") {
+            if let Some(node) = m.metric.get("instance") {
                 if let Some(entry) = nodes.get_mut(node) {
                     entry.1 = m.value.1.parse().unwrap_or(0.0);
                 }
@@ -204,7 +204,7 @@ async fn fetch_node_metrics() -> Vec<Value> {
     }
     if let Ok(d) = &memory_total_data {
         for m in &d.data.result {
-            if let Some(node) = m.metric.get("node") {
+            if let Some(node) = m.metric.get("instance") {
                 if let Some(entry) = nodes.get_mut(node) {
                     entry.2 = m.value.1.parse().unwrap_or(0.0);
                 }
@@ -215,12 +215,17 @@ async fn fetch_node_metrics() -> Vec<Value> {
     let mut cpu_capacity: HashMap<String, f64> = HashMap::new();
     if let Ok(d) = &cpu_capacity_data {
         for m in &d.data.result {
-            if let Some(node) = m.metric.get("node") {
+            if let Some(node) = m.metric.get("instance") {
                 cpu_capacity.insert(node.clone(), m.value.1.parse().unwrap_or(1.0));
             }
         }
     }
 
+    // cadvisor's node name is its `instance` label (kubernetes-nodes-cadvisor
+    // relabels it to the hostname); there's no `node` label. Sorted, since
+    // HashMap order would reshuffle the list every tick.
+    let mut nodes: Vec<_> = nodes.into_iter().collect();
+    nodes.sort_by(|a, b| a.0.cmp(&b.0));
     nodes
         .into_iter()
         .map(|(name, (cpu_used, mem_used, mem_total))| {

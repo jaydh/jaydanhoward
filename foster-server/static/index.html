@@ -271,6 +271,28 @@
     @media (max-width: 640px) { .cluster-sparks { grid-template-columns: 1fr; } }
     .cluster-spark { border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.6rem; background: var(--surface); }
     .cluster-spark-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light); margin-bottom: 0.3rem; }
+    .cluster-spark-head { display: flex; justify-content: space-between; align-items: baseline; gap: 0.5rem; margin-bottom: 0.3rem; }
+    .cluster-spark-head .cluster-spark-title { margin-bottom: 0; }
+    .cluster-spark-now { font-size: 1.15rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .cluster-spark-now small { font-size: 0.7rem; font-weight: 400; color: var(--text-light); }
+    .cluster-spark-detail { font-size: 0.72rem; color: var(--text-light); margin-top: 0.35rem; font-variant-numeric: tabular-nums; }
+    .cluster-spark-note { font-size: 0.72rem; color: var(--text-light); margin-top: 0.5rem; }
+    .net-rx { color: #3b82f6; }
+    .net-tx { color: #f59e0b; }
+    .cluster-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: -0.25rem 0 1rem; }
+    .cluster-chip { font-size: 0.75rem; padding: 0.15rem 0.6rem; border-radius: 999px; border: 1px solid var(--border); }
+    .cluster-chip.ok { color: #15803d; border-color: #15803d55; }
+    .cluster-chip.warn { color: #b45309; border-color: #b4530955; }
+    .cluster-chip.err { color: #b91c1c; border-color: #b91c1c55; }
+    html.dark .cluster-chip.ok { color: #4ade80; }
+    html.dark .cluster-chip.warn { color: #fbbf24; }
+    html.dark .cluster-chip.err { color: #f87171; }
+    .cluster-node-box { margin-top: 1rem; max-height: none; }
+    .cluster-node-row { display: grid; grid-template-columns: 5rem auto 1fr 3.5rem auto 1fr 4.5rem; align-items: center; gap: 0.5rem; font-size: 0.75rem; padding: 0.2rem 0; }
+    .cluster-node-row .cluster-bar-label { width: auto; color: var(--text-light); }
+    .cluster-node-name { font-family: ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .cluster-node-val { text-align: right; font-family: ui-monospace, monospace; color: var(--text-light); font-variant-numeric: tabular-nums; }
+    @media (max-width: 640px) { .cluster-node-row { grid-template-columns: 4rem auto 1fr 4.5rem; } .cluster-node-row > :nth-child(5) { grid-column: 2; } }
     .cluster-spark svg { display: block; width: 100%; height: 50px; }
     .cluster-spark svg.spark-tall { height: 70px; }
     .spark-line { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
@@ -493,30 +515,49 @@
           <div><strong fx-text="pod_count">0</strong>pods</div>
           <div><strong fx-text="node_ready">0/0</strong>nodes ready</div>
         </div>
-        <div class="cluster-sparks">
-          <div class="cluster-spark"><div class="cluster-spark-title">CPU Usage</div>
-            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#ef4444" fx-bind-attr="d=ctx:spark_cpu"/></svg></div>
-          <div class="cluster-spark"><div class="cluster-spark-title">Memory Usage</div>
-            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#3b82f6" fx-bind-attr="d=ctx:spark_memory"/></svg></div>
-          <div class="cluster-spark"><div class="cluster-spark-title">Storage Usage</div>
-            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#8b5cf6" fx-bind-attr="d=ctx:spark_disk"/></svg></div>
+        <div class="cluster-chips">
+          <span class="cluster-chip" fx-bind-attr="class=ctx:alerts_cls" fx-text="alerts_label"></span>
+          <span class="cluster-chip" fx-bind-attr="class=ctx:ceph_cls" fx-text="ceph_chip"></span>
+          <span class="cluster-chip" fx-bind-attr="class=ctx:cf_cls" fx-text="cf_chip"></span>
         </div>
-        <div class="cluster-spark"><div class="cluster-spark-title">Network (RX/TX Mbps)</div>
+        <div class="cluster-sparks">
+          <div class="cluster-spark">
+            <div class="cluster-spark-head"><span class="cluster-spark-title">CPU</span><span class="cluster-spark-now" fx-text="cpu_now"></span></div>
+            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#ef4444" fx-bind-attr="d=ctx:spark_cpu"/></svg>
+            <div class="cluster-spark-detail" fx-text="cpu_detail"></div></div>
+          <div class="cluster-spark">
+            <div class="cluster-spark-head"><span class="cluster-spark-title">Memory</span><span class="cluster-spark-now" fx-text="mem_now"></span></div>
+            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#3b82f6" fx-bind-attr="d=ctx:spark_memory"/></svg>
+            <div class="cluster-spark-detail" fx-text="mem_detail"></div></div>
+          <div class="cluster-spark">
+            <div class="cluster-spark-head"><span class="cluster-spark-title">Ceph storage</span><span class="cluster-spark-now" fx-text="disk_now"></span></div>
+            <svg viewBox="0 0 260 50" preserveAspectRatio="none" aria-hidden="true"><path class="spark-line" stroke="#8b5cf6" fx-bind-attr="d=ctx:spark_disk"/></svg>
+            <div class="cluster-spark-detail" fx-text="disk_detail"></div></div>
+        </div>
+        <div class="cluster-spark">
+          <div class="cluster-spark-head"><span class="cluster-spark-title">Network</span>
+            <span class="cluster-spark-now"><span class="net-rx">↓ <span fx-text="rx_now"></span></span> <span class="net-tx">↑ <span fx-text="tx_now"></span></span> <small>Mbps</small></span></div>
           <svg class="spark-tall" viewBox="0 0 260 70" preserveAspectRatio="none" aria-hidden="true">
             <path class="spark-line" stroke="#3b82f6" fx-bind-attr="d=ctx:spark_rx"/>
             <path class="spark-line" stroke="#f59e0b" fx-bind-attr="d=ctx:spark_tx"/>
-          </svg></div>
-        <div class="cluster-nodes" fx-for="nodes">
-          <div class="cluster-box" style="max-height:none;display:none">
-            <h3 fx-field="name"></h3>
-            <div class="cluster-bar-row"><span class="cluster-bar-label">CPU</span>
+          </svg>
+          <div class="cluster-spark-detail"><span class="net-rx">● rx</span> <span class="net-tx">● tx</span> · <span fx-text="net_peak"></span></div></div>
+        <div class="cluster-box cluster-node-box">
+          <h3>Nodes</h3>
+          <div fx-for="nodes">
+            <div class="cluster-node-row" style="display:none">
+              <span class="cluster-node-name" fx-field="name"></span>
+              <span class="cluster-bar-label">cpu</span>
               <div class="cluster-bar-track"><div class="cluster-bar-fill" fx-bind-attr="style.width=item:cpu_width"></div></div>
-              <span class="cluster-bar-val" fx-field="cpu_label"></span></div>
-            <div class="cluster-bar-row"><span class="cluster-bar-label">Mem</span>
+              <span class="cluster-node-val" fx-field="cpu_label"></span>
+              <span class="cluster-bar-label">mem</span>
               <div class="cluster-bar-track"><div class="cluster-bar-fill" fx-bind-attr="style.width=item:mem_width"></div></div>
-              <span class="cluster-bar-val" fx-field="mem_label"></span></div>
+              <span class="cluster-node-val" fx-field="mem_label"></span>
+            </div>
           </div>
+          <p class="cluster-empty" fx-if='{"field":"nodes","op":"eq","value":[]}'>No node metrics yet.</p>
         </div>
+        <p class="cluster-spark-note">Charts cover the last 24h; CPU, memory and storage are drawn on a 0–100% scale.</p>
       </div>
 
       <div id="cluster-tab-storage" class="cluster-tabpanel">
