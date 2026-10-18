@@ -237,11 +237,34 @@ async fn fetch_node_metrics() -> Vec<Value> {
 
 // ── Historical (24h, 10m step) ──────────────────────────────────────────────
 
+const HISTORY_STEP_SECS: i64 = 600;
+
+/// (aligned window end, result) of the last range query.
+static HISTORY_CACHE: std::sync::Mutex<Option<(i64, (Value, Value))>> = std::sync::Mutex::new(None);
+
 /// Returns (full series for the sparkline widget, min/avg/max/latest
 /// summary). cluster_view.rs turns the series into SVG sparkline paths for
 /// the card.
+///
+/// The window is aligned to the step, so every tick within the same 10
+/// minutes asks for exactly the same points — the result is cached until
+/// the next step boundary. (An unaligned `now - 24h` shifted every
+/// evaluation timestamp each second, re-sending all five sparkline paths
+/// on every 1s cluster tick and re-running the range queries with it.)
 async fn fetch_historical_metrics() -> (Value, Value) {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64;
+    let end = now - now % HISTORY_STEP_SECS;
+    if let Some((cached_end, result)) = HISTORY_CACHE.lock().unwrap().as_ref() {
+        if *cached_end == end {
+            return result.clone();
+        }
+    }
+    let result = query_historical_metrics(end).await;
+    *HISTORY_CACHE.lock().unwrap() = Some((end, result.clone()));
+    result
+}
+
+async fn query_historical_metrics(now: i64) -> (Value, Value) {
     let start = now - 24 * 3600;
     let step = "10m";
 
@@ -442,10 +465,13 @@ async fn fetch_gitops_status(client: &Client) -> Vec<Value> {
             resources.push(json!({ "kind": kind, "namespace": namespace, "name": name, "ready_icon": if ready { "\u{2713}" } else { "\u{2717}" } }));
         }
     }
+    // Total order (namespace included) so the list doesn't reshuffle
+    // between ticks — every reorder is a patch op per moved row.
     resources.sort_by(|a, b| {
         a["ready_icon"].as_str().cmp(&b["ready_icon"].as_str())
             .then(a["kind"].as_str().cmp(&b["kind"].as_str()))
             .then(a["name"].as_str().cmp(&b["name"].as_str()))
+            .then(a["namespace"].as_str().cmp(&b["namespace"].as_str()))
     });
     resources
 }
