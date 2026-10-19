@@ -478,7 +478,7 @@ async fn fetch_firing_alerts() -> Vec<Value> {
     // ALERTS{} series only has labels, which used to be dumped raw here —
     // internal IPs, chart versions and all — on a public page.
     let alerts = crate::prometheus_client::fetch_alerts().await.unwrap_or_default();
-    alerts
+    let mut firing: Vec<Value> = alerts
         .iter()
         .filter(|a| a["state"].as_str() == Some("firing"))
         .map(|a| {
@@ -490,7 +490,13 @@ async fn fetch_firing_alerts() -> Vec<Value> {
                 "summary": summary,
             })
         })
-        .collect()
+        .collect();
+    // The API's order isn't stable; without this the rows swap every tick.
+    firing.sort_by(|a, b| {
+        a["alertname"].as_str().cmp(&b["alertname"].as_str())
+            .then(a["summary"].as_str().cmp(&b["summary"].as_str()))
+    });
+    firing
 }
 
 /// Assembles every cluster panel into one context object for the "cluster"
