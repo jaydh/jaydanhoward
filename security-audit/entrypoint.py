@@ -126,6 +126,17 @@ def main():
         print(f"Upload failed with status {e.code}.")
         sys.exit(1)
 
+    # A failed Job is the alert: SecurityAuditFailed (homelab
+    # monitoring/prometheus.yaml) pages ntfy, and this log is where the
+    # details are, since the site no longer shows them.
+    if vulns:
+        print(f"{len(vulns)} vulnerable dependencies:")
+        for v in vulns:
+            a = v.get("advisory", {})
+            pkg = v.get("package", {})
+            print(f"  {a.get('id')} {pkg.get('name')} {pkg.get('version')}: {a.get('title')}")
+        sys.exit(2)
+
 
 if __name__ == "__main__":
     main()
