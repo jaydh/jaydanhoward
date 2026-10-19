@@ -254,17 +254,12 @@
     #cluster-widget:has(#ct-storage:checked) #cluster-tab-storage,
     #cluster-widget:has(#ct-network:checked) #cluster-tab-network,
     #cluster-widget:has(#ct-gitops:checked) #cluster-tab-gitops,
-    #cluster-widget:has(#ct-audit:checked) #cluster-tab-audit,
     #visitors-widget:has(#vt-people:checked) #visitor-tab-people,
     #visitors-widget:has(#vt-bots:checked) #visitor-tab-bots { display: block; }
     .cluster-empty { color: var(--text-light); font-size: 0.8rem; }
     .cluster-grid-row { display: grid; grid-template-columns: 1fr 5rem 5rem; gap: 0.5rem; font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.2rem 0; border-top: 1px solid var(--border); }
     .cluster-grid-head { color: var(--text-light); border-top: none; }
     .cluster-grid-row .num { text-align: right; }
-    .cluster-audit-summary { font-size: 0.8rem; margin: 0.2rem 0; }
-    .cluster-audit-findings { font-size: 0.78rem; font-family: ui-monospace, monospace; white-space: pre-line; opacity: 0.8; }
-    .cluster-audit-entry + .cluster-audit-entry { border-top: 1px solid var(--border); margin-top: 0.5rem; padding-top: 0.5rem; }
-    .cluster-audit-warn { opacity: 0.7; }
     .cluster-summary { display: flex; gap: 1.5rem; margin: 0 0 1rem; flex-wrap: wrap; font-size: 0.85rem; }
     .cluster-summary strong { font-size: 1.4rem; color: var(--accent); margin-right: 0.35rem; }
     .cluster-sparks { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; margin-bottom: 1rem; }
@@ -312,10 +307,6 @@
     .flux-row:last-child, .backup-row:last-child { border-bottom: none; }
     .flux-kind { color: var(--text-light); width: 6rem; flex-shrink: 0; }
     .flux-name { flex: 1; word-break: break-all; }
-    .cluster-audit-row { font-size: 0.78rem; font-family: ui-monospace, monospace; padding: 0.3rem 0; border-bottom: 1px solid var(--border); }
-    .cluster-audit-row:last-child { border-bottom: none; }
-    .cluster-audit-err { color: #b91c1c; }
-    html.dark .cluster-audit-err { color: #ef4444; }
     .screening-box { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; background: var(--surface); }
     .screening-status { font-family: ui-monospace, monospace; font-size: 0.85rem; padding: 0.15rem 0.5rem; border-radius: 0.25rem; background: var(--border); }
     #conjunction-start {
@@ -485,8 +476,8 @@
     <p>
       A real, live server-push feed of this site's own homelab — CPU/mem/
       disk/pod/node metrics, historical 24h series, Ceph health, network
-      insights, GitOps status, backup Job status, cloudflared tunnel stats
-      and firing alerts, all ported from the real
+      insights, GitOps status, backup Job status and cloudflared tunnel
+      stats, all ported from the real
       <code>src/components/cluster_stats.rs</code>. A shared Foster machine
       fed by the server once a second (only while someone's watching): one
       homelab, so one instance for every visitor, pushed over SSE.
@@ -507,7 +498,6 @@
         <input type="radio" name="cluster-tab" id="ct-storage"><label class="cluster-tab" for="ct-storage">Storage</label>
         <input type="radio" name="cluster-tab" id="ct-network"><label class="cluster-tab" for="ct-network">Network</label>
         <input type="radio" name="cluster-tab" id="ct-gitops"><label class="cluster-tab" for="ct-gitops">GitOps</label>
-        <input type="radio" name="cluster-tab" id="ct-audit"><label class="cluster-tab" for="ct-audit">Alerts</label>
       </div>
 
       <div id="cluster-tab-overview" class="cluster-tabpanel">
@@ -516,7 +506,6 @@
           <div><strong fx-text="node_ready">0/0</strong>nodes ready</div>
         </div>
         <div class="cluster-chips">
-          <span class="cluster-chip" fx-bind-attr="class=ctx:alerts_cls" fx-text="alerts_label"></span>
           <span class="cluster-chip" fx-bind-attr="class=ctx:ceph_cls" fx-text="ceph_chip"></span>
           <span class="cluster-chip" fx-bind-attr="class=ctx:cf_cls" fx-text="cf_chip"></span>
         </div>
@@ -636,15 +625,6 @@
         </div>
       </div>
 
-      <div id="cluster-tab-audit" class="cluster-tabpanel">
-        <div class="cluster-box">
-          <h3>Firing alerts</h3>
-          <div fx-for="alerts">
-            <div class="cluster-audit-row cluster-audit-err" style="display:none"><strong fx-field="name"></strong> <span fx-field="detail"></span></div>
-          </div>
-          <p class="cluster-empty" fx-if='{"field":"alerts","op":"eq","value":[]}'>No alerts firing.</p>
-        </div>
-      </div>
     </div><!-- /fx-machine=cluster -->
 
     <h2>Visitors</h2>

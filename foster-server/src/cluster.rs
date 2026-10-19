@@ -470,63 +470,6 @@ async fn fetch_spike_config(pool: &PgPool) -> Value {
     }
 }
 
-/// Currently-firing Prometheus alerts (compromise-detection rules — see
-/// homelab repo's monitoring/prometheus.yaml). Ported from
-/// src/components/cluster_alerts.rs.
-async fn fetch_firing_alerts() -> Vec<Value> {
-    // /api/v1/alerts carries annotations (the human-readable summary); the
-    // ALERTS{} series only has labels, which used to be dumped raw here —
-    // internal IPs, chart versions and all — on a public page.
-    let alerts = crate::prometheus_client::fetch_alerts().await.unwrap_or_default();
-    let mut firing: Vec<Value> = alerts
-        .iter()
-        .filter(|a| a["state"].as_str() == Some("firing"))
-        .map(|a| {
-            let (labels, notes) = (&a["labels"], &a["annotations"]);
-            let summary = notes["summary"].as_str().or(notes["description"].as_str()).unwrap_or("");
-            json!({
-                "alertname": labels["alertname"].as_str().unwrap_or(""),
-                "severity": labels["severity"].as_str().unwrap_or(""),
-                "summary": summary,
-            })
-        })
-        .collect();
-    // The API's order isn't stable; without this the rows swap every tick.
-    firing.sort_by(|a, b| {
-        a["alertname"].as_str().cmp(&b["alertname"].as_str())
-            .then(a["summary"].as_str().cmp(&b["summary"].as_str()))
-    });
-    firing
-}
-
-/// Assembles every cluster panel into one context object for the "cluster"
-/// Foster machine. Real work (network I/O to Prometheus/k8s/Postgres);
-/// called via `block_in_place`, same pattern as visitors.rs/lighthouse.rs.
-/// Latest cargo-audit report — parsed the same way the real
-/// `src/components/security_audit.rs` server function does. The report
-/// itself is produced by a separate periodic scanner (a small standalone
-/// image running cargo-audit against this repo's lockfiles, POSTing the
-/// JSON result here with the same Basic-Auth token Lighthouse uses — see
-/// security_audit.rs::upload_security_audit and CI milestone 7's
-/// security-audit-image-push job), not computed by this process itself.
-async fn fetch_security_audit(pool: &PgPool) -> Value {
-    let row: Option<Value> = sqlx::query_scalar(
-        "SELECT report FROM security_audit ORDER BY uploaded_at DESC LIMIT 1",
-    )
-    .fetch_optional(pool)
-    .await
-    .ok()
-    .flatten();
-
-    // Only the count leaves this function: the page shows a vulnerable
-    // dependency as an alert, never which advisory it is.
-    let Some(v) = row else { return json!({ "vulnerabilities": 0, "scanned_at": "" }) };
-    json!({
-        "vulnerabilities": v["vulnerabilities"]["list"].as_array().map(Vec::len).unwrap_or(0),
-        "scanned_at": v["scanned_at"].as_str().unwrap_or(""),
-    })
-}
-
 /// Real live snapshot for the SSE stream (see main.rs's /api/metrics/stream
 /// route) — the real site's tabbed "Homelab Cluster" card is fed by a true
 /// server-push EventSource, not a request/response round trip, so this is
@@ -553,12 +496,7 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         None => (vec![], vec![]),
     };
 
-    let (insights, spike_config, security_audit, alerts) = tokio::join!(
-        fetch_network_insights(pool),
-        fetch_spike_config(pool),
-        fetch_security_audit(pool),
-        fetch_firing_alerts(),
-    );
+    let (insights, spike_config) = tokio::join!(fetch_network_insights(pool), fetch_spike_config(pool));
 
     json!({
         "cluster": metrics,
@@ -571,8 +509,6 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         "backups": backups,
         "network_insights": insights,
         "spike_config": spike_config,
-        "security_audit": security_audit,
-        "alerts": alerts,
         "kube_connected": kube_client.is_some(),
     })
 }

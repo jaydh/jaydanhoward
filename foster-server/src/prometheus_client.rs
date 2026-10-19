@@ -66,20 +66,6 @@ pub async fn query_prometheus(query: &str) -> Result<PrometheusData, anyhow::Err
     Ok(response)
 }
 
-/// Alerts with their labels *and* annotations (`/api/v1/alerts`); the
-/// `ALERTS{}` series only carries labels.
-pub async fn fetch_alerts() -> Result<Vec<serde_json::Value>, anyhow::Error> {
-    let base_url = std::env::var("PROMETHEUS_URL").map_err(|_| anyhow::anyhow!("Prometheus URL not defined"))?;
-    let body: serde_json::Value = reqwest::Client::new()
-        .get(format!("{base_url}/api/v1/alerts"))
-        .timeout(std::time::Duration::from_secs(10))
-        .send()
-        .await?
-        .json()
-        .await?;
-    Ok(body["data"]["alerts"].as_array().cloned().unwrap_or_default())
-}
-
 pub async fn query_prometheus_range(
     query: &str,
     start: i64,

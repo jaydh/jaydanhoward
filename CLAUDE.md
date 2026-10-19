@@ -86,7 +86,7 @@ feature — routes, state machine, and any background tasks:
 - `satellites.rs` — TLE-backed 3D satellite globe (WebGL2 client, TLE cache in Postgres)
 - `visitors.rs` — geo-IP visitor logging/map
 - `lighthouse.rs` — Lighthouse report ingest/display endpoint
-- `security_audit.rs` — `cargo-audit` report ingest (shown only as an alert when it finds vulnerabilities)
+- `security_audit.rs` — `cargo-audit` report ingest (stored, not shown on the site)
 - `photography.rs`, `request_trace.rs`, `site_middleware.rs`, `prometheus_client.rs` —
   supporting features/middleware
 

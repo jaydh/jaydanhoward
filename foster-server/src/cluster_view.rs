@@ -102,7 +102,6 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
     let hist = &snap["historical"]["series"];
     let cf = &snap["cloudflared"];
     let spike = &snap["spike_config"];
-    let sec = &snap["security_audit"];
 
     let rx = series(&hist["network_rx"]);
     let tx = series(&hist["network_tx"]);
@@ -154,25 +153,6 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
 
     let ha = i(&cf["ha_connections"]);
     let ha_label = if ha >= EXPECTED_HA_CONNS { "healthy" } else if ha > 0 { "degraded" } else { "down" };
-    // Prometheus alerts, plus one for the site's own dependencies when the
-    // latest cargo-audit report has vulnerabilities — a count only, never
-    // which advisory (that would advertise an unpatched hole publicly).
-    let mut alerts: Vec<Value> = arr(&snap["alerts"])
-        .iter()
-        .map(|a| json!({
-            "name": s(&a["alertname"]),
-            "detail": format!("[{}] {}", s(&a["severity"]), s(&a["summary"])),
-        }))
-        .collect();
-    let vulns = i(&sec["vulnerabilities"]);
-    if vulns > 0 {
-        alerts.push(json!({
-            "name": "SecurityAdvisories",
-            "detail": format!("[warning] {vulns} vulnerable {} in this site (cargo audit, {})",
-                if vulns == 1 { "dependency" } else { "dependencies" }, s(&sec["scanned_at"])),
-        }));
-    }
-    let alert_count = alerts.len();
 
     let list = |key: &str, row: &dyn Fn(&Value) -> Value| -> Vec<Value> { arr(&snap[key]).iter().map(row).collect() };
 
@@ -189,12 +169,6 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
         "rx_now": format!("{:.1}", f(&cluster["network_rx_mbps"])),
         "tx_now": format!("{:.1}", f(&cluster["network_tx_mbps"])),
         "net_peak": format!("24h peak {net_max:.0} Mbps"),
-        "alerts_label": match alert_count {
-            0 => "No alerts firing".to_string(),
-            1 => "1 alert firing".to_string(),
-            n => format!("{n} alerts firing"),
-        },
-        "alerts_cls": chip(if alert_count == 0 { "ok" } else { "warn" }),
         "ceph_chip": format!("Ceph {ceph_health}"),
         "ceph_cls": chip(match ceph_health { "OK" => "ok", "WARN" => "warn", _ => "err" }),
         "cf_chip": format!("Tunnel {ha_label}"),
@@ -250,7 +224,6 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
             "icon": s(&r["ready_icon"]),
         })),
 
-        "alerts": alerts,
     });
     if let (Some(v), Value::Object(o)) = (view.as_object_mut(), overview) {
         v.extend(o);
@@ -277,9 +250,6 @@ mod tests {
         assert_eq!(v["spike_threshold"], "3.0x above baseline");
         assert_eq!(v["nodes"], json!([]));
         assert_eq!(v["spark_cpu"], "");
-        // No cargo-audit report (or a clean one) adds no alert.
-        assert_eq!(v["alerts"], json!([]));
-        assert_eq!(v["alerts_label"], "No alerts firing");
     }
 
     #[test]
@@ -311,9 +281,6 @@ mod tests {
                                         "disk": [24.0, 25.0], "network_rx": [1.0, 80.0], "network_tx": [2.0] } },
             "ceph": { "health": 0 },
             "cloudflared": { "ha_connections": 3 },
-            "alerts": [{ "alertname": "NodeFanStopped", "severity": "warning", "summary": "pi5 fan reads 0 RPM" },
-                       { "alertname": "B" }],
-            "security_audit": { "vulnerabilities": 1, "scanned_at": "2026-10-18" },
         }), "");
         assert_eq!(v["cpu_now"], "12%");
         assert_eq!(v["cpu_detail"], "3.0 of 24 cores · 24h peak 40%");
@@ -322,13 +289,6 @@ mod tests {
         assert_eq!(v["disk_detail"], "900 GB of 3.6 TB · +36 GB in 24h");
         assert_eq!(v["rx_now"], "1.2");
         assert_eq!(v["net_peak"], "24h peak 80 Mbps");
-        assert_eq!(v["alerts_label"], "3 alerts firing");
-        assert_eq!(v["alerts"][0], json!({ "name": "NodeFanStopped", "detail": "[warning] pi5 fan reads 0 RPM" }));
-        assert_eq!(v["alerts"][2], json!({
-            "name": "SecurityAdvisories",
-            "detail": "[warning] 1 vulnerable dependency in this site (cargo audit, 2026-10-18)",
-        }));
-        assert_eq!(v["alerts_cls"], "cluster-chip warn");
         assert_eq!(v["ceph_cls"], "cluster-chip ok");
         assert_eq!(v["cf_chip"], "Tunnel degraded");
         assert_eq!(v["cf_cls"], "cluster-chip warn");
