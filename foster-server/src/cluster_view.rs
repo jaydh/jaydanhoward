@@ -33,17 +33,6 @@ fn s(v: &Value) -> String {
     }
 }
 
-/// JS truthiness, matching the old `e.error ? … : …` check.
-fn truthy(v: &Value) -> bool {
-    match v {
-        Value::Null => false,
-        Value::Bool(b) => *b,
-        Value::Number(n) => n.as_f64() != Some(0.0),
-        Value::String(x) => !x.is_empty(),
-        _ => true,
-    }
-}
-
 fn arr(v: &Value) -> &[Value] {
     v.as_array().map(Vec::as_slice).unwrap_or(&[])
 }
@@ -165,7 +154,25 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
 
     let ha = i(&cf["ha_connections"]);
     let ha_label = if ha >= EXPECTED_HA_CONNS { "healthy" } else if ha > 0 { "degraded" } else { "down" };
-    let alert_count = arr(&snap["alerts"]).len();
+    // Prometheus alerts, plus one for the site's own dependencies when the
+    // latest cargo-audit report has vulnerabilities — a count only, never
+    // which advisory (that would advertise an unpatched hole publicly).
+    let mut alerts: Vec<Value> = arr(&snap["alerts"])
+        .iter()
+        .map(|a| json!({
+            "name": s(&a["alertname"]),
+            "detail": format!("[{}] {}", s(&a["severity"]), s(&a["summary"])),
+        }))
+        .collect();
+    let vulns = i(&sec["vulnerabilities"]);
+    if vulns > 0 {
+        alerts.push(json!({
+            "name": "SecurityAdvisories",
+            "detail": format!("[warning] {vulns} vulnerable {} in this site (cargo audit, {})",
+                if vulns == 1 { "dependency" } else { "dependencies" }, s(&sec["scanned_at"])),
+        }));
+    }
+    let alert_count = alerts.len();
 
     let list = |key: &str, row: &dyn Fn(&Value) -> Value| -> Vec<Value> { arr(&snap[key]).iter().map(row).collect() };
 
@@ -243,37 +250,7 @@ pub fn cluster_view(snap: &Value, updated_at: &str) -> Value {
             "icon": s(&r["ready_icon"]),
         })),
 
-        "alerts": list("alerts", &|a| json!({
-            "name": s(&a["alertname"]),
-            "detail": format!("[{}] {} — {}", s(&a["severity"]), s(&a["namespace"]), s(&a["summary"])),
-        })),
-        "daily_audit": list("daily_audit", &|a| json!({
-            "when": s(&a["occurred_at"]),
-            "significance": format!("{}/10", s(&a["significance"])),
-            "summary": s(&a["summary"]),
-            "findings": arr(&a["findings"]).iter()
-                .map(|x| format!("{}: {}", s(&x["title"]), s(&x["detail"])))
-                .collect::<Vec<_>>().join("\n"),
-        })),
-        "sec_status": sec["sec_status_label"].as_str().unwrap_or("No audit report yet"),
-        "sec_deps": format!("{} deps", i(&sec["sec_dependency_count"])),
-        "sec_advisories": format!("{} advisories", i(&sec["sec_advisory_count"])),
-        "sec_scanned_at": s(&sec["sec_scanned_at"]),
-        "sec_findings": arr(&sec["security_vulnerabilities"]).iter().map(|v| (v, true))
-            .chain(arr(&sec["security_warnings"]).iter().map(|v| (v, false)))
-            .map(|(v, vuln)| json!({
-                "text": format!("{} {} — {}", s(&v["id"]), s(&v["package"]), s(&v["title"])),
-                "cls": if vuln { "cluster-audit-row cluster-audit-err" } else { "cluster-audit-row cluster-audit-warn" },
-            }))
-            .collect::<Vec<_>>(),
-        "claude_log": list("claude_log", &|e| {
-            let err = truthy(&e["error"]);
-            json!({
-                "text": format!("{} — {} — {}{}", s(&e["occurred_at"]), s(&e["model"]), s(&e["context"]),
-                    if err { " (error)" } else { "" }),
-                "cls": if err { "cluster-audit-row cluster-audit-err" } else { "cluster-audit-row" },
-            })
-        }),
+        "alerts": alerts,
     });
     if let (Some(v), Value::Object(o)) = (view.as_object_mut(), overview) {
         v.extend(o);
@@ -300,6 +277,9 @@ mod tests {
         assert_eq!(v["spike_threshold"], "3.0x above baseline");
         assert_eq!(v["nodes"], json!([]));
         assert_eq!(v["spark_cpu"], "");
+        // No cargo-audit report (or a clean one) adds no alert.
+        assert_eq!(v["alerts"], json!([]));
+        assert_eq!(v["alerts_label"], "No alerts firing");
     }
 
     #[test]
@@ -310,7 +290,6 @@ mod tests {
             "nodes": [{ "name": "n1", "cpu_usage_percent": 12.34, "memory_usage_gb": 4.0, "memory_total_gb": 16.0 }],
             "ceph": { "health": 1 },
             "cloudflared": { "ha_connections": 12, "by_status": [{ "status_code": 200, "req_per_sec": 1.234 }] },
-            "claude_log": [{ "occurred_at": "t", "model": "m", "context": "c", "error": "boom" }],
         }), "12:00:00 UTC");
         assert_eq!(v["pod_count"], 42);
         assert_eq!(v["nodes"][0]["cpu_label"], "12.3%");
@@ -319,7 +298,6 @@ mod tests {
         assert_eq!(v["ceph_health"], "WARN");
         assert_eq!(v["cf_status"], "healthy (12/12 HA conns)");
         assert_eq!(v["cf_by_status"][0], json!({ "code": "200", "rate": "1.23/s" }));
-        assert_eq!(v["claude_log"][0]["text"], "t — m — c (error)");
     }
 
     #[test]
@@ -333,7 +311,9 @@ mod tests {
                                         "disk": [24.0, 25.0], "network_rx": [1.0, 80.0], "network_tx": [2.0] } },
             "ceph": { "health": 0 },
             "cloudflared": { "ha_connections": 3 },
-            "alerts": [{ "alertname": "A" }, { "alertname": "B" }],
+            "alerts": [{ "alertname": "NodeFanStopped", "severity": "warning", "summary": "pi5 fan reads 0 RPM" },
+                       { "alertname": "B" }],
+            "security_audit": { "vulnerabilities": 1, "scanned_at": "2026-10-18" },
         }), "");
         assert_eq!(v["cpu_now"], "12%");
         assert_eq!(v["cpu_detail"], "3.0 of 24 cores · 24h peak 40%");
@@ -342,7 +322,12 @@ mod tests {
         assert_eq!(v["disk_detail"], "900 GB of 3.6 TB · +36 GB in 24h");
         assert_eq!(v["rx_now"], "1.2");
         assert_eq!(v["net_peak"], "24h peak 80 Mbps");
-        assert_eq!(v["alerts_label"], "2 alerts firing");
+        assert_eq!(v["alerts_label"], "3 alerts firing");
+        assert_eq!(v["alerts"][0], json!({ "name": "NodeFanStopped", "detail": "[warning] pi5 fan reads 0 RPM" }));
+        assert_eq!(v["alerts"][2], json!({
+            "name": "SecurityAdvisories",
+            "detail": "[warning] 1 vulnerable dependency in this site (cargo audit, 2026-10-18)",
+        }));
         assert_eq!(v["alerts_cls"], "cluster-chip warn");
         assert_eq!(v["ceph_cls"], "cluster-chip ok");
         assert_eq!(v["cf_chip"], "Tunnel degraded");

@@ -485,8 +485,8 @@
     <p>
       A real, live server-push feed of this site's own homelab — CPU/mem/
       disk/pod/node metrics, historical 24h series, Ceph health, network
-      insights, GitOps status, backup Job status, cloudflared tunnel stats,
-      and the Claude audit log, all ported from the real
+      insights, GitOps status, backup Job status, cloudflared tunnel stats
+      and firing alerts, all ported from the real
       <code>src/components/cluster_stats.rs</code>. A shared Foster machine
       fed by the server once a second (only while someone's watching): one
       homelab, so one instance for every visitor, pushed over SSE.
@@ -507,7 +507,7 @@
         <input type="radio" name="cluster-tab" id="ct-storage"><label class="cluster-tab" for="ct-storage">Storage</label>
         <input type="radio" name="cluster-tab" id="ct-network"><label class="cluster-tab" for="ct-network">Network</label>
         <input type="radio" name="cluster-tab" id="ct-gitops"><label class="cluster-tab" for="ct-gitops">GitOps</label>
-        <input type="radio" name="cluster-tab" id="ct-audit"><label class="cluster-tab" for="ct-audit">AI Audit</label>
+        <input type="radio" name="cluster-tab" id="ct-audit"><label class="cluster-tab" for="ct-audit">Alerts</label>
       </div>
 
       <div id="cluster-tab-overview" class="cluster-tabpanel">
@@ -638,37 +638,11 @@
 
       <div id="cluster-tab-audit" class="cluster-tabpanel">
         <div class="cluster-box">
-          <h3>Alerts</h3>
+          <h3>Firing alerts</h3>
           <div fx-for="alerts">
             <div class="cluster-audit-row cluster-audit-err" style="display:none"><strong fx-field="name"></strong> <span fx-field="detail"></span></div>
           </div>
           <p class="cluster-empty" fx-if='{"field":"alerts","op":"eq","value":[]}'>No alerts firing.</p>
-        </div>
-        <div class="cluster-box">
-          <h3>Daily Audit</h3>
-          <div fx-for="daily_audit">
-            <div class="cluster-audit-entry" style="display:none">
-              <div class="visit-row"><span fx-field="when"></span><span fx-field="significance"></span></div>
-              <p class="cluster-audit-summary" fx-field="summary"></p>
-              <div class="cluster-audit-findings" fx-field="findings"></div>
-            </div>
-          </div>
-          <p class="cluster-empty" fx-if='{"field":"daily_audit","op":"eq","value":[]}'>No audit runs yet — runs daily once Prometheus and an Anthropic key are configured.</p>
-        </div>
-        <div class="cluster-box">
-          <h3>Security Audit</h3>
-          <div class="visit-row"><span fx-text="sec_status"></span><span fx-text="sec_deps"></span><span fx-text="sec_advisories"></span></div>
-          <div class="visit-row"><span>last scan</span><span fx-text="sec_scanned_at"></span></div>
-          <div fx-for="sec_findings">
-            <div class="cluster-audit-row" style="display:none" fx-field="text" fx-bind-attr="class=item:cls"></div>
-          </div>
-        </div>
-        <div class="cluster-box">
-          <h3>Claude Audit Log</h3>
-          <div fx-for="claude_log">
-            <div class="cluster-audit-row" style="display:none" fx-field="text" fx-bind-attr="class=item:cls"></div>
-          </div>
-          <p class="cluster-empty" fx-if='{"field":"claude_log","op":"eq","value":[]}'>No Claude API calls recorded yet.</p>
         </div>
       </div>
     </div><!-- /fx-machine=cluster -->

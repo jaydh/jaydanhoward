@@ -15,98 +15,14 @@
 //! real Prometheus happens in milestone 8's in-cluster staging step.
 
 use crate::prometheus_client::{empty_data, parse_prometheus_value, query_prometheus, query_prometheus_range};
-use axum::extract::State;
-use axum::http::{header::HeaderMap, StatusCode};
-use axum::response::{IntoResponse, Response};
-use base64::Engine;
 use k8s_openapi::api::batch::v1::Job;
 use kube::api::{Api, ListParams};
 use kube::core::DynamicObject;
 use kube::discovery::ApiResource;
 use kube::Client;
-use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::{PgPool, Row};
 use std::collections::HashMap;
-use subtle::ConstantTimeEq;
-
-/// Ingest endpoint for external Claude usage tracking, ported from
-/// `src/routes/audit.rs`. Unlike the real production version this sits
-/// behind the same Basic-Auth token as `/api/lighthouse` and
-/// `/api/security-audit` — nothing actually calls it externally (the
-/// in-process daily cluster audit in `cluster_audit.rs` writes to
-/// `claude_audit_log` directly), and it was found unauthenticated and
-/// unrated on a public router, letting anyone forge entries in the
-/// publicly-displayed Claude-audit-log panel.
-#[derive(Deserialize)]
-pub struct ClaudeAuditPayload {
-    pub context: String,
-    pub model: String,
-    pub prompt: String,
-    pub response: Option<String>,
-    pub input_tokens: Option<i32>,
-    pub output_tokens: Option<i32>,
-    pub error: Option<String>,
-}
-
-fn basic_authentication(headers: &HeaderMap) -> Result<(), StatusCode> {
-    let header_value = headers.get("authorization").ok_or(StatusCode::UNAUTHORIZED)?;
-    let header_str = header_value.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
-    let encoded = header_str.strip_prefix("Basic ").ok_or(StatusCode::UNAUTHORIZED)?;
-    let decoded = base64::engine::general_purpose::STANDARD
-        .decode(encoded)
-        .map_err(|_| StatusCode::UNAUTHORIZED)?;
-    let decoded = String::from_utf8(decoded).map_err(|_| StatusCode::UNAUTHORIZED)?;
-
-    let mut parts = decoded.splitn(2, ':');
-    let username = parts.next().ok_or(StatusCode::UNAUTHORIZED)?;
-    let password = parts.next().ok_or(StatusCode::UNAUTHORIZED)?;
-
-    let expected = std::env::var("LIGHTHOUSE_UPDATE_TOKEN").map_err(|_| StatusCode::FORBIDDEN)?;
-    let user_ok: bool = username.as_bytes().ct_eq(b"jay").into();
-    let pass_ok: bool = password.as_bytes().ct_eq(expected.as_bytes()).into();
-    if !user_ok || !pass_ok {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
-    Ok(())
-}
-
-pub async fn ingest_claude_audit(
-    State(pool): State<PgPool>,
-    headers: HeaderMap,
-    axum::Json(payload): axum::Json<ClaudeAuditPayload>,
-) -> Response {
-    if let Err(status) = basic_authentication(&headers) {
-        return (
-            status,
-            [(
-                axum::http::header::WWW_AUTHENTICATE,
-                axum::http::header::HeaderValue::from_static("Basic realm=\"audit\""),
-            )],
-        )
-            .into_response();
-    }
-
-    let result = sqlx::query(
-        "INSERT INTO claude_audit_log \
-         (context, model, prompt, response, input_tokens, output_tokens, error) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    )
-    .bind(&payload.context)
-    .bind(&payload.model)
-    .bind(&payload.prompt)
-    .bind(&payload.response)
-    .bind(payload.input_tokens)
-    .bind(payload.output_tokens)
-    .bind(&payload.error)
-    .execute(&pool)
-    .await;
-
-    match result {
-        Ok(_) => StatusCode::OK.into_response(),
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    }
-}
 
 // ── Cluster metrics (CPU/mem/disk/pod/node + storage) ──────────────────────
 
@@ -516,7 +432,7 @@ async fn fetch_backup_status(client: &Client) -> Vec<Value> {
         .collect()
 }
 
-// ── Postgres-backed: network insights, spike config, claude audit log ──────
+// ── Postgres-backed: network insights, spike config ──────────────────────────
 
 async fn fetch_network_insights(pool: &PgPool) -> Vec<Value> {
     let rows = sqlx::query(
@@ -558,57 +474,20 @@ async fn fetch_spike_config(pool: &PgPool) -> Value {
 /// homelab repo's monitoring/prometheus.yaml). Ported from
 /// src/components/cluster_alerts.rs.
 async fn fetch_firing_alerts() -> Vec<Value> {
-    let data = match query_prometheus(r#"ALERTS{alertstate="firing"}"#).await {
-        Ok(d) => d,
-        Err(_) => return vec![],
-    };
-
-    data.data
-        .result
-        .into_iter()
-        .map(|m| {
-            let get = |k: &str| m.metric.get(k).cloned().unwrap_or_default();
-            // "summary" is a Prometheus *annotation*, not a label — the
-            // ALERTS{} series only ever exposes labels, so it's always
-            // empty here (getting the real annotation text needs
-            // Alertmanager's API, which isn't reliably up). Build a
-            // readable line from whatever labels this specific alert
-            // actually carries instead of a permanently-blank field.
-            let skip = ["__name__", "alertname", "alertstate", "severity"];
-            let mut parts: Vec<String> = m
-                .metric
-                .iter()
-                .filter(|(k, _)| !skip.contains(&k.as_str()))
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            parts.sort();
+    // /api/v1/alerts carries annotations (the human-readable summary); the
+    // ALERTS{} series only has labels, which used to be dumped raw here —
+    // internal IPs, chart versions and all — on a public page.
+    let alerts = crate::prometheus_client::fetch_alerts().await.unwrap_or_default();
+    alerts
+        .iter()
+        .filter(|a| a["state"].as_str() == Some("firing"))
+        .map(|a| {
+            let (labels, notes) = (&a["labels"], &a["annotations"]);
+            let summary = notes["summary"].as_str().or(notes["description"].as_str()).unwrap_or("");
             json!({
-                "alertname": get("alertname"),
-                "severity": get("severity"),
-                "namespace": get("namespace"),
-                "summary": parts.join(" "),
-            })
-        })
-        .collect()
-}
-
-async fn fetch_claude_audit_log(pool: &PgPool) -> Vec<Value> {
-    let rows = sqlx::query(
-        "SELECT id, occurred_at, context, model, prompt, response, input_tokens, output_tokens, error \
-         FROM claude_audit_log ORDER BY occurred_at DESC LIMIT 20",
-    )
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
-
-    rows.iter()
-        .map(|r| {
-            json!({
-                "id": r.try_get::<i64, _>("id").unwrap_or(0),
-                "occurred_at": r.try_get::<String, _>("occurred_at").unwrap_or_default(),
-                "context": r.try_get::<String, _>("context").unwrap_or_default(),
-                "model": r.try_get::<String, _>("model").unwrap_or_default(),
-                "error": r.try_get::<Option<String>, _>("error").ok().flatten(),
+                "alertname": labels["alertname"].as_str().unwrap_or(""),
+                "severity": labels["severity"].as_str().unwrap_or(""),
+                "summary": summary,
             })
         })
         .collect()
@@ -633,54 +512,12 @@ async fn fetch_security_audit(pool: &PgPool) -> Value {
     .ok()
     .flatten();
 
-    let Some(v) = row else {
-        return json!({
-            "sec_scanned_at": "",
-            "sec_dependency_count": 0,
-            "sec_status_label": "No audit report yet",
-            "sec_advisory_count": 0,
-            "security_vulnerabilities": [],
-            "security_warnings": [],
-        });
-    };
-
-    let scanned_at = v["scanned_at"].as_str().unwrap_or("unknown").to_string();
-    let dependency_count = v["lockfile"]["dependency-count"].as_u64().unwrap_or(0);
-
-    let to_advisory = |entry: &Value| -> Value {
-        let a = &entry["advisory"];
-        json!({
-            "id": a["id"].as_str().unwrap_or(""),
-            "package": a["package"].as_str().unwrap_or(""),
-            "title": a["title"].as_str().unwrap_or(""),
-            "date": a["date"].as_str().unwrap_or(""),
-            "url": a["url"].as_str().unwrap_or(""),
-        })
-    };
-
-    let vulnerabilities: Vec<Value> = v["vulnerabilities"]["list"]
-        .as_array()
-        .map(|a| a.iter().map(to_advisory).collect())
-        .unwrap_or_default();
-
-    let mut warnings: Vec<Value> = Vec::new();
-    if let Some(warn_map) = v["warnings"].as_object() {
-        for entries in warn_map.values() {
-            for entry in entries.as_array().unwrap_or(&vec![]) {
-                warnings.push(to_advisory(entry));
-            }
-        }
-    }
-
-    let status_label = if vulnerabilities.is_empty() { "\u{2713} Clean" } else { "\u{2717} Vulnerabilities found" };
-
+    // Only the count leaves this function: the page shows a vulnerable
+    // dependency as an alert, never which advisory it is.
+    let Some(v) = row else { return json!({ "vulnerabilities": 0, "scanned_at": "" }) };
     json!({
-        "sec_scanned_at": scanned_at,
-        "sec_dependency_count": dependency_count,
-        "sec_status_label": status_label,
-        "sec_advisory_count": vulnerabilities.len() + warnings.len(),
-        "security_vulnerabilities": vulnerabilities,
-        "security_warnings": warnings,
+        "vulnerabilities": v["vulnerabilities"]["list"].as_array().map(Vec::len).unwrap_or(0),
+        "scanned_at": v["scanned_at"].as_str().unwrap_or(""),
     })
 }
 
@@ -710,13 +547,11 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         None => (vec![], vec![]),
     };
 
-    let (insights, spike_config, claude_log, security_audit, alerts, daily_audit) = tokio::join!(
+    let (insights, spike_config, security_audit, alerts) = tokio::join!(
         fetch_network_insights(pool),
         fetch_spike_config(pool),
-        fetch_claude_audit_log(pool),
         fetch_security_audit(pool),
         fetch_firing_alerts(),
-        crate::cluster_audit::fetch_cluster_audits(pool),
     );
 
     json!({
@@ -730,10 +565,8 @@ pub async fn fetch_cluster_snapshot(pool: &PgPool) -> Value {
         "backups": backups,
         "network_insights": insights,
         "spike_config": spike_config,
-        "claude_log": claude_log,
         "security_audit": security_audit,
         "alerts": alerts,
-        "daily_audit": daily_audit,
         "kube_connected": kube_client.is_some(),
     })
 }

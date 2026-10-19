@@ -6,7 +6,6 @@
 //! schema (migrations/ here are byte-identical copies of the real site's).
 
 mod cluster;
-mod cluster_audit;
 mod cluster_view;
 mod conjunction;
 mod lighthouse;
@@ -223,38 +222,6 @@ async fn main() {
     let satellites_runtime = std::sync::Arc::new(satellites::SatellitesRuntime::new());
     satellites::spawn_background_loop(satellites_runtime.clone(), Some(pg_pool.clone()));
 
-    // Daily LLM cluster audit — second opinion on top of the Prometheus
-    // threshold alerts. Skipped when Prometheus or the Anthropic key aren't
-    // configured. Replicas race for the day's bucket via
-    // cluster_audit_claims (see cluster_audit.rs) so only one of them
-    // actually calls Claude. Ported from src/startup.rs.
-    if std::env::var("PROMETHEUS_URL").is_ok() && std::env::var("ANTHROPIC_API_KEY").is_ok() {
-        let pool_for_audit = pg_pool.clone();
-        tokio::spawn(async move {
-            const AUDIT_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
-
-            // Spread pod startup across up to 10 minutes so replicas don't
-            // burst the claim race (and Anthropic) simultaneously. No rand
-            // dependency in this crate — nanosecond-of-boot is jitter enough.
-            let jitter_secs = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.subsec_nanos() as u64 % 600)
-                .unwrap_or(0);
-            tokio::time::sleep(Duration::from_secs(jitter_secs)).await;
-
-            loop {
-                if cluster_audit::try_claim_cluster_audit(&pool_for_audit).await {
-                    match cluster_audit::run_audit(&pool_for_audit).await {
-                        Ok((summary, significance)) => {
-                            println!("Cluster audit complete (significance={significance}/10): {summary}");
-                        }
-                        Err(e) => eprintln!("Cluster audit failed: {e}"),
-                    }
-                }
-                tokio::time::sleep(AUDIT_INTERVAL).await;
-            }
-        });
-    }
     let satellites_machine = {
         let running_for_pause = satellites_runtime.running.clone();
         let running_for_resume = satellites_runtime.running.clone();
@@ -344,7 +311,6 @@ async fn main() {
     let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
     let lighthouse_limiter = auth_rate_limiter.clone();
     let security_audit_limiter = auth_rate_limiter.clone();
-    let claude_audit_limiter = auth_rate_limiter.clone();
 
     // Feeds only poll while someone has the machine's live stream open.
     let every = |secs: u64| {
@@ -393,15 +359,6 @@ async fn main() {
             post(security_audit::upload_security_audit)
                 .layer(axum::middleware::from_fn(move |req, next| {
                     let limiter = security_audit_limiter.clone();
-                    async move { limiter.check_middleware(req, next).await }
-                }))
-                .with_state(pg_pool.clone()),
-        )
-        .route(
-            "/api/audit/claude",
-            post(cluster::ingest_claude_audit)
-                .layer(axum::middleware::from_fn(move |req, next| {
-                    let limiter = claude_audit_limiter.clone();
                     async move { limiter.check_middleware(req, next).await }
                 }))
                 .with_state(pg_pool.clone()),

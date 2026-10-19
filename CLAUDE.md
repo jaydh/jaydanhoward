@@ -80,13 +80,13 @@ migrations, and all feature modules.
 
 **Feature modules** (`foster-server/src/`): each file is a largely self-contained
 feature — routes, state machine, and any background tasks:
-- `cluster.rs` / `cluster_audit.rs` — homelab k8s cluster stats panel + daily
-  Claude-reviewed audit of firing Prometheus alerts
+- `cluster.rs` / `cluster_view.rs` — homelab k8s cluster stats panel
+  (Prometheus + kube API) and its display model
 - `conjunction.rs` — satellite conjunction screening (SGP4/TCA)
 - `satellites.rs` — TLE-backed 3D satellite globe (WebGL2 client, TLE cache in Postgres)
 - `visitors.rs` — geo-IP visitor logging/map
 - `lighthouse.rs` — Lighthouse report ingest/display endpoint
-- `security_audit.rs` — `cargo-audit` report ingest/display
+- `security_audit.rs` — `cargo-audit` report ingest (shown only as an alert when it finds vulnerabilities)
 - `photography.rs`, `request_trace.rs`, `site_middleware.rs`, `prometheus_client.rs` —
   supporting features/middleware
 
