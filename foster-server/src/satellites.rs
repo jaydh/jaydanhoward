@@ -146,7 +146,7 @@ fn build_cache_from_tles(tles: Vec<(String, String)>, fetched_at: DateTime<Utc>)
 
 /// Try to atomically claim the right to do the live CelesTrak refetch for
 /// this minute bucket. Returns true if this replica won the race — same
-/// INSERT ON CONFLICT DO NOTHING pattern as spike_claims/cluster_audit_claims.
+/// INSERT ON CONFLICT DO NOTHING pattern as spike_claims.
 async fn try_claim_tle_refresh(pool: &PgPool) -> bool {
     let result = sqlx::query(
         "INSERT INTO tle_refresh_claims (bucket) \
