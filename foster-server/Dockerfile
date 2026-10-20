@@ -33,17 +33,20 @@ COPY foster-server/src src
 # straight to the final stage, so widget changes don't rebuild the server.
 COPY foster-server/static/index.html static/index.html
 COPY foster-server/migrations migrations
-RUN cargo build --release --locked
+# Copy the binary out in the same RUN: cargo makes target/release/jaydanhoward
+# a hard link into target/release/deps/, and kaniko drops hard links when it
+# restores a cached layer — so whenever this step came from the cache, the
+# binary was missing ("cp: cannot stat 'target/release/jaydanhoward'",
+# "failed to get fileinfo for /kaniko/0/build/target/release/jaydanhoward").
+# A plain copy is a regular file and survives.
+RUN cargo build --release --locked && cp target/release/jaydanhoward /build/jaydanhoward-bin
 # Keeps this stage from ever being fully cached: kaniko doesn't hand a
 # fully cached stage's files to a later COPY --from (see above). CI passes
 # the commit SHA plus the run attempt — a re-run of a build that got this
 # far would otherwise find the layer cached; this is the only layer it
-# invalidates. The binary is copied out in this same, always-fresh step:
-# when `cargo build` above came from the cache, kaniko didn't carry
-# target/release/jaydanhoward over to the final stage's COPY --from
-# ("failed to get fileinfo for /kaniko/0/build/target/release/jaydanhoward").
+# invalidates.
 ARG GIT_SHA=local
-RUN echo "$GIT_SHA" > /build/.rev && cp target/release/jaydanhoward /build/jaydanhoward-bin
+RUN echo "$GIT_SHA" > /build/.rev
 
 FROM gcr.io/distroless/cc-debian13
 WORKDIR /app
