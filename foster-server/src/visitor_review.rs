@@ -10,16 +10,20 @@
 //!    [`should_block`]): a model mistake, or a user agent written to talk the
 //!    model round, can't get someone blocked who never probed the site;
 //!  - goes to ntfy when it blocks, as do appeals and repeated review failures.
+//!    The notifications carry no credentials, only a link to the admin page.
 //!
 //! Blocked IPs get [`blocked_page`] (403) for every request, with a form to
-//! appeal; lifting a block is a token-authenticated POST, which the ntfy
-//! notifications carry as an Unblock button.
+//! appeal. Blocks and appeals are handled on [`admin_router`], served on a
+//! separate internal port that only the mTLS admin gateway (tailnet-only,
+//! client certificate required) can reach; nothing here is on the public site.
 
 use axum::body::Body;
-use axum::extract::{Form, FromRequest, Query, Request, State};
+use axum::extract::{Form, FromRequest, Request, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::middleware::Next;
-use axum::response::{Html, IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
+use axum::Router;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -28,7 +32,6 @@ use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
-use subtle::ConstantTimeEq;
 
 const REVIEW_EVERY: Duration = Duration::from_secs(15 * 60);
 /// How often each replica reloads the active blocks from the database.
@@ -82,8 +85,8 @@ struct Config {
     ollama_url: String,
     model: String,
     ntfy_url: Option<String>,
-    public_url: String,
-    admin_token: Option<String>,
+    /// The admin page, linked from every notification.
+    admin_url: Option<String>,
     /// VISITOR_AUTOBLOCK=false: decide and notify, but don't block.
     enforce: bool,
     ignore_ips: HashSet<String>,
@@ -96,8 +99,7 @@ impl Config {
             ollama_url: var("OLLAMA_URL").unwrap_or_else(|| "http://ollama:11434".into()),
             model: var("OLLAMA_MODEL").unwrap_or_else(|| "qwen3.6:35b-a3b".into()),
             ntfy_url: var("NTFY_URL"),
-            public_url: var("PUBLIC_URL").unwrap_or_else(|| "https://jaydanhoward.com".into()),
-            admin_token: var("VISITOR_ADMIN_TOKEN"),
+            admin_url: var("ADMIN_URL"),
             enforce: var("VISITOR_AUTOBLOCK").is_none_or(|v| v != "false"),
             ignore_ips: var("VISITOR_IGNORE_IPS")
                 .unwrap_or_default()
@@ -120,7 +122,7 @@ struct Block {
     expires_at: DateTime<Utc>,
 }
 
-/// Shared by the block middleware, the lift endpoint and the background tasks.
+/// Shared by the block middleware, the admin page and the background tasks.
 #[derive(Clone)]
 pub struct Blocklist {
     pool: PgPool,
@@ -148,7 +150,7 @@ impl Blocklist {
         active.get(ip).filter(|b| b.expires_at > Utc::now()).cloned()
     }
 
-    async fn ntfy(&self, title: &str, body: &str, priority: u8, tags: &str, actions: &[String]) {
+    async fn ntfy(&self, title: &str, body: &str, priority: u8, tags: &str) {
         let Some(url) = &self.cfg.ntfy_url else { return };
         let title: String = title.chars().map(|c| if c.is_ascii() && !c.is_ascii_control() { c } else { '?' }).collect();
         let mut req = self
@@ -158,23 +160,14 @@ impl Blocklist {
             .header("Priority", priority.to_string())
             .header("Tags", tags)
             .body(body.chars().take(3800).collect::<String>());
-        if !actions.is_empty() {
-            req = req.header("Actions", actions.join("; "));
+        if let Some(admin) = &self.cfg.admin_url {
+            req = req.header("Click", admin).header("Actions", format!("view, Open admin, {admin}"));
         }
         if let Err(e) = req.send().await.and_then(|r| r.error_for_status()) {
             eprintln!("visitor review: ntfy failed: {e}");
         }
     }
 
-    /// An ntfy action button that lifts the block on `ip`, if lifting is set up.
-    fn unblock_action(&self, ip: &str) -> Option<String> {
-        let token = self.cfg.admin_token.as_ref()?;
-        let ip_param: String = ip.chars().map(|c| if c == ':' { "%3A".into() } else { c.to_string() }).collect();
-        Some(format!(
-            "http, Unblock {ip}, {}/api/visitor-blocks/lift?ip={ip_param}, method=POST, headers.Authorization=Bearer {token}, clear=true",
-            self.cfg.public_url
-        ))
-    }
 }
 
 async fn refresh_blocks(bl: Blocklist) {
@@ -355,7 +348,6 @@ async fn record_outcome(bl: &Blocklist, result: anyhow::Result<usize>) {
                     &format!("The last {failures} visitor reviews failed (hard-evidence blocks still apply). Latest error:\n{e:#}"),
                     3,
                     "warning",
-                    &[],
                 )
                 .await;
             }
@@ -628,12 +620,7 @@ async fn notify_review(bl: &Blocklist, blocked: &[(Session, String)], flagged: &
     } else {
         format!("jaydanhoward: {verb} {} IPs", blocked.len())
     };
-    let actions: Vec<String> = if bl.cfg.enforce {
-        blocked.iter().take(3).filter_map(|(s, _)| bl.unblock_action(&s.ip)).collect()
-    } else {
-        Vec::new()
-    };
-    bl.ntfy(&title, &body, 3, "no_entry", &actions).await;
+    bl.ntfy(&title, &body, 3, "no_entry").await;
 }
 
 // ── Blocked page, appeals, lifting ───────────────────────────────────────
@@ -710,8 +697,7 @@ async fn appeal(bl: &Blocklist, ip: &str, block: &Block, req: Request) -> Respon
         if contact.is_empty() { "none" } else { &contact },
         reason.as_deref().unwrap_or("?"),
     );
-    let actions: Vec<String> = bl.unblock_action(ip).into_iter().collect();
-    bl.ntfy("jaydanhoward: block appeal", &body, 4, "envelope", &actions).await;
+    bl.ntfy("jaydanhoward: block appeal", &body, 4, "envelope").await;
     forbidden(Some(Utc::now()))
 }
 
@@ -769,43 +755,221 @@ button {{ margin-top: 1rem; padding: .6rem 1.1rem; font: inherit; color: #fff; b
     )
 }
 
+// ── Admin page ───────────────────────────────────────────────────────────
+// Served on its own port (see main.rs), reachable only through the mTLS
+// admin gateway, so being able to reach it is the authentication.
+
+/// The admin page and its two actions.
+pub fn admin_router(bl: Blocklist) -> Router {
+    Router::new()
+        .route("/", get(admin_page))
+        .route("/unblock", post(admin_unblock))
+        .route("/deny", post(admin_deny))
+        .with_state(bl)
+}
+
+/// The browser presents the client certificate to any site that posts to
+/// the gateway, so refuse posts that come from another site (CSRF).
+fn cross_site(headers: &HeaderMap) -> bool {
+    headers
+        .get("sec-fetch-site")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v != "same-origin" && v != "none")
+}
+
 #[derive(Deserialize)]
-pub struct LiftQuery {
+struct UnblockForm {
     ip: String,
 }
 
-/// POST /api/visitor-blocks/lift?ip=… with `Authorization: Bearer
-/// $VISITOR_ADMIN_TOKEN` (what the ntfy Unblock buttons send).
-pub async fn lift(State(bl): State<Blocklist>, headers: HeaderMap, Query(q): Query<LiftQuery>) -> Response {
-    let Some(token) = &bl.cfg.admin_token else {
-        return (StatusCode::NOT_FOUND, "disabled").into_response();
-    };
-    let given = headers
-        .get("authorization")
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .unwrap_or_default();
-    if !bool::from(given.as_bytes().ct_eq(token.as_bytes())) {
-        return (StatusCode::UNAUTHORIZED, "invalid credentials").into_response();
+async fn admin_unblock(State(bl): State<Blocklist>, headers: HeaderMap, Form(f): Form<UnblockForm>) -> Response {
+    if cross_site(&headers) {
+        return StatusCode::FORBIDDEN.into_response();
     }
-    let Ok(ip) = q.ip.parse::<IpAddr>().map(|ip| ip.to_string()) else {
+    let Ok(ip) = f.ip.parse::<IpAddr>().map(|ip| ip.to_string()) else {
         return (StatusCode::BAD_REQUEST, "bad ip").into_response();
     };
-    match sqlx::query("UPDATE ip_blocks SET lifted_at = NOW() WHERE ip = $1 AND lifted_at IS NULL")
+    let result = async {
+        sqlx::query("UPDATE ip_blocks SET lifted_at = NOW() WHERE ip = $1 AND lifted_at IS NULL")
+            .bind(&ip)
+            .execute(&bl.pool)
+            .await?;
+        sqlx::query(
+            "UPDATE ip_appeals SET resolution = 'unblocked', resolved_at = NOW() WHERE ip = $1 AND resolved_at IS NULL",
+        )
         .bind(&ip)
         .execute(&bl.pool)
         .await
-    {
-        Ok(r) => {
-            bl.active.write().unwrap().remove(&ip);
-            println!("visitor review: block on {ip} lifted ({} rows)", r.rows_affected());
-            (StatusCode::OK, format!("unblocked {ip}")).into_response()
-        }
-        Err(e) => {
-            eprintln!("visitor review: lifting {ip} failed: {e}");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-        }
     }
+    .await;
+    if let Err(e) = result {
+        eprintln!("visitor review: unblocking {ip} failed: {e}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    bl.active.write().unwrap().remove(&ip);
+    println!("visitor review: block on {ip} lifted from the admin page");
+    Redirect::to("/").into_response()
+}
+
+#[derive(Deserialize)]
+struct DenyForm {
+    id: i64,
+}
+
+async fn admin_deny(State(bl): State<Blocklist>, headers: HeaderMap, Form(f): Form<DenyForm>) -> Response {
+    if cross_site(&headers) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let result = sqlx::query("UPDATE ip_appeals SET resolution = 'denied', resolved_at = NOW() WHERE id = $1 AND resolved_at IS NULL")
+        .bind(f.id)
+        .execute(&bl.pool)
+        .await;
+    if let Err(e) = result {
+        eprintln!("visitor review: denying appeal {} failed: {e}", f.id);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    Redirect::to("/").into_response()
+}
+
+fn ago(t: DateTime<Utc>) -> String {
+    let mins = (Utc::now() - t).num_minutes().max(0);
+    match mins {
+        0..=59 => format!("{mins}m ago"),
+        60..=2879 => format!("{}h ago", mins / 60),
+        _ => format!("{}d ago", mins / 1440),
+    }
+}
+
+fn unblock_button(ip: &str, label: &str) -> String {
+    format!(
+        "<form method=\"post\" action=\"/unblock\"><input type=\"hidden\" name=\"ip\" value=\"{}\"><button>{label}</button></form>",
+        html_escape(ip)
+    )
+}
+
+async fn admin_page(State(bl): State<Blocklist>) -> Response {
+    match render_admin(&bl).await {
+        Ok(page) => Html(page).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("admin page failed: {e}")).into_response(),
+    }
+}
+
+async fn render_admin(bl: &Blocklist) -> anyhow::Result<String> {
+    let e = html_escape;
+    let status = sqlx::query("SELECT consecutive_failures, last_error, last_success FROM visitor_review_status WHERE id = 1")
+        .fetch_one(&bl.pool)
+        .await?;
+    let failures: i32 = status.try_get("consecutive_failures")?;
+    let last_success: Option<DateTime<Utc>> = status.try_get("last_success")?;
+    let last_error: Option<String> = status.try_get("last_error")?;
+    let health = format!(
+        "Model {} · last successful review {}{}{}",
+        e(&bl.cfg.model),
+        last_success.map(ago).unwrap_or_else(|| "never".into()),
+        if failures > 0 { format!(" · <span class=\"bad\">{failures} failed since</span>") } else { String::new() },
+        last_error.filter(|_| failures > 0).map(|m| format!("<br><small>{}</small>", e(&m))).unwrap_or_default(),
+    );
+
+    let mut appeals = String::new();
+    for r in sqlx::query(
+        "SELECT a.id, a.ip, a.message, a.contact, a.created_at, b.kind, b.reason,
+                (b.lifted_at IS NULL AND b.expires_at > NOW()) AS active
+         FROM ip_appeals a LEFT JOIN ip_blocks b USING (ip)
+         WHERE a.resolved_at IS NULL ORDER BY a.created_at DESC LIMIT 50",
+    )
+    .fetch_all(&bl.pool)
+    .await?
+    {
+        let ip: String = r.try_get("ip")?;
+        let id: i64 = r.try_get("id")?;
+        appeals.push_str(&format!(
+            "<tr><td><code>{}</code><br><small>{}</small></td><td>{}<br><small>contact: {}</small></td>\
+             <td><small>{}: {}</small></td><td class=\"actions\">{}<form method=\"post\" action=\"/deny\">\
+             <input type=\"hidden\" name=\"id\" value=\"{id}\"><button class=\"secondary\">Deny</button></form></td></tr>",
+            e(&ip),
+            ago(r.try_get("created_at")?),
+            e(&r.try_get::<String, _>("message")?),
+            e(&r.try_get::<Option<String>, _>("contact")?.unwrap_or_else(|| "none".into())),
+            e(&r.try_get::<Option<String>, _>("kind")?.unwrap_or_default()),
+            e(&r.try_get::<Option<String>, _>("reason")?.unwrap_or_default()),
+            if r.try_get::<Option<bool>, _>("active")?.unwrap_or(false) { unblock_button(&ip, "Unblock") } else { "<small>not blocked</small>".into() },
+        ));
+    }
+
+    let mut blocks = String::new();
+    for r in sqlx::query(
+        "SELECT b.ip, b.kind, b.reason, b.blocked_at, b.expires_at, b.times_blocked, g.isp, g.country_code
+         FROM ip_blocks b LEFT JOIN ip_geo g USING (ip)
+         WHERE b.lifted_at IS NULL AND b.expires_at > NOW() ORDER BY b.blocked_at DESC LIMIT 200",
+    )
+    .fetch_all(&bl.pool)
+    .await?
+    {
+        let ip: String = r.try_get("ip")?;
+        let expires: DateTime<Utc> = r.try_get("expires_at")?;
+        blocks.push_str(&format!(
+            "<tr><td><code>{}</code><br><small>{} {}</small></td><td>{}<br><small>{}</small></td>\
+             <td><small>{} · until {}{}</small></td><td class=\"actions\">{}</td></tr>",
+            e(&ip),
+            e(&r.try_get::<Option<String>, _>("isp")?.unwrap_or_default()),
+            e(&r.try_get::<Option<String>, _>("country_code")?.unwrap_or_default()),
+            e(&r.try_get::<String, _>("kind")?),
+            e(&r.try_get::<String, _>("reason")?),
+            ago(r.try_get("blocked_at")?),
+            expires.format("%b %-d"),
+            match r.try_get::<i32, _>("times_blocked")? { 1 => String::new(), n => format!(" · blocked {n}×") },
+            unblock_button(&ip, "Unblock"),
+        ));
+    }
+
+    let mut verdicts = String::new();
+    for r in sqlx::query(
+        "SELECT ip, verdict, confidence, reason, reviewed_at FROM ip_verdicts ORDER BY reviewed_at DESC LIMIT 60",
+    )
+    .fetch_all(&bl.pool)
+    .await?
+    {
+        let verdict: String = r.try_get("verdict")?;
+        verdicts.push_str(&format!(
+            "<tr><td><code>{}</code></td><td class=\"v-{}\">{} <small>{:.2}</small></td><td><small>{}</small></td><td><small>{}</small></td></tr>",
+            e(&r.try_get::<String, _>("ip")?),
+            e(&verdict),
+            e(&verdict),
+            r.try_get::<f32, _>("confidence")?,
+            e(&r.try_get::<String, _>("reason")?),
+            ago(r.try_get("reviewed_at")?),
+        ));
+    }
+
+    let none = |cols: u8, what: &str| format!("<tr><td colspan=\"{cols}\"><small>{what}</small></td></tr>");
+    Ok(format!(
+        "<!doctype html>
+<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
+<meta name=\"robots\" content=\"noindex\"><title>Visitor admin</title>
+<style>
+:root {{ color-scheme: light dark; --fg: #1b1b1f; --muted: #5b5b66; --bg: #fafafa; --line: #e4e4e7; --accent: #2b59c3; --bad: #c0362c; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --fg: #ececf1; --muted: #a1a1aa; --bg: #121214; --line: #2e2e33; --accent: #8aa8ff; --bad: #ff8a80; }} }}
+body {{ margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }}
+main {{ max-width: 64rem; margin: 2rem auto; padding: 0 16px; }}
+h1 {{ font-size: 1.4rem; margin: 0 0 .25rem; }} h2 {{ font-size: 1.05rem; margin: 2rem 0 .5rem; }}
+small, .muted {{ color: var(--muted); }} .bad, .v-scanner, .v-abusive {{ color: var(--bad); }} .v-human {{ color: var(--accent); }}
+.scroll {{ overflow-x: auto; }} table {{ border-collapse: collapse; width: 100%; }}
+td {{ border-bottom: 1px solid var(--line); padding: .5rem .5rem .5rem 0; vertical-align: top; overflow-wrap: anywhere; }}
+.actions {{ white-space: nowrap; }} .actions form {{ display: inline; }}
+button {{ padding: .3rem .7rem; font: inherit; color: #fff; background: var(--accent); border: 0; border-radius: 5px; cursor: pointer; }}
+button.secondary {{ color: var(--fg); background: transparent; border: 1px solid var(--line); margin-left: .3rem; }}
+</style></head>
+<body><main>
+<h1>Visitor admin</h1>
+<p class=\"muted\">{health}</p>
+<h2>Appeals</h2><div class=\"scroll\"><table>{}</table></div>
+<h2>Active blocks</h2><div class=\"scroll\"><table>{}</table></div>
+<h2>Recent verdicts</h2><div class=\"scroll\"><table>{}</table></div>
+</main></body></html>",
+        if appeals.is_empty() { none(4, "No open appeals.") } else { appeals },
+        if blocks.is_empty() { none(4, "Nothing blocked.") } else { blocks },
+        if verdicts.is_empty() { none(4, "No verdicts yet.") } else { verdicts },
+    ))
 }
 
 #[cfg(test)]
@@ -889,6 +1053,18 @@ mod tests {
         let page = blocked_page("203.0.113.7", &block, Some(Utc::now()));
         assert!(!page.contains("<form"));
         assert!(page.contains("appeal was received"));
+    }
+
+    #[test]
+    fn admin_posts_refuse_other_sites() {
+        let mut h = HeaderMap::new();
+        assert!(!cross_site(&h));
+        h.insert("sec-fetch-site", "same-origin".parse().unwrap());
+        assert!(!cross_site(&h));
+        h.insert("sec-fetch-site", "cross-site".parse().unwrap());
+        assert!(cross_site(&h));
+        h.insert("sec-fetch-site", "same-site".parse().unwrap());
+        assert!(cross_site(&h));
     }
 
     #[test]

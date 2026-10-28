@@ -312,8 +312,14 @@ async fn main() {
     let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
     let lighthouse_limiter = auth_rate_limiter.clone();
     let security_audit_limiter = auth_rate_limiter.clone();
-    let lift_limiter = auth_rate_limiter.clone();
     let blocklist = visitor_review::Blocklist::spawn(pg_pool.clone());
+    // Visitor admin page on its own port: not routed by the Cloudflare
+    // tunnel, and the network policy only admits the mTLS admin gateway.
+    let admin_app = visitor_review::admin_router(blocklist.clone());
+    tokio::spawn(async move {
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:8001").await.unwrap();
+        axum::serve(listener, admin_app).await.unwrap();
+    });
 
     // Feeds only poll while someone has the machine's live stream open.
     let every = |secs: u64| {
@@ -365,15 +371,6 @@ async fn main() {
                     async move { limiter.check_middleware(req, next).await }
                 }))
                 .with_state(pg_pool.clone()),
-        )
-        .route(
-            "/api/visitor-blocks/lift",
-            post(visitor_review::lift)
-                .layer(axum::middleware::from_fn(move |req, next| {
-                    let limiter = lift_limiter.clone();
-                    async move { limiter.check_middleware(req, next).await }
-                }))
-                .with_state(blocklist.clone()),
         )
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))
