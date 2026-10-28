@@ -650,7 +650,7 @@ dependencies = [
 [[package]]
 name = "foster-core"
 version = "0.1.0"
-source = "git+https://github.com/jaydh/foster?rev=439bd20#439bd20ced9080ea2b64e3bb85d655d270d7cd65"
+source = "git+https://github.com/jaydh/foster?rev=08bc906#08bc9067e0e2be2703593015db8f865df3c79324"
 dependencies = [
  "serde",
  "serde_json",
@@ -660,7 +660,7 @@ dependencies = [
 [[package]]
 name = "foster-server"
 version = "0.1.0"
-source = "git+https://github.com/jaydh/foster?rev=439bd20#439bd20ced9080ea2b64e3bb85d655d270d7cd65"
+source = "git+https://github.com/jaydh/foster?rev=08bc906#08bc9067e0e2be2703593015db8f865df3c79324"
 dependencies = [
  "axum",
  "foster-core",
