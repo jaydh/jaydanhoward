@@ -15,6 +15,7 @@ mod request_trace;
 mod satellites;
 mod security_audit;
 mod site_middleware;
+mod visitor_review;
 mod visitors;
 
 use axum::routing::{get, post};
@@ -311,6 +312,8 @@ async fn main() {
     let auth_rate_limiter = RateLimiter::new(5, Duration::from_secs(60));
     let lighthouse_limiter = auth_rate_limiter.clone();
     let security_audit_limiter = auth_rate_limiter.clone();
+    let lift_limiter = auth_rate_limiter.clone();
+    let blocklist = visitor_review::Blocklist::spawn(pg_pool.clone());
 
     // Feeds only poll while someone has the machine's live stream open.
     let every = |secs: u64| {
@@ -363,6 +366,15 @@ async fn main() {
                 }))
                 .with_state(pg_pool.clone()),
         )
+        .route(
+            "/api/visitor-blocks/lift",
+            post(visitor_review::lift)
+                .layer(axum::middleware::from_fn(move |req, next| {
+                    let limiter = lift_limiter.clone();
+                    async move { limiter.check_middleware(req, next).await }
+                }))
+                .with_state(blocklist.clone()),
+        )
         .route("/health_check", get(health_check))
         .nest_service("/pkg", ServeDir::new(pkg_dir))
         .fallback_service(ServeDir::new(static_dir))
@@ -370,6 +382,9 @@ async fn main() {
             visitors::VisitorLog::spawn(pg_pool),
             visitors::visitor_logger,
         ))
+        // Outside the visitor log: blocked IPs get the blocked page and
+        // aren't logged as visits.
+        .layer(axum::middleware::from_fn_with_state(blocklist, visitor_review::block_middleware))
         .layer(axum::middleware::from_fn(site_middleware::cache_control))
         .layer(axum::middleware::from_fn(site_middleware::security_headers))
         .layer(CompressionLayer::new());

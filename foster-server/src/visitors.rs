@@ -288,7 +288,17 @@ async fn write_visits(pool: PgPool, mut rx: mpsc::Receiver<Visit>) {
         } else {
             geo_for(&pool, &client, &mut budget, &v.ip).await.unwrap_or_default()
         };
-        let is_bot = looks_automated(v.user_agent.as_deref(), v.status) || geo.hosting == Some(true);
+        // A session-level verdict from visitor_review beats the per-request
+        // heuristic (unclear verdicts leave the heuristic in charge).
+        let reviewed: Option<bool> =
+            sqlx::query_scalar("SELECT verdict <> 'human' FROM ip_verdicts WHERE ip = $1 AND verdict <> 'unclear'")
+                .bind(&v.ip)
+                .fetch_optional(&pool)
+                .await
+                .ok()
+                .flatten();
+        let is_bot = reviewed
+            .unwrap_or_else(|| looks_automated(v.user_agent.as_deref(), v.status) || geo.hosting == Some(true));
         let result = sqlx::query(
             r#"INSERT INTO visitors (ip, path, country, country_code, region, city, lat, lon, isp,
                                      user_agent, referer, status, is_bot)

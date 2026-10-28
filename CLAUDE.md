@@ -85,6 +85,9 @@ feature — routes, state machine, and any background tasks:
 - `conjunction.rs` — satellite conjunction screening (SGP4/TCA)
 - `satellites.rs` — TLE-backed 3D satellite globe (WebGL2 client, TLE cache in Postgres)
 - `visitors.rs` — geo-IP visitor logging/map
+- `visitor_review.rs` — local-LLM (Ollama) verdicts on visitor sessions that
+  override `visitors.is_bot`, abuse blocks (only with probe evidence) served
+  a 403 page with an appeal form, ntfy notifications with Unblock buttons
 - `lighthouse.rs` — Lighthouse report ingest/display endpoint
 - `security_audit.rs` — `cargo-audit` report ingest (stored, not shown on the site)
 - `photography.rs`, `request_trace.rs`, `site_middleware.rs`, `prometheus_client.rs` —
