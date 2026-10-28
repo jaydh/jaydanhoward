@@ -302,7 +302,13 @@ async fn review_loop(bl: Blocklist) {
         if !claim_review(&bl.pool).await {
             continue;
         }
-        let result = review(&bl).await;
+        // Its own task, so a panic is recorded as a failed review (and
+        // alerted on) instead of ending this loop for good.
+        let run = bl.clone();
+        let result = match tokio::spawn(async move { review(&run).await }).await {
+            Ok(result) => result,
+            Err(e) => Err(anyhow::anyhow!("review panicked: {e}")),
+        };
         record_outcome(&bl, result).await;
         prune(&bl.pool).await;
     }
@@ -402,7 +408,7 @@ async fn load_session(pool: &PgPool, ip: &str) -> anyhow::Result<Session> {
     .fetch_one(pool)
     .await?;
     let top_paths = sqlx::query(
-        "SELECT path, COALESCE(status, 0) AS status, COUNT(*) AS n FROM visitors
+        "SELECT path, COALESCE(status, 0::smallint) AS status, COUNT(*) AS n FROM visitors
          WHERE ip = $1 AND visited_at > NOW() - INTERVAL '7 days'
          GROUP BY 1, 2 ORDER BY 3 DESC, 1 LIMIT 20",
     )
@@ -410,8 +416,10 @@ async fn load_session(pool: &PgPool, ip: &str) -> anyhow::Result<Session> {
     .fetch_all(pool)
     .await?
     .iter()
-    .map(|r| (r.get::<String, _>("path"), r.get::<i16, _>("status"), r.get::<i64, _>("n")))
-    .collect();
+    // try_get, not get: a decode error must fail the review (and count
+    // toward the failure alert), not panic and silently kill the loop.
+    .map(|r| Ok((r.try_get::<String, _>("path")?, r.try_get::<i16, _>("status")?, r.try_get::<i64, _>("n")?)))
+    .collect::<Result<_, sqlx::Error>>()?;
     let geo = sqlx::query("SELECT isp, country_code, hosting FROM ip_geo WHERE ip = $1")
         .bind(ip)
         .fetch_optional(pool)
