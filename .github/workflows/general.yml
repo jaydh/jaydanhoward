@@ -93,8 +93,10 @@ jobs:
         env:
           POSTGRES_PASSWORD: foster
           POSTGRES_DB: jaydanhoward
-        ports:
-          - 5432:5432
+        # No `ports:`. In ARC's k8s mode a mapping becomes a hostPort on a pod
+        # pinned to the runner's node, so two runs there at once (a PR and
+        # main) collide and the second pod fails admission. Services share the
+        # job pod's network, so localhost:5432 works without it.
         options: >-
           --health-cmd pg_isready
           --health-interval 5s
