@@ -16,8 +16,12 @@ LOCKFILE = "foster-server/Cargo.lock"
 # rstml, three-d/winit) — gone along with Leptos after the Foster
 # migration, so only the sqlx/rsa watch (still a real transitive dep)
 # remains relevant here.
+# RUSTSEC-2026-0459 (libsqlite3-sys, C SQLite CVE-2026-119375) is the same
+# shape: Cargo.lock lists it via sqlx-sqlite, but the sqlite feature is off so
+# it is never compiled. Both go away with sqlx 0.9.
 IGNORE_FLAGS = [
     "--ignore", "RUSTSEC-2023-0071",
+    "--ignore", "RUSTSEC-2026-0459",
 ]
 
 
